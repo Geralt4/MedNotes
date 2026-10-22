@@ -1,0 +1,409 @@
+import SwiftUI
+
+/// What the Data pane shows about the store: where it is, what it holds,
+/// and how many restore points sit beside it.
+struct StorageSummary: Equatable {
+    /// The newest `backup_create` audit row: when an encrypted backup was
+    /// last made, and what it was called. After a restore the trail is the
+    /// backup's own, so this is whatever that copy knew.
+    struct LastBackup: Equatable {
+        let date: Date
+        let name: String
+    }
+
+    let rootURL: URL
+    let backupsURL: URL
+    /// Row counts keyed by table, as `Database.counts()` reports them.
+    let counts: [String: Int]
+    var lastBackup: LastBackup? = nil
+
+    /// Whether there is anything to lose.
+    var hasRecords: Bool {
+        ["patients", "notes", "todo_items", "calendar_events"].contains { (counts[$0] ?? 0) > 0 }
+    }
+}
+
+/// One `backup_…` directory beside the store, as the Data pane lists it.
+struct RestorePoint: Identifiable, Equatable, Sendable {
+    let url: URL
+    let createdAt: Date
+    let name: String
+    let counts: [String: Int]
+    /// The database plus every attachment copy; nil until measured.
+    let sizeBytes: Int64?
+
+    var id: String { url.lastPathComponent }
+}
+
+/// The outcome of one integrity pass over the open store.
+struct IntegrityReport: Equatable {
+    let passed: Bool
+    let checkedAt: Date
+    /// Localised wording when the check passed or a link was broken;
+    /// SQLite's own message, verbatim, when the file itself is damaged.
+    let detail: String
+}
+
+/// Settings › Data: the store on disk, its restore points, an on-demand
+/// integrity check, and the one paragraph on what encryption covers.
+///
+/// Commands stay in the File menu (Back Up…, Restore from Backup…, Import
+/// Legacy Data…); this pane says where their output goes and shows the
+/// store's health, which nothing else in the app does.
+struct DataSettingsPane: View {
+    let loadSummary: () async -> StorageSummary?
+    let loadRestorePoints: () async -> [RestorePoint]
+    let deleteRestorePoint: (RestorePoint) async throws -> Void
+    let checkIntegrity: () async -> IntegrityReport
+    /// Nil when no folder was chosen or a lock stopped the export.
+    let exportMarkdown: () async throws -> MarkdownExportService.ExportReport?
+    /// Why the last export stopped short (`AppSession.markdownExportInterruption`).
+    /// Passed in rather than kept here: the lock that stops an export also
+    /// rebuilds this pane.
+    let exportInterruption: String?
+    let legacyVaultReport: () async -> VaultReconciliation.Report?
+    let legacyVaultURL: URL?
+    let deleteLegacyVault: (() async throws -> Void)?
+
+    @State private var summary: StorageSummary?
+    @State private var restorePoints: [RestorePoint] = []
+    @State private var pendingDelete: RestorePoint?
+    @State private var failure: String?
+    @State private var integrity: IntegrityReport?
+    @State private var isChecking = false
+    @State private var exportFailure: String?
+    @State private var exportedSummary: String?
+    @State private var vaultReport: VaultReconciliation.Report?
+    @State private var pendingVaultDelete = false
+
+    /// See `GeneralSettingsPane.height`; a check's result adds two rows, an
+    /// overdue backup a caption, the vault report a section that grows by a
+    /// row per listed note. The base fits the Greek notes, which wrap a line
+    /// more than the English ones (measured from renders in both languages).
+    var preferredHeight: CGFloat {
+        var height: CGFloat = 877 + max(41, 46 * CGFloat(min(restorePoints.count, 6)))
+            + (integrity == nil ? 0 : 70) + (backupIsOverdue ? 24 : 0) + (failure == nil ? 0 : 24)
+        if let vaultReport {
+            let listed = vaultReport.vaultOnly.count + vaultReport.divergent.count
+            height += 225 + 37 * CGFloat(min(listed, 6)) + (vaultReport.parseFailures.isEmpty ? 0 : 37)
+        }
+        if exportedSummary != nil { height += 24 }
+        if exportFailure != nil { height += 24 }
+        // Measured with the caption's longest form: 60 pt in Greek, 47 in English.
+        if exportInterruption != nil { height += 60 }
+        return height
+    }
+
+    /// A backup older than this, or none at all over a store with records,
+    /// is called out. The owner's number; one constant.
+    static let staleBackupAge: TimeInterval = 30 * 24 * 3600
+
+    private var backupIsOverdue: Bool {
+        guard let summary else { return false }
+        guard let last = summary.lastBackup else { return summary.hasRecords }
+        return Date().timeIntervalSince(last.date) > Self.staleBackupAge
+    }
+
+    private var lastBackupText: String {
+        guard let last = summary?.lastBackup else { return String(localized: "Never") }
+        return last.date.formatted(.relative(presentation: .named)) + " · " + last.name
+    }
+
+    /// `initialIntegrity` is a render seam only: the offscreen harness and the
+    /// render test show a checked pane without pressing the button.
+    init(loadSummary: @escaping () async -> StorageSummary?,
+         loadRestorePoints: @escaping () async -> [RestorePoint] = { [] },
+         deleteRestorePoint: @escaping (RestorePoint) async throws -> Void = { _ in },
+         checkIntegrity: @escaping () async -> IntegrityReport,
+         initialIntegrity: IntegrityReport? = nil,
+         exportMarkdown: @escaping () async throws -> MarkdownExportService.ExportReport? = { nil },
+         exportInterruption: String? = nil,
+         legacyVaultReport: @escaping () async -> VaultReconciliation.Report? = { nil },
+         legacyVaultURL: URL? = nil,
+         deleteLegacyVault: (() async throws -> Void)? = nil) {
+        self.loadSummary = loadSummary
+        self.loadRestorePoints = loadRestorePoints
+        self.deleteRestorePoint = deleteRestorePoint
+        self.checkIntegrity = checkIntegrity
+        self.exportMarkdown = exportMarkdown
+        self.exportInterruption = exportInterruption
+        self.legacyVaultReport = legacyVaultReport
+        self.legacyVaultURL = legacyVaultURL
+        self.deleteLegacyVault = deleteLegacyVault
+        _integrity = State(initialValue: initialIntegrity)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Location") {
+                    if let summary {
+                        Text(verbatim: Self.abbreviated(summary.rootURL))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(summary.rootURL.path)
+                            .accessibilityIdentifier(SettingsIdentifiers.storageLocation)
+                    } else {
+                        Text("Opening…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Records") {
+                    Text(verbatim: summary.map { BackupFlowSheet.summary(counts: $0.counts) } ?? "")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier(SettingsIdentifiers.storageCounts)
+                }
+                if let summary {
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([summary.rootURL])
+                    }
+                }
+            } header: {
+                DetailSectionHeader(title: "Storage", systemImage: "internaldrive")
+            }
+
+            Section {
+                LabeledContent("Last backup") {
+                    Text(verbatim: summary == nil ? "" : lastBackupText)
+                        .foregroundStyle(backupIsOverdue ? Color.orange : Color.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .accessibilityIdentifier(SettingsIdentifiers.lastBackup)
+                }
+                if backupIsOverdue {
+                    Text("Make a new one with File › Back Up…")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                if restorePoints.isEmpty {
+                    LabeledContent("Restore points") {
+                        Text("None yet")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(restorePoints) { point in
+                        RestorePointRow(point: point) {
+                            pendingDelete = point
+                        }
+                    }
+                }
+                if let failure {
+                    Text(verbatim: failure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                SettingsNote("Restore points are encrypted snapshots MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose.")
+                if let summary {
+                    Button("Show Backups in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([summary.backupsURL])
+                    }
+                }
+            } header: {
+                DetailSectionHeader(title: "Backups", systemImage: "externaldrive.badge.timemachine")
+            }
+
+            Section {
+                HStack(spacing: Chrome.Space.md) {
+                    Button(isChecking ? "Checking…" : "Check Now") {
+                        isChecking = true
+                        Task {
+                            integrity = await checkIntegrity()
+                            isChecking = false
+                        }
+                    }
+                    .disabled(isChecking || summary == nil)
+                    .accessibilityIdentifier(SettingsIdentifiers.integrityButton)
+                    if let integrity {
+                        Label {
+                            Text(verbatim: integrity.detail)
+                        } icon: {
+                            Image(systemName: integrity.passed
+                                  ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(integrity.passed ? Color.green : Color.orange)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let integrity {
+                    Text("Checked \(integrity.checkedAt, format: .dateTime.hour().minute())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                SettingsNote("Runs SQLite's own integrity check and confirms every link between records. Backups are checked the same way before they are trusted.")
+            } header: {
+                DetailSectionHeader(title: "Integrity", systemImage: "checkmark.shield")
+            }
+
+            Section {
+                SettingsNote("The database, attachments and restore points are encrypted with a key in the macOS Keychain; MedNotes locks after five minutes without activity, when the screen locks, and on request. Data leaves the app only when you send records to Calendar or Reminders, run a Markdown export, or open an attachment in another app.")
+                Button("Export Markdown Vault…") {
+                    exportFailure = nil
+                    exportedSummary = nil
+                    Task {
+                        do {
+                            if let report = try await exportMarkdown() {
+                                exportedSummary = String(
+                                    localized: "Exported \(report.notesWritten) notes as plaintext Markdown.")
+                            }
+                        } catch {
+                            exportFailure = error.localizedDescription
+                        }
+                    }
+                }
+                .accessibilityIdentifier(SettingsIdentifiers.markdownExport)
+                SettingsNote("Writes every note as a readable Markdown file to a folder you choose, for use in another app. The result is plaintext. This replaces the old continuous mirror, which no longer runs.")
+                if let exportedSummary {
+                    Text(verbatim: exportedSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let exportFailure {
+                    Text(verbatim: exportFailure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let exportInterruption {
+                    Text(verbatim: exportInterruption)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                DetailSectionHeader(title: "Privacy", systemImage: "lock.shield")
+            }
+
+            if let vaultReport {
+                Section {
+                    SettingsNote("An old plaintext Markdown mirror is still on disk. Review it before deleting: notes that exist only there can be imported, and notes that differ are shown for a choice.")
+                    ForEach(vaultReport.vaultOnly) { item in
+                        LabeledContent(item.title.isEmpty ? String(localized: "(untitled)") : item.title,
+                                       value: String(localized: "Only in the mirror"))
+                    }
+                    ForEach(vaultReport.divergent) { item in
+                        LabeledContent(item.title.isEmpty ? String(localized: "(untitled)") : item.title,
+                                       value: String(localized: "Differs"))
+                    }
+                    if !vaultReport.parseFailures.isEmpty {
+                        Text(verbatim: String(localized: "\(vaultReport.parseFailures.count) file(s) could not be read."))
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    if let legacyVaultURL {
+                        Button("Show Mirror in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([legacyVaultURL])
+                        }
+                    }
+                    Button("Delete Plaintext Mirror", role: .destructive) {
+                        pendingVaultDelete = true
+                    }
+                } header: {
+                    DetailSectionHeader(title: "Old Markdown Mirror", systemImage: "doc.text")
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(height: preferredHeight)
+        .task {
+            summary = await loadSummary()
+            restorePoints = await loadRestorePoints()
+            vaultReport = await legacyVaultReport()
+        }
+        .confirmationDialog("Delete this restore point?", isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                guard let point = pendingDelete else { return }
+                Task { await delete(point) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone.")
+        }
+        .confirmationDialog("Delete the plaintext Markdown mirror?", isPresented: $pendingVaultDelete,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    do {
+                        try await deleteLegacyVault?()
+                        vaultReport = nil
+                    } catch {
+                        exportFailure = error.localizedDescription
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The files are readable clinical text. Deleting them cannot be undone; APFS snapshots or backups may still hold copies.")
+        }
+    }
+
+    private func delete(_ point: RestorePoint) async {
+        do {
+            try await deleteRestorePoint(point)
+            failure = nil
+            restorePoints.removeAll { $0.id == point.id }
+        } catch {
+            failure = error.localizedDescription
+        }
+        pendingDelete = nil
+    }
+
+    static func sizeText(_ bytes: Int64?) -> String {
+        bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—"
+    }
+
+    /// `~/Library/Containers/…` rather than the full home path: the row is
+    /// one line, and the interesting part is the tail. Abbreviated against
+    /// the account's home, not `NSHomeDirectory()`: inside the sandbox that
+    /// is the container itself, which would fold the container out of the
+    /// path and show the store somewhere it is not.
+    static func abbreviated(_ url: URL) -> String {
+        let path = url.path
+        let home = userHomePath
+        guard !home.isEmpty, path.hasPrefix(home + "/") else { return path }
+        return "~" + path.dropFirst(home.count)
+    }
+
+    /// The account's home directory from its passwd entry, which the sandbox
+    /// leaves alone.
+    static var userHomePath: String {
+        guard let entry = getpwuid(getuid()), let dir = entry.pointee.pw_dir else { return "" }
+        return String(cString: dir)
+    }
+}
+
+/// When it was made and what it holds on the left, its size and a trash
+/// button on the right.
+private struct RestorePointRow: View {
+    let point: RestorePoint
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Chrome.Space.md) {
+            VStack(alignment: .leading, spacing: Chrome.Space.xxs) {
+                Text(point.createdAt.formatted(date: .abbreviated, time: .shortened))
+                Text(verbatim: "\(DisplayCopy.backupName(point.name)) · \(BackupFlowSheet.summary(counts: point.counts))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: Chrome.Space.sm)
+            Text(verbatim: DataSettingsPane.sizeText(point.sizeBytes))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Delete restore point")
+            .accessibilityLabel("Delete restore point")
+        }
+        .padding(.vertical, Chrome.Space.xxs)
+    }
+}

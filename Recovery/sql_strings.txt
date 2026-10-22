@@ -1,0 +1,76 @@
+        DELETE FROM notes_fts WHERE id = OLD.id;
+        DELETE FROM patients_fts WHERE id = OLD.id;
+        INSERT INTO notes_fts(id, title, content, tags)
+        INSERT INTO patients_fts(id, first_name, last_name, full_name, phone, email, amka, medical_content)
+        UPDATE notes 
+        UPDATE patients 
+        UPDATE todo_items 
+    AFTER UPDATE ON notes
+    AFTER UPDATE ON patients
+    AFTER UPDATE ON todo_items
+    CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
+    CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
+    CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
+    CREATE TRIGGER IF NOT EXISTS patients_fts_delete AFTER DELETE ON patients BEGIN
+    CREATE TRIGGER IF NOT EXISTS patients_fts_insert AFTER INSERT ON patients BEGIN
+    CREATE TRIGGER IF NOT EXISTS patients_fts_update AFTER UPDATE ON patients BEGIN
+    CREATE TRIGGER IF NOT EXISTS update_note_computed_columns
+    CREATE TRIGGER IF NOT EXISTS update_note_computed_columns_on_update
+    CREATE TRIGGER IF NOT EXISTS update_patient_computed_columns
+    CREATE TRIGGER IF NOT EXISTS update_patient_computed_columns_on_update
+    CREATE TRIGGER IF NOT EXISTS update_todo_computed_columns
+    CREATE TRIGGER IF NOT EXISTS update_todo_computed_columns_on_update
+    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+    CREATE VIRTUAL TABLE IF NOT EXISTS patients_fts USING fts5(
+ DROP CO
+2. Select your project
+DROP 
+DROP INDH
+DROP TABH
+Delete from Apple Calendar
+Failed to update appointment: 
+Failed to update note: 
+Failed to update patient: 
+Failed to update reminder: 
+Invalid admission date. Please select a date within reasonable range.
+PRAGMA 
+PRAGMA cache_size = 10000
+PRAGMA foreign_key_check
+PRAGMA foreign_key_list(
+PRAGMA foreign_keys = ON
+PRAGMA index_info(
+PRAGMA index_list(
+PRAGMA integrity_check
+PRAGMA journal_mode = WAL
+PRAGMA oH
+PRAGMA synchronous = NORMAL
+PRAGMA table_info(
+PRAGMA temp_store = MEMORY
+PRAGMA user_version
+PRAGMA user_version = 
+Please select a future date and time for the appointment.
+Reminders access required to update reminders
+Review or update patient medication.
+SELECT 
+SELECT DH
+SELECT DI
+SELECT EI
+SELECT sqlite_version()
+Select AH
+Select Backup to Restore
+Select DH
+Select FH
+Select PH
+Select Reminder List
+Select a Patient
+Select a color to help identify this tag visually
+Select aH
+Select files to import patient data
+Select which information to keep for each section. The primary patient's record will be updated with the selected information.
+Update tH
+Update the bundle identifier in Xcode, then try again.
+Use 'ALTER TABLE ADD COLUMN (...)'
+update fI
+update room assignment
+update treatment plan
+update vI

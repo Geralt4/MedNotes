@@ -1,0 +1,6887 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {},
+    "# Admission — {{patient}}\n_{{date}}_\n\n## Presenting complaint\n- \n\n## History of present illness\n\n\n## Past medical history / medications / allergies\n\n\n## Examination findings\n\n\n## Investigations\n\n\n## Working diagnosis\n\n\n## Initial management plan\n" : {
+      "comment" : "Body of a built-in note template, looked up at runtime by its English text (TemplateService.displayed). Keep {{patient}}, {{date}}, [[ ]] and the Markdown as they are.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Εισαγωγή — {{patient}}\n_{{date}}_\n\n## Κύρια ενόχληση\n- \n\n## Ιστορικό παρούσας νόσου\n\n\n## Ατομικό αναμνηστικό / φάρμακα / αλλεργίες\n\n\n## Ευρήματα αντικειμενικής εξέτασης\n\n\n## Παρακλινικός έλεγχος\n\n\n## Διάγνωση εργασίας\n\n\n## Αρχικό σχέδιο αντιμετώπισης\n"
+          }
+        }
+      }
+    },
+    "# Discharge Summary — {{patient}}\n_{{date}}_\n\n## Admission diagnosis\n\n\n## Hospital course\n\n\n## Discharge medications\n\n\n## Follow-up\n- [ ] Appointment: [[ ]]\n\n## Instructions to patient\n" : {
+      "comment" : "Body of a built-in note template, looked up at runtime by its English text (TemplateService.displayed). Keep {{patient}}, {{date}}, [[ ]] and the Markdown as they are.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Εξιτήριο — {{patient}}\n_{{date}}_\n\n## Διάγνωση εισαγωγής\n\n\n## Πορεία νοσηλείας\n\n\n## Φαρμακευτική αγωγή εξόδου\n\n\n## Παρακολούθηση\n- [ ] Ραντεβού: [[ ]]\n\n## Οδηγίες προς τον ασθενή\n"
+          }
+        }
+      }
+    },
+    "# SOAP — {{patient}}\n_{{date}}_\n\n## Subjective\n-\n\n## Objective\n-\n\n## Assessment\n-\n\n## Plan\n-" : {
+      "comment" : "Body of a built-in note template, looked up at runtime by its English text (TemplateService.displayed). Keep {{patient}}, {{date}}, [[ ]] and the Markdown as they are.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# SOAP — {{patient}}\n_{{date}}_\n\n## Υποκειμενικά\n-\n\n## Αντικειμενικά\n-\n\n## Εκτίμηση\n-\n\n## Σχέδιο\n-"
+          }
+        }
+      }
+    },
+    "%@ The original data could not be put back: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Τα αρχικά δεδομένα δεν μπόρεσαν να επανέλθουν: %@"
+          }
+        }
+      }
+    },
+    "%@ already has this AMKA. Saving will fail until it is changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ασθενής %@ έχει ήδη αυτόν τον ΑΜΚΑ. Η αποθήκευση θα αποτύχει μέχρι να αλλάξει."
+          }
+        }
+      }
+    },
+    "%@ copy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (αντίγραφο)"
+          }
+        }
+      }
+    },
+    "%@ is missing %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ο πίνακας %@ δεν έχει τη στήλη %@"
+          }
+        }
+      }
+    },
+    "%@ is too large" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "το αρχείο %@ είναι πολύ μεγάλο"
+          }
+        }
+      }
+    },
+    "%@: %lld rows, expected %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: %lld εγγραφές, αναμένονταν %lld"
+          }
+        }
+      }
+    },
+    "%@: duplicate event %@, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: διπλότυπο συμβάν %@, παραλείφθηκε"
+          }
+        }
+      }
+    },
+    "%@: duplicate note %@, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: διπλότυπη σημείωση %@, παραλείφθηκε"
+          }
+        }
+      }
+    },
+    "%@: duplicate patient %@, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: διπλότυπη εγγραφή ασθενούς %@, παραλείφθηκε"
+          }
+        }
+      }
+    },
+    "%@: duplicate todo %@, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: διπλότυπη εκκρεμότητα %@, παραλείφθηκε"
+          }
+        }
+      }
+    },
+    "%@: the file has no content to import" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: το αρχείο δεν έχει περιεχόμενο για εισαγωγή"
+          }
+        }
+      }
+    },
+    "%lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld active" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ενεργές"
+          }
+        }
+      }
+    },
+    "%lld active conditions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ενεργές παθήσεις"
+          }
+        }
+      }
+    },
+    "%lld attachments not encrypted" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld συνημμένα δεν κρυπτογραφήθηκαν"
+          }
+        }
+      }
+    },
+    "%lld attachments skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld συνημμένα παραλείφθηκαν"
+          }
+        }
+      }
+    },
+    "%lld awaiting consent" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld σε αναμονή συγκατάθεσης"
+          }
+        }
+      }
+    },
+    "%lld broken links between records" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld κατεστραμμένοι σύνδεσμοι μεταξύ εγγραφών"
+          }
+        }
+      }
+    },
+    "%lld calendar event(s) from MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld συμβάν(-τα) ημερολογίου από το MedNotes."
+          }
+        }
+      }
+    },
+    "%lld conflicts" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld συγκρούσεις"
+          }
+        }
+      }
+    },
+    "%lld file(s) could not be read." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχεία των οποίων δεν ήταν δυνατή η ανάγνωση: %lld."
+          }
+        }
+      }
+    },
+    "%lld missing remotely" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "λείπουν %lld από τον προορισμό"
+          }
+        }
+      }
+    },
+    "%lld more tags" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ακόμη ετικέτες"
+          }
+        }
+      }
+    },
+    "%lld pending" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld σε εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "%lld records point to a patient that no longer exists." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld εγγραφές παραπέμπουν σε ασθενή που δεν υπάρχει πια."
+          }
+        }
+      }
+    },
+    "%lld todo(s) from MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld εκκρεμότητα(-ες) από το MedNotes."
+          }
+        }
+      }
+    },
+    "%lld upcoming" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επερχόμενα: %lld"
+          }
+        }
+      }
+    },
+    "%lld warnings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld προειδοποιήσεις"
+          }
+        }
+      }
+    },
+    "%lld words" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld λέξεις"
+          }
+        }
+      }
+    },
+    "%lld years old" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ετών"
+          }
+        }
+      }
+    },
+    "%lldy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ετών"
+          }
+        }
+      }
+    },
+    "(untitled)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(χωρίς τίτλο)"
+          }
+        }
+      }
+    },
+    "+%lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld"
+          }
+        }
+      }
+    },
+    "11 digits" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "11 ψηφία"
+          }
+        }
+      }
+    },
+    "9 digits" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "9 ψηφία"
+          }
+        }
+      }
+    },
+    "A blank note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Κενή σημείωση"
+          }
+        }
+      }
+    },
+    "A database operation failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απέτυχε μια λειτουργία της βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "A restore point could not be made because this store has no restore key." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν δημιουργήθηκε σημείο επαναφοράς, επειδή αυτή η κλειδοθήκη δεν έχει κλειδί επαναφοράς."
+          }
+        }
+      }
+    },
+    "A storage key could not be derived from the device key." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η παραγωγή κλειδιού αποθήκευσης από το κλειδί συσκευής."
+          }
+        }
+      }
+    },
+    "A synced event's title, notes and dates go to the calendar you chose, and from there wherever that account syncs. The event type and patient link never leave MedNotes. Choose the destination before the first write; MedNotes never picks one by name." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο τίτλος, οι σημειώσεις και οι ημερομηνίες ενός συγχρονισμένου συμβάντος πηγαίνουν στο ημερολόγιο που επιλέξατε και από εκεί οπουδήποτε συγχρονίζει ο λογαριασμός του. Ο τύπος συμβάντος και ο σύνδεσμος ασθενούς δεν φεύγουν ποτέ από το MedNotes. Επιλέξτε τον προορισμό πριν γραφτεί οτιδήποτε· το MedNotes δεν επιλέγει ποτέ προορισμό με βάση το όνομα."
+          }
+        }
+      }
+    },
+    "A synced event's title, notes and dates go to the “MedNotes” calendar in Apple Calendar, and from there wherever that account syncs. The event type and patient link never leave MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ο τίτλος, οι σημειώσεις και οι ημερομηνίες ενός συγχρονισμένου συμβάντος πηγαίνουν στο ημερολόγιο «MedNotes» του Ημερολογίου Apple, και από εκεί όπου συγχρονίζει ο λογαριασμός. Ο τύπος συμβάντος και ο σύνδεσμος ασθενούς δεν φεύγουν ποτέ από το MedNotes."
+          }
+        }
+      }
+    },
+    "A synced todo's title, notes, due day, completion and priority go to the list you chose, and from there wherever that account syncs. The patient link and tags never leave MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο τίτλος, οι σημειώσεις, η ημέρα προθεσμίας, η ολοκλήρωση και η προτεραιότητα μιας συγχρονισμένης εκκρεμότητας πηγαίνουν στη λίστα που επιλέξατε και από εκεί οπουδήποτε συγχρονίζει ο λογαριασμός της. Ο σύνδεσμος ασθενούς και οι ετικέτες δεν φεύγουν ποτέ από το MedNotes."
+          }
+        }
+      }
+    },
+    "A synced todo's title, notes, due day, completion and priority go to the “MedNotes” list in Apple Reminders, and from there wherever that account syncs. The patient link and tags never leave MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ο τίτλος, οι σημειώσεις, η ημέρα προθεσμίας, η ολοκλήρωση και η προτεραιότητα μιας συγχρονισμένης εκκρεμότητας πηγαίνουν στη λίστα «MedNotes» των Υπενθυμίσεων Apple, και από εκεί όπου συγχρονίζει ο λογαριασμός. Ο σύνδεσμος ασθενούς και οι ετικέτες δεν φεύγουν ποτέ από το MedNotes."
+          }
+        }
+      }
+    },
+    "A “MedNotes” container MedNotes created earlier." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προορισμός «MedNotes» που δημιούργησε νωρίτερα το MedNotes."
+          }
+        }
+      }
+    },
+    "AFM" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ΑΦΜ"
+          }
+        }
+      }
+    },
+    "AMKA" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ΑΜΚΑ"
+          }
+        }
+      }
+    },
+    "AMKA %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ΑΜΚΑ %@"
+          }
+        }
+      }
+    },
+    "AMKA has %lld digits; it should have 11." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ΑΜΚΑ έχει %lld ψηφία· πρέπει να έχει 11."
+          }
+        }
+      }
+    },
+    "AMKA should contain digits only." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ΑΜΚΑ πρέπει να περιέχει μόνο ψηφία."
+          }
+        }
+      }
+    },
+    "Account" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λογαριασμός"
+          }
+        }
+      }
+    },
+    "Action" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ενέργεια"
+          }
+        }
+      }
+    },
+    "Active" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ενεργή"
+          }
+        }
+      }
+    },
+    "Active patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ενεργοί ασθενείς"
+          }
+        }
+      }
+    },
+    "Activity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δραστηριότητα"
+          }
+        }
+      }
+    },
+    "Add" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη"
+          }
+        }
+      }
+    },
+    "Add a condition" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη πάθησης"
+          }
+        }
+      }
+    },
+    "Add a medication" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη φαρμάκου"
+          }
+        }
+      }
+    },
+    "Add a tag" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη ετικέτας"
+          }
+        }
+      }
+    },
+    "Add a template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Προσθήκη προτύπου"
+          }
+        }
+      }
+    },
+    "Add an allergy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη αλλεργίας"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διεύθυνση"
+          }
+        }
+      }
+    },
+    "Admission Note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημείωση εισαγωγής"
+          }
+        }
+      }
+    },
+    "All" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όλα"
+          }
+        }
+      }
+    },
+    "All-day" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ολοήμερο"
+          }
+        }
+      }
+    },
+    "Allergen" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλεργιογόνο"
+          }
+        }
+      }
+    },
+    "Allergies" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλεργίες"
+          }
+        }
+      }
+    },
+    "An attachment in the backup has the wrong length." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ένα συνημμένο στο αντίγραφο ασφαλείας έχει λάθος μήκος."
+          }
+        }
+      }
+    },
+    "An existing container. MedNotes will only touch records it created and marked." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προορισμός που υπήρχε ήδη. Το MedNotes θα επεμβαίνει μόνο στις εγγραφές που δημιούργησε και επισήμανε το ίδιο."
+          }
+        }
+      }
+    },
+    "An old plaintext Markdown mirror is still on disk. Review it before deleting: notes that exist only there can be imported, and notes that differ are shown for a choice." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στον δίσκο βρίσκεται ακόμη ένας παλαιός μη κρυπτογραφημένος αντικατοπτρισμός Markdown. Εξετάστε τον πριν τον διαγράψετε: οι σημειώσεις που υπάρχουν μόνο εκεί μπορούν να εισαχθούν, και όσες διαφέρουν εμφανίζονται για να επιλέξετε ποια έκδοση θα κρατήσετε."
+          }
+        }
+      }
+    },
+    "Another MedNotes copy may be running. Quit it, then relaunch." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ενδέχεται να εκτελείται ήδη άλλο αντίγραφο του MedNotes. Τερματίστε το και ανοίξτε ξανά το MedNotes."
+          }
+        }
+      }
+    },
+    "Another patient already has this AMKA." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άλλος ασθενής έχει ήδη αυτόν τον ΑΜΚΑ."
+          }
+        }
+      }
+    },
+    "Apple Calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ημερολόγιο Apple"
+          }
+        }
+      }
+    },
+    "Apple Calendar access is required for syncing. Enable it in System Settings › Privacy & Security › Calendars." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Για τον συγχρονισμό απαιτείται πρόσβαση στο Ημερολόγιο Apple. Ενεργοποιήστε τη στις Ρυθμίσεις συστήματος › Απόρρητο και ασφάλεια › Ημερολόγια."
+          }
+        }
+      }
+    },
+    "Apple Calendar access was not granted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν δόθηκε πρόσβαση στο Ημερολόγιο Apple."
+          }
+        }
+      }
+    },
+    "Apple Calendar connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο Apple συνδεδεμένο"
+          }
+        }
+      }
+    },
+    "Apple Calendar: connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο Apple: συνδεδεμένο"
+          }
+        }
+      }
+    },
+    "Apple Calendar: not connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο Apple: μη συνδεδεμένο"
+          }
+        }
+      }
+    },
+    "Apple Calendar: permission denied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο Apple: η άδεια απορρίφθηκε"
+          }
+        }
+      }
+    },
+    "Apple Reminders" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Υπενθυμίσεις Apple"
+          }
+        }
+      }
+    },
+    "Apple Reminders access is required for syncing. Enable it in System Settings › Privacy & Security › Reminders." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Για τον συγχρονισμό απαιτείται πρόσβαση στις Υπενθυμίσεις Apple. Ενεργοποιήστε τη στις Ρυθμίσεις συστήματος › Απόρρητο και ασφάλεια › Υπομνήσεις."
+          }
+        }
+      }
+    },
+    "Apple Reminders access was not granted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν δόθηκε πρόσβαση στις Υπενθυμίσεις Apple."
+          }
+        }
+      }
+    },
+    "Apple Reminders connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπενθυμίσεις Apple συνδεδεμένες"
+          }
+        }
+      }
+    },
+    "Apple Reminders: connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπενθυμίσεις Apple: συνδεδεμένες"
+          }
+        }
+      }
+    },
+    "Apple Reminders: not connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπενθυμίσεις Apple: μη συνδεδεμένες"
+          }
+        }
+      }
+    },
+    "Apple Reminders: permission denied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπενθυμίσεις Apple: η άδεια απορρίφθηκε"
+          }
+        }
+      }
+    },
+    "Appointment" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ραντεβού"
+          }
+        }
+      }
+    },
+    "Archive" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθέτηση"
+          }
+        }
+      }
+    },
+    "Archive patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθέτηση ασθενούς"
+          }
+        }
+      }
+    },
+    "Archive this patient?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθέτηση αυτού του ασθενούς;"
+          }
+        }
+      }
+    },
+    "Archived" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθετημένος"
+          }
+        }
+      }
+    },
+    "Archived patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθέτηση ασθενούς"
+          }
+        }
+      }
+    },
+    "Archived patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αρχειοθετημένοι ασθενείς"
+          }
+        }
+      }
+    },
+    "Archived patients appear here and can be restored." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι αρχειοθετημένοι ασθενείς εμφανίζονται εδώ και μπορούν να επαναφερθούν."
+          }
+        }
+      }
+    },
+    "At launch, open" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Άνοιγμα κατά την εκκίνηση"
+          }
+        }
+      }
+    },
+    "Back Up" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργία αντιγράφου ασφαλείας"
+          }
+        }
+      }
+    },
+    "Back Up…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργία αντιγράφου ασφαλείας…"
+          }
+        }
+      }
+    },
+    "Backed up" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφο ασφαλείας"
+          }
+        }
+      }
+    },
+    "Backed up to %@: %@." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφο ασφαλείας στο %@: %@."
+          }
+        }
+      }
+    },
+    "Backend failed to start" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποτυχία εκκίνησης της βάσης δεδομένων"
+          }
+        }
+      }
+    },
+    "Backup passphrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φράση πρόσβασης αντιγράφου"
+          }
+        }
+      }
+    },
+    "Backup passphrase (16+ characters)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φράση πρόσβασης αντιγράφου (16+ χαρακτήρες)"
+          }
+        }
+      }
+    },
+    "Backups" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αντίγραφα ασφαλείας"
+          }
+        }
+      }
+    },
+    "Birthdays" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γενέθλια"
+          }
+        }
+      }
+    },
+    "Blood type" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ομάδα αίματος"
+          }
+        }
+      }
+    },
+    "Built-in" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ενσωματωμένο"
+          }
+        }
+      }
+    },
+    "Calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο"
+          }
+        }
+      }
+    },
+    "Calendar auto-sync off" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αυτόματος συγχρονισμός ημερολογίου ανενεργός"
+          }
+        }
+      }
+    },
+    "Calendar auto-sync on" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αυτόματος συγχρονισμός ημερολογίου ενεργός"
+          }
+        }
+      }
+    },
+    "Calendar conflict: %lld event(s) had unsynced local edits that were overwritten by newer versions from Apple Calendar." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύγκρουση Ημερολογίου: %lld συμβάν(-τα) είχαν μη συγχρονισμένες τοπικές αλλαγές που αντικαταστάθηκαν από νεότερες εκδόσεις από το Ημερολόγιο Apple."
+          }
+        }
+      }
+    },
+    "Calendar permission denied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η άδεια για το Ημερολόγιο απορρίφθηκε"
+          }
+        }
+      }
+    },
+    "Calendar write failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εγγραφή στο Ημερολόγιο απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "Calendar: %lld event(s) are missing from the chosen calendar. Reconnect or resolve them manually; nothing was deleted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο: %lld συμβάν(-τα) λείπουν από το ημερολόγιο που επιλέξατε. Συνδέστε ξανά το Ημερολόγιο ή επιλύστε το ζήτημα χειροκίνητα· δεν διαγράφηκε τίποτα."
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ακύρωση"
+          }
+        }
+      }
+    },
+    "Change" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλαγή"
+          }
+        }
+      }
+    },
+    "Change severity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλαγή σοβαρότητας"
+          }
+        }
+      }
+    },
+    "Change status" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλαγή κατάστασης"
+          }
+        }
+      }
+    },
+    "Check Backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Έλεγχος αντιγράφου"
+          }
+        }
+      }
+    },
+    "Check Folder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Έλεγχος φακέλου"
+          }
+        }
+      }
+    },
+    "Check Now" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Έλεγχος τώρα"
+          }
+        }
+      }
+    },
+    "Checked %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ελέγχθηκε %@"
+          }
+        }
+      }
+    },
+    "Checked integrity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Έλεγχος ακεραιότητας"
+          }
+        }
+      }
+    },
+    "Checking…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Έλεγχος…"
+          }
+        }
+      }
+    },
+    "Checkup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προληπτικός έλεγχος"
+          }
+        }
+      }
+    },
+    "Choose Backup Location…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή θέσης αντιγράφου ασφαλείας…"
+          }
+        }
+      }
+    },
+    "Choose Backup…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή αντιγράφου ασφαλείας…"
+          }
+        }
+      }
+    },
+    "Choose Location & Back Up…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή θέσης και δημιουργία αντιγράφου…"
+          }
+        }
+      }
+    },
+    "Choose a Calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή ημερολογίου"
+          }
+        }
+      }
+    },
+    "Choose a MedNotes backup (.%@)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε αντίγραφο ασφαλείας MedNotes (.%@)."
+          }
+        }
+      }
+    },
+    "Choose a Reminders List" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή λίστας υπενθυμίσεων"
+          }
+        }
+      }
+    },
+    "Choose a folder for the plaintext Markdown export." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε φάκελο για τη μη κρυπτογραφημένη εξαγωγή Markdown."
+          }
+        }
+      }
+    },
+    "Choose a portable backup (.mednotesbackup) to recover this store." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε φορητό αντίγραφο ασφαλείας (.mednotesbackup) για ανάκτηση της βάσης δεδομένων."
+          }
+        }
+      }
+    },
+    "Choose a portable backup to recover this store." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε φορητό αντίγραφο ασφαλείας για ανάκτηση της βάσης δεδομένων."
+          }
+        }
+      }
+    },
+    "Choose and confirm a calendar destination before syncing." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε και επιβεβαιώστε προορισμό ημερολογίου πριν από τον συγχρονισμό."
+          }
+        }
+      }
+    },
+    "Choose and confirm a reminder list destination before syncing." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε και επιβεβαιώστε προορισμό λίστας υπενθυμίσεων πριν από τον συγχρονισμό."
+          }
+        }
+      }
+    },
+    "Choose the legacy MedNotes folder — the one containing Patients, Notes, Todos and CalendarEvents." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε τον παλαιό φάκελο MedNotes — αυτόν που περιέχει τους φακέλους Patients, Notes, Todos και CalendarEvents."
+          }
+        }
+      }
+    },
+    "Chronic" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρόνια"
+          }
+        }
+      }
+    },
+    "City" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πόλη"
+          }
+        }
+      }
+    },
+    "Clear date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ημερομηνίας"
+          }
+        }
+      }
+    },
+    "Clear date of birth" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ημερομηνίας γέννησης"
+          }
+        }
+      }
+    },
+    "Clear diagnosis date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ημερομηνίας διάγνωσης"
+          }
+        }
+      }
+    },
+    "Clear end date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ημερομηνίας λήξης"
+          }
+        }
+      }
+    },
+    "Clear expiry date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ημερομηνίας λήξης"
+          }
+        }
+      }
+    },
+    "Clear search" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καθαρισμός αναζήτησης"
+          }
+        }
+      }
+    },
+    "Completed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ολοκληρώθηκε"
+          }
+        }
+      }
+    },
+    "Completed %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ολοκληρώθηκε %@"
+          }
+        }
+      }
+    },
+    "Condition" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πάθηση"
+          }
+        }
+      }
+    },
+    "Conditions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παθήσεις"
+          }
+        }
+      }
+    },
+    "Confirm Destination" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιβεβαίωση προορισμού"
+          }
+        }
+      }
+    },
+    "Confirm passphrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιβεβαίωση φράσης πρόσβασης"
+          }
+        }
+      }
+    },
+    "Confirmed a %@ destination" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιβεβαιώθηκε προορισμός: %@"
+          }
+        }
+      }
+    },
+    "Confirmed sync destination" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιβεβαίωση προορισμού συγχρονισμού"
+          }
+        }
+      }
+    },
+    "Connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Συνδέθηκε"
+          }
+        }
+      }
+    },
+    "Connected to %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδέθηκε με «%@»"
+          }
+        }
+      }
+    },
+    "Connected to the %@ %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδέθηκε με «%@» (%@)"
+          }
+        }
+      }
+    },
+    "Connecting…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύνδεση…"
+          }
+        }
+      }
+    },
+    "Connect…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Σύνδεση…"
+          }
+        }
+      }
+    },
+    "Consultation" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συμβουλευτική"
+          }
+        }
+      }
+    },
+    "Contact" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επικοινωνία"
+          }
+        }
+      }
+    },
+    "Content" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Περιεχόμενο"
+          }
+        }
+      }
+    },
+    "Could not build the encrypted store: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η δημιουργία της κρυπτογραφημένης βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "Could not create the MedNotes calendar: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η δημιουργία του ημερολογίου «MedNotes»: %@"
+          }
+        }
+      }
+    },
+    "Could not create the MedNotes reminders list: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η δημιουργία της λίστας υπενθυμίσεων «MedNotes»: %@"
+          }
+        }
+      }
+    },
+    "Country" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χώρα"
+          }
+        }
+      }
+    },
+    "Create a new one" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργία νέου προορισμού"
+          }
+        }
+      }
+    },
+    "Create a note to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήστε μια σημείωση για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Create a patient to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήστε έναν ασθενή για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Create a todo to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήστε μια εκκρεμότητα για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Create an event to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήστε ένα συμβάν για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Create and verify a portable backup before encrypting this store." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήστε και επαληθεύστε ένα φορητό αντίγραφο ασφαλείας πριν κρυπτογραφήσετε αυτή τη βάση δεδομένων."
+          }
+        }
+      }
+    },
+    "Created %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήθηκε %@"
+          }
+        }
+      }
+    },
+    "Custom" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Προσαρμοσμένο"
+          }
+        }
+      }
+    },
+    "Custom Event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσαρμοσμένο συμβάν"
+          }
+        }
+      }
+    },
+    "Data" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δεδομένα"
+          }
+        }
+      }
+    },
+    "Data still leaves the app in three deliberate ways: records you send to Calendar or Reminders, a Markdown export you run yourself, and an attachment you open in another app. Each one is confirmed before it happens." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπάρχουν ωστόσο τρεις τρόποι με τους οποίους φεύγουν δεδομένα από την εφαρμογή, κατόπιν δικής σας ενέργειας: εγγραφές που στέλνετε στο Ημερολόγιο ή στις Υπενθυμίσεις, μια εξαγωγή Markdown που εκτελείτε εσείς και ένα συνημμένο που ανοίγετε σε άλλη εφαρμογή. Κάθε τέτοια ενέργεια επιβεβαιώνεται πριν γίνει."
+          }
+        }
+      }
+    },
+    "Date of birth" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερομηνία γέννησης"
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή"
+          }
+        }
+      }
+    },
+    "Delete Permanently" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οριστική διαγραφή"
+          }
+        }
+      }
+    },
+    "Delete Plaintext Mirror" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή μη κρυπτογραφημένου αντικατοπτρισμού"
+          }
+        }
+      }
+    },
+    "Delete event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή συμβάντος"
+          }
+        }
+      }
+    },
+    "Delete note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή σημείωσης"
+          }
+        }
+      }
+    },
+    "Delete patient permanently" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οριστική διαγραφή ασθενούς"
+          }
+        }
+      }
+    },
+    "Delete permanently" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οριστική διαγραφή"
+          }
+        }
+      }
+    },
+    "Delete restore point" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή σημείου επαναφοράς"
+          }
+        }
+      }
+    },
+    "Delete the plaintext Markdown mirror?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή του μη κρυπτογραφημένου αντικατοπτρισμού Markdown;"
+          }
+        }
+      }
+    },
+    "Delete the selected template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή του επιλεγμένου προτύπου"
+          }
+        }
+      }
+    },
+    "Delete this event?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή αυτού του συμβάντος;"
+          }
+        }
+      }
+    },
+    "Delete this note?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή αυτής της σημείωσης;"
+          }
+        }
+      }
+    },
+    "Delete this patient permanently?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οριστική διαγραφή αυτού του ασθενούς;"
+          }
+        }
+      }
+    },
+    "Delete this restore point?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή αυτού του σημείου επαναφοράς;"
+          }
+        }
+      }
+    },
+    "Delete this template?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή αυτού του προτύπου;"
+          }
+        }
+      }
+    },
+    "Delete this todo?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή αυτής της εκκρεμότητας;"
+          }
+        }
+      }
+    },
+    "Delete todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή εκκρεμότητας"
+          }
+        }
+      }
+    },
+    "Deleted event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή συμβάντος"
+          }
+        }
+      }
+    },
+    "Deleted note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή σημείωσης"
+          }
+        }
+      }
+    },
+    "Deleted patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή ασθενούς"
+          }
+        }
+      }
+    },
+    "Deleted plaintext mirror" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή μη κρυπτογραφημένου αντικατοπτρισμού"
+          }
+        }
+      }
+    },
+    "Deleted restore point" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή σημείου επαναφοράς"
+          }
+        }
+      }
+    },
+    "Deleted restore point “%@”" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγράφηκε το σημείο επαναφοράς «%@»"
+          }
+        }
+      }
+    },
+    "Deleted template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διαγραφή προτύπου"
+          }
+        }
+      }
+    },
+    "Deleted todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαγραφή εκκρεμότητας"
+          }
+        }
+      }
+    },
+    "Description" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Περιγραφή"
+          }
+        }
+      }
+    },
+    "Destination" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προορισμός"
+          }
+        }
+      }
+    },
+    "Details" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λεπτομέρειες"
+          }
+        }
+      }
+    },
+    "Diagnosed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διάγνωση"
+          }
+        }
+      }
+    },
+    "Differs" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαφέρει"
+          }
+        }
+      }
+    },
+    "Discard changes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρριψη αλλαγών"
+          }
+        }
+      }
+    },
+    "Discarded untouched event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρριψη κενού συμβάντος"
+          }
+        }
+      }
+    },
+    "Discarded untouched note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρριψη κενής σημείωσης"
+          }
+        }
+      }
+    },
+    "Discarded untouched patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρριψη κενού ασθενούς"
+          }
+        }
+      }
+    },
+    "Discarded untouched todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρριψη κενής εκκρεμότητας"
+          }
+        }
+      }
+    },
+    "Discharge Summary" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξιτήριο"
+          }
+        }
+      }
+    },
+    "Discontinued" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διακόπηκε"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Απόκρυψη"
+          }
+        }
+      }
+    },
+    "Dosage" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δοσολογία"
+          }
+        }
+      }
+    },
+    "Due date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προθεσμία"
+          }
+        }
+      }
+    },
+    "Due today" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λήγει σήμερα"
+          }
+        }
+      }
+    },
+    "Duplicate the selected template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αντιγραφή του επιλεγμένου προτύπου"
+          }
+        }
+      }
+    },
+    "Edit" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επεξεργασία"
+          }
+        }
+      }
+    },
+    "Edited" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τροποποιημένο"
+          }
+        }
+      }
+    },
+    "Email" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email"
+          }
+        }
+      }
+    },
+    "Emergency contact" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαφή έκτακτης ανάγκης"
+          }
+        }
+      }
+    },
+    "Empty" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κενό"
+          }
+        }
+      }
+    },
+    "Empty note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κενή σημείωση"
+          }
+        }
+      }
+    },
+    "Encrypt Store" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κρυπτογράφηση βάσης δεδομένων"
+          }
+        }
+      }
+    },
+    "Encrypted" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κρυπτογραφημένη"
+          }
+        }
+      }
+    },
+    "Encrypted data exists but its device key is missing. Restore from a portable backup to recover." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπάρχουν κρυπτογραφημένα δεδομένα, αλλά το κλειδί συσκευής τους λείπει. Για ανάκτηση, επαναφέρετε ένα φορητό αντίγραφο ασφαλείας."
+          }
+        }
+      }
+    },
+    "Encrypted data exists, but the Keychain item that holds its key is gone. Restore a portable backup to recover. MedNotes will not start an empty database over this data." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπάρχουν κρυπτογραφημένα δεδομένα, αλλά το στοιχείο κλειδοθήκης που περιέχει το κλειδί τους δεν υπάρχει πια. Για ανάκτηση, επαναφέρετε ένα φορητό αντίγραφο ασφαλείας. Το MedNotes δεν θα δημιουργήσει κενή βάση δεδομένων στη θέση αυτών των δεδομένων."
+          }
+        }
+      }
+    },
+    "Encrypting MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κρυπτογράφηση MedNotes"
+          }
+        }
+      }
+    },
+    "Encrypting…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κρυπτογράφηση…"
+          }
+        }
+      }
+    },
+    "Encryption was cancelled. The store is unchanged and still plaintext." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η κρυπτογράφηση ακυρώθηκε. Η βάση δεδομένων δεν άλλαξε και παραμένει μη κρυπτογραφημένη."
+          }
+        }
+      }
+    },
+    "End" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λήξη"
+          }
+        }
+      }
+    },
+    "Ended" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λήξη"
+          }
+        }
+      }
+    },
+    "Enter a name to identify this patient." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγάγετε όνομα για να αναγνωρίζεται ο ασθενής."
+          }
+        }
+      }
+    },
+    "Error" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σφάλμα"
+          }
+        }
+      }
+    },
+    "Event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συμβάν"
+          }
+        }
+      }
+    },
+    "Event not found" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το συμβάν δεν βρέθηκε"
+          }
+        }
+      }
+    },
+    "Event saved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το συμβάν αποθηκεύτηκε"
+          }
+        }
+      }
+    },
+    "Events" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συμβάντα"
+          }
+        }
+      }
+    },
+    "Everything already in sync" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όλα είναι ήδη συγχρονισμένα"
+          }
+        }
+      }
+    },
+    "Existing %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπάρχων προορισμός (%@)"
+          }
+        }
+      }
+    },
+    "Export Markdown Vault…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξαγωγή Vault Markdown…"
+          }
+        }
+      }
+    },
+    "Exported %lld notes as plaintext Markdown." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξήχθησαν %lld σημειώσεις ως μη κρυπτογραφημένα αρχεία Markdown."
+          }
+        }
+      }
+    },
+    "Exported Markdown" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξαγωγή Markdown"
+          }
+        }
+      }
+    },
+    "Father's name" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πατρώνυμο"
+          }
+        }
+      }
+    },
+    "Female" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γυναίκα"
+          }
+        }
+      }
+    },
+    "Fields: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πεδία: %@"
+          }
+        }
+      }
+    },
+    "Filter" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φίλτρο"
+          }
+        }
+      }
+    },
+    "Filter: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φίλτρο: %@"
+          }
+        }
+      }
+    },
+    "Find" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εύρεση"
+          }
+        }
+      }
+    },
+    "First name" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όνομα"
+          }
+        }
+      }
+    },
+    "Frequency" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συχνότητα"
+          }
+        }
+      }
+    },
+    "Gender" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φύλο"
+          }
+        }
+      }
+    },
+    "General" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Γενικά"
+          }
+        }
+      }
+    },
+    "Go" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μετάβαση"
+          }
+        }
+      }
+    },
+    "Graph" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γράφημα"
+          }
+        }
+      }
+    },
+    "Group number" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αριθμός ομάδας"
+          }
+        }
+      }
+    },
+    "Height" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ύψος"
+          }
+        }
+      }
+    },
+    "Height (cm)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ύψος (cm)"
+          }
+        }
+      }
+    },
+    "High" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υψηλή"
+          }
+        }
+      }
+    },
+    "I understand that this account may be shared, and its participants may receive this clinical data." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κατανοώ ότι αυτός ο λογαριασμός μπορεί να είναι σε κοινή χρήση και ότι οι συμμετέχοντές του ενδέχεται να λάβουν αυτά τα κλινικά δεδομένα."
+          }
+        }
+      }
+    },
+    "ID number" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αριθμός ταυτότητας"
+          }
+        }
+      }
+    },
+    "Identity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στοιχεία ταυτότητας"
+          }
+        }
+      }
+    },
+    "Import" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή"
+          }
+        }
+      }
+    },
+    "Import Legacy Data" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή παλαιών δεδομένων"
+          }
+        }
+      }
+    },
+    "Import Legacy Data…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή παλαιών δεδομένων…"
+          }
+        }
+      }
+    },
+    "Imported %@." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισήχθησαν: %@."
+          }
+        }
+      }
+    },
+    "Imported legacy data" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή παλαιών δεδομένων"
+          }
+        }
+      }
+    },
+    "Imported todo from Reminders" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή εκκρεμότητας από τις Υπενθυμίσεις"
+          }
+        }
+      }
+    },
+    "Inactive" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανενεργή"
+          }
+        }
+      }
+    },
+    "Insert clinical template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή κλινικού προτύπου"
+          }
+        }
+      }
+    },
+    "Insurance" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασφάλιση"
+          }
+        }
+      }
+    },
+    "Integrity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ακεραιότητα"
+          }
+        }
+      }
+    },
+    "Integrity check failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο έλεγχος ακεραιότητας απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "Integrity check failed: %@. Back up now, then see Settings › Data." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ο έλεγχος ακεραιότητας απέτυχε: %@. Δημιουργήστε αντίγραφο ασφαλείας τώρα και δείτε τις Ρυθμίσεις › Δεδομένα."
+          }
+        }
+      }
+    },
+    "Jump to note, patient, todo or event…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μετάβαση σε σημείωση, ασθενή, εκκρεμότητα ή συμβάν…"
+          }
+        }
+      }
+    },
+    "Keep in sync automatically" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Διατήρηση αυτόματου συγχρονισμού"
+          }
+        }
+      }
+    },
+    "Keep typing — creates link text" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνεχίστε να πληκτρολογείτε — δημιουργεί κείμενο συνδέσμου"
+          }
+        }
+      }
+    },
+    "Lab Result" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εργαστηριακό αποτέλεσμα"
+          }
+        }
+      }
+    },
+    "Last backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τελευταίο αντίγραφο ασφαλείας"
+          }
+        }
+      }
+    },
+    "Last name" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επώνυμο"
+          }
+        }
+      }
+    },
+    "Last sync" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τελευταίος συγχρονισμός"
+          }
+        }
+      }
+    },
+    "Launch" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εκκίνηση"
+          }
+        }
+      }
+    },
+    "Life-threatening" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απειλητική για τη ζωή"
+          }
+        }
+      }
+    },
+    "Link notes with [[double brackets]] to build the graph." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδέστε σημειώσεις με [[διπλές αγκύλες]] για να χτιστεί το γράφημα."
+          }
+        }
+      }
+    },
+    "Link update failed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποτυχία ενημέρωσης συνδέσμων"
+          }
+        }
+      }
+    },
+    "Linked mentions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδεδεμένες αναφορές"
+          }
+        }
+      }
+    },
+    "Linked patient is not in the current list." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο συνδεδεμένος ασθενής δεν βρίσκεται στην τρέχουσα λίστα."
+          }
+        }
+      }
+    },
+    "Loading…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φόρτωση…"
+          }
+        }
+      }
+    },
+    "Location" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Θέση"
+          }
+        }
+      }
+    },
+    "Lock MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωμα του MedNotes"
+          }
+        }
+      }
+    },
+    "Locked MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωμα του MedNotes"
+          }
+        }
+      }
+    },
+    "Locked after inactivity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε λόγω αδράνειας"
+          }
+        }
+      }
+    },
+    "Locked on a user switch" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε κατά την εναλλαγή χρηστών"
+          }
+        }
+      }
+    },
+    "Locked on request" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε κατόπιν αιτήματος"
+          }
+        }
+      }
+    },
+    "Locked when the Mac went to sleep" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε όταν το Mac τέθηκε σε κατάσταση ύπνου"
+          }
+        }
+      }
+    },
+    "Locked when the display went to sleep" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε όταν η οθόνη τέθηκε σε κατάσταση ύπνου"
+          }
+        }
+      }
+    },
+    "Locked when the screen locked" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωσε όταν κλείδωσε η οθόνη"
+          }
+        }
+      }
+    },
+    "Locks after" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλείδωμα μετά από"
+          }
+        }
+      }
+    },
+    "Low" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χαμηλή"
+          }
+        }
+      }
+    },
+    "Low priority" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χαμηλή προτεραιότητα"
+          }
+        }
+      }
+    },
+    "Made %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργήθηκε %@"
+          }
+        }
+      }
+    },
+    "Make a new one with File › Back Up…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δημιουργήστε νέο από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας…"
+          }
+        }
+      }
+    },
+    "Male" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άνδρας"
+          }
+        }
+      }
+    },
+    "Mark as done" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σήμανση ως ολοκληρωμένης"
+          }
+        }
+      }
+    },
+    "Mark as not done" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σήμανση ως μη ολοκληρωμένης"
+          }
+        }
+      }
+    },
+    "MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MedNotes"
+          }
+        }
+      }
+    },
+    "MedNotes Encryption Backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφο ασφαλείας MedNotes πριν από την κρυπτογράφηση"
+          }
+        }
+      }
+    },
+    "MedNotes backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφο ασφαλείας MedNotes"
+          }
+        }
+      }
+    },
+    "MedNotes creates a “MedNotes” %@ in this account." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes θα δημιουργήσει %@ με το όνομα «MedNotes» σε αυτόν τον λογαριασμό."
+          }
+        }
+      }
+    },
+    "MedNotes is converting this store to an encrypted one. Make and verify a backup first; the wizard will not touch your data until it has." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes μετατρέπει αυτή τη βάση δεδομένων σε κρυπτογραφημένη. Δημιουργήστε και επαληθεύστε πρώτα ένα αντίγραφο ασφαλείας· μέχρι να γίνει αυτό, τα δεδομένα σας δεν θα αλλάξουν."
+          }
+        }
+      }
+    },
+    "MedNotes is locked" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes είναι κλειδωμένο"
+          }
+        }
+      }
+    },
+    "MedNotes is locked." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes είναι κλειδωμένο."
+          }
+        }
+      }
+    },
+    "MedNotes locked before the backup was finished, so nothing was saved to “%@”. Choose File › Back Up… to make one." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε πριν ολοκληρωθεί το αντίγραφο ασφαλείας, οπότε δεν αποθηκεύτηκε τίποτα στο «%@». Επιλέξτε Αρχείο › Δημιουργία αντιγράφου ασφαλείας… για να δημιουργήσετε ένα."
+          }
+        }
+      }
+    },
+    "MedNotes locked during the Markdown export: %lld of %lld notes were written to “%@” as plaintext before it stopped. Export again to write them all." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε κατά την εξαγωγή Markdown: %lld από %lld σημειώσεις γράφτηκαν στο «%@» μη κρυπτογραφημένες πριν αυτή σταματήσει. Κάντε ξανά την εξαγωγή για να γραφτούν όλες."
+          }
+        }
+      }
+    },
+    "MedNotes locked while a record was being edited, and %lld edit(s) could not be saved." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε ενώ επεξεργαζόσασταν μια εγγραφή, και %lld αλλαγή(-ές) δεν αποθηκεύτηκαν."
+          }
+        }
+      }
+    },
+    "MedNotes opens on this module. “Where I left off” returns to whichever module was showing when it last quit." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το MedNotes ανοίγει σε αυτή την ενότητα. Το «Εκεί που σταμάτησα» επαναφέρει την ενότητα που εμφανιζόταν την τελευταία φορά που έκλεισε."
+          }
+        }
+      }
+    },
+    "MedNotes will write a portable backup here and verify it before encrypting anything." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes θα αποθηκεύσει εδώ ένα φορητό αντίγραφο ασφαλείας και θα το επαληθεύσει πριν κρυπτογραφήσει οτιδήποτε."
+          }
+        }
+      }
+    },
+    "MedNotes writes only to the destination you choose here. It never picks one by name, and it stops if that destination disappears." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes γράφει μόνο στον προορισμό που επιλέγετε εδώ. Δεν επιλέγει ποτέ προορισμό με βάση το όνομα και σταματά τον συγχρονισμό αν αυτός ο προορισμός πάψει να υπάρχει."
+          }
+        }
+      }
+    },
+    "Medical" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ιατρικά στοιχεία"
+          }
+        }
+      }
+    },
+    "Medication" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φάρμακο"
+          }
+        }
+      }
+    },
+    "Medication Change" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλαγή φαρμακευτικής αγωγής"
+          }
+        }
+      }
+    },
+    "Medications" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φαρμακευτική αγωγή"
+          }
+        }
+      }
+    },
+    "Medium" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μεσαία"
+          }
+        }
+      }
+    },
+    "Mild" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ήπια"
+          }
+        }
+      }
+    },
+    "Mirror notes to Markdown files" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατοπτρισμός σημειώσεων σε αρχεία Markdown"
+          }
+        }
+      }
+    },
+    "Mobile or landline" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κινητό ή σταθερό"
+          }
+        }
+      }
+    },
+    "Moderate" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μέτρια"
+          }
+        }
+      }
+    },
+    "Modified %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τροποποιήθηκε %@"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όνομα"
+          }
+        }
+      }
+    },
+    "Needs reconnection" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απαιτείται επανασύνδεση"
+          }
+        }
+      }
+    },
+    "Never" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ποτέ"
+          }
+        }
+      }
+    },
+    "New %@ account" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λογαριασμός όπου θα δημιουργηθεί %@"
+          }
+        }
+      }
+    },
+    "New Event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέο συμβάν"
+          }
+        }
+      }
+    },
+    "New Note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα σημείωση"
+          }
+        }
+      }
+    },
+    "New Patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέος ασθενής"
+          }
+        }
+      }
+    },
+    "New Template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέο πρότυπο"
+          }
+        }
+      }
+    },
+    "New Todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "New event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέο συμβάν"
+          }
+        }
+      }
+    },
+    "New note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα σημείωση"
+          }
+        }
+      }
+    },
+    "New notes start from" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Οι νέες σημειώσεις ξεκινούν από"
+          }
+        }
+      }
+    },
+    "New patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέος ασθενής"
+          }
+        }
+      }
+    },
+    "New todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "No Activity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καμία δραστηριότητα"
+          }
+        }
+      }
+    },
+    "No Archived Patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν αρχειοθετημένοι ασθενείς"
+          }
+        }
+      }
+    },
+    "No Events" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν συμβάντα"
+          }
+        }
+      }
+    },
+    "No Matching Events" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κανένα συμβάν δεν ταιριάζει"
+          }
+        }
+      }
+    },
+    "No Matching Todos" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καμία εκκρεμότητα δεν ταιριάζει"
+          }
+        }
+      }
+    },
+    "No Notes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν σημειώσεις"
+          }
+        }
+      }
+    },
+    "No Patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν ασθενείς"
+          }
+        }
+      }
+    },
+    "No Todos" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν εκκρεμότητες"
+          }
+        }
+      }
+    },
+    "No account can hold a new %@." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει λογαριασμός όπου να μπορεί να δημιουργηθεί %@."
+          }
+        }
+      }
+    },
+    "No account is available to create the MedNotes reminders list." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει διαθέσιμος λογαριασμός για τη δημιουργία της λίστας υπενθυμίσεων «MedNotes»."
+          }
+        }
+      }
+    },
+    "No allergies recorded." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχουν καταγραφεί αλλεργίες."
+          }
+        }
+      }
+    },
+    "No calendar account is available to create the MedNotes calendar." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει διαθέσιμος λογαριασμός ημερολογίου για τη δημιουργία του ημερολογίου «MedNotes»."
+          }
+        }
+      }
+    },
+    "No conditions recorded." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχουν καταγραφεί παθήσεις."
+          }
+        }
+      }
+    },
+    "No event selected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει επιλεγεί συμβάν"
+          }
+        }
+      }
+    },
+    "No links yet" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν σύνδεσμοι ακόμη"
+          }
+        }
+      }
+    },
+    "No matches" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καμία αντιστοιχία"
+          }
+        }
+      }
+    },
+    "No medications recorded." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει καταγραφεί φαρμακευτική αγωγή."
+          }
+        }
+      }
+    },
+    "No note selected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει επιλεγεί σημείωση"
+          }
+        }
+      }
+    },
+    "No patient selected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει επιλεγεί ασθενής"
+          }
+        }
+      }
+    },
+    "No pending" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καμία σε εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "No problems found." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δεν βρέθηκαν προβλήματα."
+          }
+        }
+      }
+    },
+    "No todo selected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει επιλεγεί εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "No upcoming" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κανένα επερχόμενο"
+          }
+        }
+      }
+    },
+    "None" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κανένας"
+          }
+        }
+      }
+    },
+    "None yet" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Κανένα ακόμη"
+          }
+        }
+      }
+    },
+    "Not chosen" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει επιλεγεί"
+          }
+        }
+      }
+    },
+    "Not connected" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δεν έχει συνδεθεί"
+          }
+        }
+      }
+    },
+    "Not connected to Apple Calendar yet" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει γίνει ακόμη σύνδεση με το Ημερολόγιο Apple"
+          }
+        }
+      }
+    },
+    "Not connected to Apple Reminders yet" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει γίνει ακόμη σύνδεση με τις Υπενθυμίσεις Apple"
+          }
+        }
+      }
+    },
+    "Not recorded" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει καταγραφεί"
+          }
+        }
+      }
+    },
+    "Not started" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν έχει ξεκινήσει"
+          }
+        }
+      }
+    },
+    "Note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημείωση"
+          }
+        }
+      }
+    },
+    "Note not found" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η σημείωση δεν βρέθηκε"
+          }
+        }
+      }
+    },
+    "Note saved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η σημείωση αποθηκεύτηκε"
+          }
+        }
+      }
+    },
+    "Notes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις"
+          }
+        }
+      }
+    },
+    "Notes, todos and appointments stay linked, and the record can be restored from the Archived list." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι σημειώσεις, οι εκκρεμότητες και τα ραντεβού παραμένουν συνδεδεμένα, και το αρχείο μπορεί να επαναφερθεί από τη λίστα αρχειοθετημένων."
+          }
+        }
+      }
+    },
+    "Nothing is written to Apple Calendar or Reminders until you choose a destination and confirm. EventKit cannot tell whether a chosen calendar or list is shared, so any cloud account in the source may receive the data. If a destination disappears, the connection stops rather than falling back to a calendar with the same name. Restoring a backup suspends both bridges until you reconnect them." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τίποτα δεν γράφεται στο Ημερολόγιο ή στις Υπενθυμίσεις Apple μέχρι να επιλέξετε προορισμό και να τον επιβεβαιώσετε. Το EventKit δεν μπορεί να διακρίνει αν το ημερολόγιο ή η λίστα που επιλέξατε είναι σε κοινή χρήση, επομένως οποιοσδήποτε διαδικτυακός λογαριασμός στην πηγή ενδέχεται να λάβει τα δεδομένα. Αν ένας προορισμός πάψει να υπάρχει, η σύνδεση διακόπτεται και δεν χρησιμοποιείται στη θέση του κάποιο ημερολόγιο με το ίδιο όνομα. Η επαναφορά αντιγράφου ασφαλείας αναστέλλει και τις δύο συνδέσεις μέχρι να συνδέσετε ξανά το Ημερολόγιο και τις Υπενθυμίσεις."
+          }
+        }
+      }
+    },
+    "Nothing is written to Apple Calendar or Reminders until you connect. With “Keep in sync automatically” on, edits here are pushed as they are saved and changes made in Apple's apps are pulled in as they happen; off, nothing moves until you press Sync Now. Deleting a synced record removes its copy either way." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τίποτα δεν γράφεται στο Ημερολόγιο ή στις Υπενθυμίσεις Apple μέχρι να γίνει σύνδεση. Με ενεργή τη «Διατήρηση αυτόματου συγχρονισμού», οι αλλαγές εδώ στέλνονται μόλις αποθηκευτούν και οι αλλαγές στις εφαρμογές της Apple έρχονται μόλις γίνουν· με ανενεργή, τίποτα δεν μετακινείται μέχρι να πατήσετε Συγχρονισμός τώρα. Η διαγραφή μιας συγχρονισμένης εγγραφής αφαιρεί το αντίγραφό της σε κάθε περίπτωση."
+          }
+        }
+      }
+    },
+    "Nothing new to import: every record in the folder is already in MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει κάτι νέο για εισαγωγή: κάθε εγγραφή του φακέλου υπάρχει ήδη στο MedNotes."
+          }
+        }
+      }
+    },
+    "Nothing to sync" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει κάτι για συγχρονισμό"
+          }
+        }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
+    "Observation" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παρατήρηση"
+          }
+        }
+      }
+    },
+    "Old Markdown Mirror" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παλαιός αντικατοπτρισμός Markdown"
+          }
+        }
+      }
+    },
+    "On My Mac" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στο Mac μου"
+          }
+        }
+      }
+    },
+    "Only in the mirror" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μόνο στον αντικατοπτρισμό"
+          }
+        }
+      }
+    },
+    "Open %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άνοιγμα %@"
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Άνοιγμα Ρυθμίσεων"
+          }
+        }
+      }
+    },
+    "Open System Settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άνοιγμα Ρυθμίσεων Συστήματος"
+          }
+        }
+      }
+    },
+    "Opening…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Άνοιγμα…"
+          }
+        }
+      }
+    },
+    "Other" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άλλο"
+          }
+        }
+      }
+    },
+    "Overdue" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκπρόθεσμη"
+          }
+        }
+      }
+    },
+    "Overdue %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Έληξε στις %@"
+          }
+        }
+      }
+    },
+    "Passphrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φράση πρόσβασης"
+          }
+        }
+      }
+    },
+    "Past" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παρελθόντα"
+          }
+        }
+      }
+    },
+    "Patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασθενής"
+          }
+        }
+      }
+    },
+    "Patient not found" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ασθενής δεν βρέθηκε"
+          }
+        }
+      }
+    },
+    "Patient saved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ασθενής αποθηκεύτηκε"
+          }
+        }
+      }
+    },
+    "Patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασθενείς"
+          }
+        }
+      }
+    },
+    "Pending" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σε εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "Permission denied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Η άδεια απορρίφθηκε"
+          }
+        }
+      }
+    },
+    "Phone" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τηλέφωνο"
+          }
+        }
+      }
+    },
+    "Pin" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καρφίτσωμα"
+          }
+        }
+      }
+    },
+    "Pinned" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καρφιτσωμένη"
+          }
+        }
+      }
+    },
+    "Plaintext" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μη κρυπτογραφημένη"
+          }
+        }
+      }
+    },
+    "Policy number" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αριθμός συμβολαίου"
+          }
+        }
+      }
+    },
+    "Postal code" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ταχυδρομικός κώδικας"
+          }
+        }
+      }
+    },
+    "Pre-encryption backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφο ασφαλείας πριν από την κρυπτογράφηση"
+          }
+        }
+      }
+    },
+    "Pre-import snapshot" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στιγμιότυπο πριν από την εισαγωγή"
+          }
+        }
+      }
+    },
+    "Pre-restore snapshot" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στιγμιότυπο πριν από την επαναφορά"
+          }
+        }
+      }
+    },
+    "Prefer not to say" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν δηλώνεται"
+          }
+        }
+      }
+    },
+    "Prescribed by" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνταγογραφήθηκε από"
+          }
+        }
+      }
+    },
+    "Preview" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προεπισκόπηση"
+          }
+        }
+      }
+    },
+    "Priority" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προτεραιότητα"
+          }
+        }
+      }
+    },
+    "Privacy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόρρητο"
+          }
+        }
+      }
+    },
+    "Provider" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασφαλιστικός φορέας"
+          }
+        }
+      }
+    },
+    "Pruned restore points" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εκκαθάριση σημείων επαναφοράς"
+          }
+        }
+      }
+    },
+    "Quick Open…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γρήγορο άνοιγμα…"
+          }
+        }
+      }
+    },
+    "Reaction" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίδραση"
+          }
+        }
+      }
+    },
+    "Reason for stopping" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λόγος διακοπής"
+          }
+        }
+      }
+    },
+    "Reconciled vault" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμός Vault"
+          }
+        }
+      }
+    },
+    "Reconnect…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επανασύνδεση…"
+          }
+        }
+      }
+    },
+    "Records" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εγγραφές"
+          }
+        }
+      }
+    },
+    "Records stay inside the app's container, which FileVault encrypts with the rest of the disk. Backups made with File › Back Up… are encrypted with the passphrase you enter; nothing readable leaves the container without it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα αρχεία παραμένουν μέσα στον χώρο της εφαρμογής, τον οποίο το FileVault κρυπτογραφεί μαζί με τον υπόλοιπο δίσκο. Τα αντίγραφα ασφαλείας από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας… κρυπτογραφούνται με τη φράση πρόσβασης που εισάγετε· τίποτα αναγνώσιμο δεν φεύγει από τον χώρο της εφαρμογής χωρίς αυτήν."
+          }
+        }
+      }
+    },
+    "Recover Store" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανάκτηση βάσης δεδομένων"
+          }
+        }
+      }
+    },
+    "Recovering…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανάκτηση…"
+          }
+        }
+      }
+    },
+    "Recovery failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η ανάκτηση απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "Refresh" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανανέωση"
+          }
+        }
+      }
+    },
+    "Refresh graph" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανανέωση γραφήματος"
+          }
+        }
+      }
+    },
+    "Refusing to use an unsafe storage identifier." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν επιτρέπεται η χρήση μη ασφαλούς αναγνωριστικού αποθήκευσης."
+          }
+        }
+      }
+    },
+    "Region" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Περιφέρεια"
+          }
+        }
+      }
+    },
+    "Relationship" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σχέση"
+          }
+        }
+      }
+    },
+    "Reminders auto-sync off" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αυτόματος συγχρονισμός υπενθυμίσεων ανενεργός"
+          }
+        }
+      }
+    },
+    "Reminders auto-sync on" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αυτόματος συγχρονισμός υπενθυμίσεων ενεργός"
+          }
+        }
+      }
+    },
+    "Reminders conflict: %lld todo(s) had unsynced local edits that were overwritten by newer versions from Apple Reminders." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύγκρουση Υπενθυμίσεων: %lld εκκρεμότητα(-ες) είχαν μη συγχρονισμένες τοπικές αλλαγές που αντικαταστάθηκαν από νεότερες εκδόσεις από τις Υπενθυμίσεις Apple."
+          }
+        }
+      }
+    },
+    "Reminders permission denied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η άδεια για τις Υπενθυμίσεις απορρίφθηκε"
+          }
+        }
+      }
+    },
+    "Reminders write failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εγγραφή στις Υπενθυμίσεις απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "Reminders: %lld todo(s) are missing from the chosen list. Reconnect or resolve them manually; nothing was deleted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υπενθυμίσεις: %lld εκκρεμότητα(-ες) λείπουν από τη λίστα που επιλέξατε. Συνδέστε ξανά τις Υπενθυμίσεις ή επιλύστε το ζήτημα χειροκίνητα· δεν διαγράφηκε τίποτα."
+          }
+        }
+      }
+    },
+    "Remove %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση %@"
+          }
+        }
+      }
+    },
+    "Remove allergy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση αλλεργίας"
+          }
+        }
+      }
+    },
+    "Remove condition" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση πάθησης"
+          }
+        }
+      }
+    },
+    "Remove due date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση προθεσμίας"
+          }
+        }
+      }
+    },
+    "Remove medication" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση φαρμάκου"
+          }
+        }
+      }
+    },
+    "Removed %lld older restore point(s)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαιρέθηκαν παλαιότερα σημεία επαναφοράς: %lld"
+          }
+        }
+      }
+    },
+    "Reset template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Επαναφορά προτύπου"
+          }
+        }
+      }
+    },
+    "Reset template “%@” to its shipped copy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το πρότυπο «%@» επανήλθε στην αρχική του μορφή"
+          }
+        }
+      }
+    },
+    "Reset to Default" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Επαναφορά προεπιλογής"
+          }
+        }
+      }
+    },
+    "Resolved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποκαταστάθηκε"
+          }
+        }
+      }
+    },
+    "Restore" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά"
+          }
+        }
+      }
+    },
+    "Restore failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επαναφορά απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "Restore from Backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αντίγραφο ασφαλείας"
+          }
+        }
+      }
+    },
+    "Restore from Backup…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αντίγραφο ασφαλείας…"
+          }
+        }
+      }
+    },
+    "Restore points" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Σημεία επαναφοράς"
+          }
+        }
+      }
+    },
+    "Restore points are encrypted snapshots MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα σημεία επαναφοράς είναι κρυπτογραφημένα στιγμιότυπα που το MedNotes κρατά μέσα στον χώρο της εφαρμογής πριν από μια εισαγωγή ή επαναφορά· διατηρούνται τα πέντε νεότερα. Τα κρυπτογραφημένα αντίγραφα ασφαλείας δημιουργούνται από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας… και αποθηκεύονται όπου επιλέξετε."
+          }
+        }
+      }
+    },
+    "Restore points are plain copies MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τα σημεία επαναφοράς είναι απλά αντίγραφα που το MedNotes κρατά μέσα στον φάκελό του πριν από μια εισαγωγή ή επαναφορά· διατηρούνται τα πέντε νεότερα. Τα κρυπτογραφημένα αντίγραφα ασφαλείας δημιουργούνται από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας… και αποθηκεύονται όπου επιλέξετε."
+          }
+        }
+      }
+    },
+    "Restore to the active list" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά στη λίστα ενεργών"
+          }
+        }
+      }
+    },
+    "Restored %@: %@." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά «%@»: %@."
+          }
+        }
+      }
+    },
+    "Restored %@: %@. Reconnect Calendar and Reminders before syncing again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά «%@»: %@. Συνδέστε ξανά το Ημερολόγιο και τις Υπενθυμίσεις πριν από τον επόμενο συγχρονισμό."
+          }
+        }
+      }
+    },
+    "Restored backup" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά αντιγράφου"
+          }
+        }
+      }
+    },
+    "Restored patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά ασθενούς"
+          }
+        }
+      }
+    },
+    "Restoring replaces every record in MedNotes with this backup. A restore point of the current data is kept first." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επαναφορά αντικαθιστά κάθε εγγραφή του MedNotes με αυτό το αντίγραφο. Πρώτα διατηρείται σημείο επαναφοράς των τρεχόντων δεδομένων."
+          }
+        }
+      }
+    },
+    "Revert" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά αλλαγών"
+          }
+        }
+      }
+    },
+    "Runs SQLite's own integrity check and confirms every link between records. Backups are checked the same way before they are trusted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εκτελεί τον ίδιο τον έλεγχο ακεραιότητας της SQLite και επιβεβαιώνει κάθε σύνδεσμο μεταξύ εγγραφών. Τα αντίγραφα ασφαλείας ελέγχονται με τον ίδιο τρόπο πριν θεωρηθούν αξιόπιστα."
+          }
+        }
+      }
+    },
+    "SAMPLE DATA — throwaway preview store, not your records" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ΔΟΚΙΜΑΣΤΙΚΑ ΔΕΔΟΜΕΝΑ — προσωρινό αποθετήριο προεπισκόπησης, όχι τα αρχεία σας"
+          }
+        }
+      }
+    },
+    "SOAP Note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημείωση SOAP"
+          }
+        }
+      }
+    },
+    "Sample data. This window is running on a throwaway preview store." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δοκιμαστικά δεδομένα. Αυτό το παράθυρο τρέχει σε προσωρινό αποθετήριο προεπισκόπησης."
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση"
+          }
+        }
+      }
+    },
+    "Save changes (⌘S)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση αλλαγών (⌘S)"
+          }
+        }
+      }
+    },
+    "Saved event" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση συμβάντος"
+          }
+        }
+      }
+    },
+    "Saved note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση σημείωσης"
+          }
+        }
+      }
+    },
+    "Saved patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση ασθενούς"
+          }
+        }
+      }
+    },
+    "Saved template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αποθήκευση προτύπου"
+          }
+        }
+      }
+    },
+    "Saved todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθήκευση εκκρεμότητας"
+          }
+        }
+      }
+    },
+    "Saves, archives, backups and imports are listed here." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αποθηκεύσεις, αρχειοθετήσεις, αντίγραφα ασφαλείας και εισαγωγές εμφανίζονται εδώ."
+          }
+        }
+      }
+    },
+    "Schedule" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πρόγραμμα"
+          }
+        }
+      }
+    },
+    "Scope" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εύρος"
+          }
+        }
+      }
+    },
+    "Search activity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση δραστηριότητας"
+          }
+        }
+      }
+    },
+    "Search archived patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση αρχειοθετημένων ασθενών"
+          }
+        }
+      }
+    },
+    "Search events" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση συμβάντων"
+          }
+        }
+      }
+    },
+    "Search notes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση σημειώσεων"
+          }
+        }
+      }
+    },
+    "Search patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση ασθενών"
+          }
+        }
+      }
+    },
+    "Search todos" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση εκκρεμοτήτων"
+          }
+        }
+      }
+    },
+    "Security" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασφάλεια"
+          }
+        }
+      }
+    },
+    "Select a note, or create a new one to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε μια σημείωση ή δημιουργήστε νέα για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Select a patient, or create a new one to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε έναν ασθενή ή δημιουργήστε νέο για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Select a todo, or create a new one to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε μια εκκρεμότητα ή δημιουργήστε νέα για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Select an event, or create a new one to get started." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλέξτε ένα συμβάν ή δημιουργήστε νέο για να ξεκινήσετε."
+          }
+        }
+      }
+    },
+    "Set date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός ημερομηνίας"
+          }
+        }
+      }
+    },
+    "Set date of birth" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός ημερομηνίας"
+          }
+        }
+      }
+    },
+    "Set diagnosis date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός ημερομηνίας διάγνωσης"
+          }
+        }
+      }
+    },
+    "Set due date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός προθεσμίας"
+          }
+        }
+      }
+    },
+    "Set end date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός ημερομηνίας λήξης"
+          }
+        }
+      }
+    },
+    "Set expiry date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορισμός ημερομηνίας λήξης"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ρυθμίσεις"
+          }
+        }
+      }
+    },
+    "Settings…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ρυθμίσεις…"
+          }
+        }
+      }
+    },
+    "Severe" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σοβαρή"
+          }
+        }
+      }
+    },
+    "Severity" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σοβαρότητα"
+          }
+        }
+      }
+    },
+    "Show Backups in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εμφάνιση αντιγράφων ασφαλείας στο Finder"
+          }
+        }
+      }
+    },
+    "Show Mirror in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση του αντικατοπτρισμού στο Finder"
+          }
+        }
+      }
+    },
+    "Show Vault in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση του Vault στο Finder"
+          }
+        }
+      }
+    },
+    "Show in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εμφάνιση στο Finder"
+          }
+        }
+      }
+    },
+    "Start" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Έναρξη"
+          }
+        }
+      }
+    },
+    "Started" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Έναρξη"
+          }
+        }
+      }
+    },
+    "Starting MedNotes…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκκίνηση MedNotes…"
+          }
+        }
+      }
+    },
+    "Status" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κατάσταση"
+          }
+        }
+      }
+    },
+    "Stopped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διακόπηκε"
+          }
+        }
+      }
+    },
+    "Storage" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αποθήκευση"
+          }
+        }
+      }
+    },
+    "Store" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Βάση δεδομένων"
+          }
+        }
+      }
+    },
+    "Street" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οδός"
+          }
+        }
+      }
+    },
+    "Street and number" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οδός και αριθμός"
+          }
+        }
+      }
+    },
+    "Subscribed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδρομές"
+          }
+        }
+      }
+    },
+    "Surgery" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χειρουργείο"
+          }
+        }
+      }
+    },
+    "Sync" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Συγχρονισμός"
+          }
+        }
+      }
+    },
+    "Sync Calendar Now" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμός ημερολογίου τώρα"
+          }
+        }
+      }
+    },
+    "Sync Now" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμός τώρα"
+          }
+        }
+      }
+    },
+    "Sync Reminders Now" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμός υπενθυμίσεων τώρα"
+          }
+        }
+      }
+    },
+    "Syncing is disabled while running on sample data." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ο συγχρονισμός είναι απενεργοποιημένος όσο η εφαρμογή τρέχει με δοκιμαστικά δεδομένα."
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύστημα"
+          }
+        }
+      }
+    },
+    "Tags" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ετικέτες"
+          }
+        }
+      }
+    },
+    "Template saved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το πρότυπο αποθηκεύτηκε"
+          }
+        }
+      }
+    },
+    "Templates" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Πρότυπα"
+          }
+        }
+      }
+    },
+    "The AMKA check digit does not match; one digit is probably mistyped." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το ψηφίο ελέγχου του ΑΜΚΑ δεν ταιριάζει· πιθανόν κάποιο ψηφίο είναι λάθος."
+          }
+        }
+      }
+    },
+    "The AMKA encodes %@." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο ΑΜΚΑ αντιστοιχεί σε ημερομηνία γέννησης %@."
+          }
+        }
+      }
+    },
+    "The Keychain is not available yet. Unlock your Mac, then try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η κλειδοθήκη δεν είναι ακόμη διαθέσιμη. Ξεκλειδώστε το Mac σας και δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "The attachment is damaged, or its key is wrong." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το συνημμένο έχει καταστραφεί ή το κλειδί του είναι λάθος."
+          }
+        }
+      }
+    },
+    "The attachment is too large to open safely." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το συνημμένο είναι πολύ μεγάλο για να ανοίξει με ασφάλεια."
+          }
+        }
+      }
+    },
+    "The attachment “%@” could not be stored safely, so nothing was imported." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το συνημμένο «%@» δεν μπόρεσε να αποθηκευτεί με ασφάλεια, γι' αυτό δεν εισήχθη τίποτα."
+          }
+        }
+      }
+    },
+    "The attachment's length header is invalid." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η κεφαλίδα μήκους του συνημμένου δεν είναι έγκυρη."
+          }
+        }
+      }
+    },
+    "The backup archive is not in a form MedNotes can read." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αρχείο αντιγράφου ασφαλείας δεν έχει μορφή που μπορεί να διαβάσει το MedNotes."
+          }
+        }
+      }
+    },
+    "The backup contains a field that is too large." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει ένα πεδίο που είναι πολύ μεγάλο."
+          }
+        }
+      }
+    },
+    "The backup contains a symbolic link or non-regular file (%@)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει συμβολικό σύνδεσμο ή μη κανονικό αρχείο (%@)."
+          }
+        }
+      }
+    },
+    "The backup contains an unknown record type (%lld)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει άγνωστο τύπο εγγραφής (%lld)."
+          }
+        }
+      }
+    },
+    "The backup contains an unsafe file name (%@)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει μη ασφαλές όνομα αρχείου (%@)."
+          }
+        }
+      }
+    },
+    "The backup contains the same file twice (%@)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει το ίδιο αρχείο δύο φορές (%@)."
+          }
+        }
+      }
+    },
+    "The backup contains too many files to extract safely." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει πάρα πολλά αρχεία για ασφαλή αποσυσκευασία."
+          }
+        }
+      }
+    },
+    "The backup contains too many records to process safely." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει πάρα πολλές εγγραφές για ασφαλή επεξεργασία."
+          }
+        }
+      }
+    },
+    "The backup could not be extracted: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η αποσυσκευασία του αντιγράφου ασφαλείας: %@"
+          }
+        }
+      }
+    },
+    "The backup could not be read: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του αντιγράφου ασφαλείας: %@"
+          }
+        }
+      }
+    },
+    "The backup ends before its final marker." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας τελειώνει πριν από τον τελικό δείκτη του."
+          }
+        }
+      }
+    },
+    "The backup file could not be read or written: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση ή η εγγραφή του αρχείου αντιγράφου: %@"
+          }
+        }
+      }
+    },
+    "The backup has %lld broken links between records." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας έχει %lld κατεστραμμένους συνδέσμους μεταξύ εγγραφών."
+          }
+        }
+      }
+    },
+    "The backup is encrypted with the passphrase you entered." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο κρυπτογραφείται με τη φράση πρόσβασης που εισαγάγατε."
+          }
+        }
+      }
+    },
+    "The backup is encrypted with this passphrase. There is no way to open it without the passphrase, and MedNotes does not keep a copy." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας κρυπτογραφείται με αυτή τη φράση πρόσβασης. Δεν υπάρχει τρόπος να ανοίξει χωρίς αυτήν, και το MedNotes δεν κρατά αντίγραφό της."
+          }
+        }
+      }
+    },
+    "The backup key could not be derived." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η παραγωγή του κλειδιού του αντιγράφου."
+          }
+        }
+      }
+    },
+    "The backup nests files too deeply (%@)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας περιέχει αρχεία σε πάρα πολλά επίπεδα φακέλων (%@)."
+          }
+        }
+      }
+    },
+    "The backup operation was cancelled." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η δημιουργία αντιγράφου ασφαλείας ακυρώθηκε."
+          }
+        }
+      }
+    },
+    "The backup was made by a newer MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας δημιουργήθηκε από νεότερη έκδοση του MedNotes."
+          }
+        }
+      }
+    },
+    "The backup's %@ count does not match: expected %lld, found %lld." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το πλήθος για %@ στο αντίγραφο ασφαλείας δεν ταιριάζει: αναμένονταν %lld, βρέθηκαν %lld."
+          }
+        }
+      }
+    },
+    "The backup's final authentication tag is missing." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λείπει η τελική ετικέτα ελέγχου γνησιότητας του αντιγράφου ασφαλείας."
+          }
+        }
+      }
+    },
+    "The backup's key-derivation count (%u) is outside the accepted range." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το πλήθος επαναλήψεων (%u) για την παραγωγή του κλειδιού του αντιγράφου ασφαλείας είναι εκτός του αποδεκτού εύρους."
+          }
+        }
+      }
+    },
+    "The backup's records are out of order." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι εγγραφές του αντιγράφου ασφαλείας δεν είναι στη σωστή σειρά."
+          }
+        }
+      }
+    },
+    "The backup's schema is not one MedNotes can restore: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes δεν μπορεί να επαναφέρει αντίγραφο ασφαλείας με αυτό το σχήμα βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "The chosen calendar no longer exists. Reconnect in Settings › Sync." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το ημερολόγιο που επιλέξατε δεν υπάρχει πια. Συνδέστε ξανά το Ημερολόγιο στις Ρυθμίσεις › Συγχρονισμός."
+          }
+        }
+      }
+    },
+    "The chosen reminder list no longer exists. Reconnect in Settings › Sync." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η λίστα υπενθυμίσεων που επιλέξατε δεν υπάρχει πια. Συνδέστε ξανά τις Υπενθυμίσεις στις Ρυθμίσεις › Συγχρονισμός."
+          }
+        }
+      }
+    },
+    "The database could not be opened: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό το άνοιγμα της βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "The database encryption key could not be applied: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η χρήση του κλειδιού κρυπτογράφησης της βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "The database file is damaged. SQLite reports: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αρχείο της βάσης δεδομένων έχει καταστραφεί. Η SQLite αναφέρει: %@"
+          }
+        }
+      }
+    },
+    "The database key is wrong or the file is not an encrypted MedNotes store." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί της βάσης δεδομένων είναι λάθος ή το αρχείο δεν είναι κρυπτογραφημένη βάση δεδομένων MedNotes."
+          }
+        }
+      }
+    },
+    "The database key must be 64 hex characters (a 256-bit raw key)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί της βάσης δεδομένων πρέπει να έχει 64 δεκαεξαδικούς χαρακτήρες (ακατέργαστο κλειδί 256 bit)."
+          }
+        }
+      }
+    },
+    "The database snapshot could not be read." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του στιγμιότυπου της βάσης δεδομένων."
+          }
+        }
+      }
+    },
+    "The database, attachments and restore points are encrypted with a key held in the macOS Keychain, which requires Touch ID or your account password. MedNotes locks when the screen locks or sleeps, when you switch users, after %lld minutes without activity, and on request." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η βάση δεδομένων, τα συνημμένα και τα σημεία επαναφοράς κρυπτογραφούνται με κλειδί που φυλάσσεται στην κλειδοθήκη του macOS και για το οποίο απαιτείται το Touch ID ή το συνθηματικό του λογαριασμού σας. Το MedNotes κλειδώνει όταν η οθόνη κλειδώνει ή τίθεται σε κατάσταση ύπνου, όταν κάνετε εναλλαγή χρηστών, μετά από %lld λεπτά χωρίς δραστηριότητα και όταν το ζητήσετε."
+          }
+        }
+      }
+    },
+    "The database, attachments and restore points are encrypted with a key in the macOS Keychain; MedNotes locks after five minutes without activity, when the screen locks, and on request. Data leaves the app only when you send records to Calendar or Reminders, run a Markdown export, or open an attachment in another app." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η βάση δεδομένων, τα συνημμένα και τα σημεία επαναφοράς κρυπτογραφούνται με κλειδί που φυλάσσεται στην κλειδοθήκη του macOS· το MedNotes κλειδώνει μετά από πέντε λεπτά χωρίς δραστηριότητα, όταν κλειδώνει η οθόνη και όταν το ζητήσετε. Τα δεδομένα φεύγουν από την εφαρμογή μόνο όταν στέλνετε εγγραφές στο Ημερολόγιο ή στις Υπενθυμίσεις, όταν εκτελείτε μια εξαγωγή Markdown ή όταν ανοίγετε ένα συνημμένο σε άλλη εφαρμογή."
+          }
+        }
+      }
+    },
+    "The device key could not be read from the Keychain (status %d)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του κλειδιού συσκευής από την κλειδοθήκη (κατάσταση %d)."
+          }
+        }
+      }
+    },
+    "The device key could not be read from the Keychain (status %d). Try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του κλειδιού συσκευής από την κλειδοθήκη (κατάσταση %d). Δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "The device key has an unexpected length (%lld bytes)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί συσκευής έχει μη αναμενόμενο μήκος (%lld byte)."
+          }
+        }
+      }
+    },
+    "The device key is missing" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί συσκευής λείπει"
+          }
+        }
+      }
+    },
+    "The device key is missing. Restore from a portable backup to recover this data." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί συσκευής λείπει. Για ανάκτηση αυτών των δεδομένων, επαναφέρετε ένα φορητό αντίγραφο ασφαλείας."
+          }
+        }
+      }
+    },
+    "The encrypted store could not be installed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η εγκατάσταση της κρυπτογραφημένης βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "The encrypted store failed validation: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επικύρωση της κρυπτογραφημένης βάσης δεδομένων απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "The encryption migration failed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η μετάβαση στην κρυπτογράφηση απέτυχε: %@"
+          }
+        }
+      }
+    },
+    "The files are readable clinical text. Deleting them cannot be undone; APFS snapshots or backups may still hold copies." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα αρχεία περιέχουν αναγνώσιμο κλινικό κείμενο. Η διαγραφή τους δεν μπορεί να αναιρεθεί· ενδέχεται να υπάρχουν ακόμη σε στιγμιότυπα APFS ή σε αντίγραφα ασφαλείας."
+          }
+        }
+      }
+    },
+    "The first six digits of an AMKA are the birth date (day, month, year); these are not a real date." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα πρώτα έξι ψηφία του ΑΜΚΑ είναι η ημερομηνία γέννησης (ημέρα, μήνας, έτος)· αυτά δεν αποτελούν πραγματική ημερομηνία."
+          }
+        }
+      }
+    },
+    "The folder is read first into a scratch copy, so the report below is exactly what the import would do. Nothing is written to your records until you choose Import, and a restore point is kept before that." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο φάκελος διαβάζεται πρώτα σε πρόχειρο αντίγραφο, ώστε η παρακάτω αναφορά να είναι ακριβώς αυτό που θα έκανε η εισαγωγή. Τίποτα δεν γράφεται στα αρχεία σας μέχρι να επιλέξετε Εισαγωγή, και πριν από αυτό διατηρείται σημείο επαναφοράς."
+          }
+        }
+      }
+    },
+    "The graph is empty" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το γράφημα είναι κενό"
+          }
+        }
+      }
+    },
+    "The migration journal is unreadable. The original store is untouched." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του αρχείου καταγραφής της μετάβασης. Η αρχική βάση δεδομένων δεν έχει τροποποιηθεί."
+          }
+        }
+      }
+    },
+    "The passphrase is wrong, or the backup file is damaged." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η φράση πρόσβασης είναι λάθος ή το αρχείο αντιγράφου έχει καταστραφεί."
+          }
+        }
+      }
+    },
+    "The passphrase must be at least 16 characters." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η φράση πρόσβασης πρέπει να έχει τουλάχιστον 16 χαρακτήρες."
+          }
+        }
+      }
+    },
+    "The passphrases do not match." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι φράσεις πρόσβασης δεν ταιριάζουν."
+          }
+        }
+      }
+    },
+    "The plaintext Markdown mirror was deleted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο μη κρυπτογραφημένος αντικατοπτρισμός Markdown διαγράφηκε."
+          }
+        }
+      }
+    },
+    "The restore failed, and your original data could not be put back. It was kept in “%@”. %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επαναφορά απέτυχε και τα αρχικά σας δεδομένα δεν μπόρεσαν να επανέλθουν. Φυλάχθηκαν στο «%@». %@"
+          }
+        }
+      }
+    },
+    "The store is not open." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Η βάση δεδομένων δεν είναι ανοιχτή."
+          }
+        }
+      }
+    },
+    "The sync destination has not been reconfirmed since the last restore." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο προορισμός συγχρονισμού δεν έχει επιβεβαιωθεί ξανά μετά την τελευταία επαναφορά."
+          }
+        }
+      }
+    },
+    "There is no existing %@ to adopt." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει %@ που να μπορεί να χρησιμοποιηθεί ως προορισμός."
+          }
+        }
+      }
+    },
+    "There is not enough free disk space to stage this backup." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει αρκετός ελεύθερος χώρος στον δίσκο για την επεξεργασία αυτού του αντιγράφου ασφαλείας."
+          }
+        }
+      }
+    },
+    "This attachment was written by a newer MedNotes (format %lld)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το συνημμένο δημιουργήθηκε από νεότερη έκδοση του MedNotes (μορφή %lld)."
+          }
+        }
+      }
+    },
+    "This backup contains no database." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο ασφαλείας δεν περιέχει βάση δεδομένων."
+          }
+        }
+      }
+    },
+    "This backup has no manifest." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο ασφαλείας δεν έχει δηλωτικό περιεχομένων."
+          }
+        }
+      }
+    },
+    "This backup is larger than the 1 GiB the legacy format can be opened safely." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο ασφαλείας είναι μεγαλύτερο από 1 GiB, το όριο για ασφαλές άνοιγμα αντιγράφων παλαιάς μορφής."
+          }
+        }
+      }
+    },
+    "This backup uses an unknown key-derivation profile (%lld)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο ασφαλείας χρησιμοποιεί άγνωστο προφίλ παραγωγής κλειδιού (%lld)."
+          }
+        }
+      }
+    },
+    "This backup was written by a newer MedNotes (format %lld)." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο δημιουργήθηκε από νεότερη έκδοση του MedNotes (μορφή %lld)."
+          }
+        }
+      }
+    },
+    "This backup's manifest is invalid." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το δηλωτικό περιεχομένων αυτού του αντιγράφου ασφαλείας δεν είναι έγκυρο."
+          }
+        }
+      }
+    },
+    "This cannot be undone." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτή η ενέργεια δεν μπορεί να αναιρεθεί."
+          }
+        }
+      }
+    },
+    "This database is not encrypted, so it cannot be opened in encrypted mode." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτή η βάση δεδομένων δεν είναι κρυπτογραφημένη, γι’ αυτό δεν μπορεί να ανοίξει σε λειτουργία κρυπτογράφησης."
+          }
+        }
+      }
+    },
+    "This file is not a MedNotes backup." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αρχείο δεν είναι αντίγραφο ασφαλείας MedNotes."
+          }
+        }
+      }
+    },
+    "This file is not an encrypted MedNotes attachment." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αρχείο δεν είναι κρυπτογραφημένο συνημμένο MedNotes."
+          }
+        }
+      }
+    },
+    "This patient's attachments changed after you opened the record. Reopen it to see the current files, then repeat your edit." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα συνημμένα του ασθενούς άλλαξαν αφού ανοίξατε την εγγραφή. Ανοίξτε την ξανά για να δείτε τα τρέχοντα αρχεία και επαναλάβετε την αλλαγή."
+          }
+        }
+      }
+    },
+    "This store is still plaintext. Run the encryption migration before using it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτή η βάση δεδομένων δεν είναι ακόμη κρυπτογραφημένη. Πριν τη χρησιμοποιήσετε, εκτελέστε τη μετάβαση στην κρυπτογράφηση."
+          }
+        }
+      }
+    },
+    "This store's device key is still in the Keychain, so nothing was restored. Quit and reopen MedNotes to unlock it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το κλειδί συσκευής αυτής της βάσης δεδομένων βρίσκεται ακόμη στην κλειδοθήκη, γι’ αυτό δεν επαναφέρθηκε τίποτα. Τερματίστε το MedNotes και ανοίξτε το ξανά για ξεκλείδωμα."
+          }
+        }
+      }
+    },
+    "Title" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τίτλος"
+          }
+        }
+      }
+    },
+    "Today" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σήμερα"
+          }
+        }
+      }
+    },
+    "Todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "Todo imported from Apple Reminders" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εκκρεμότητα εισήχθη από τις Υπενθυμίσεις Apple"
+          }
+        }
+      }
+    },
+    "Todo not found" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εκκρεμότητα δεν βρέθηκε"
+          }
+        }
+      }
+    },
+    "Todo saved" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εκκρεμότητα αποθηκεύτηκε"
+          }
+        }
+      }
+    },
+    "Todos" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκκρεμότητες"
+          }
+        }
+      }
+    },
+    "Toggle Completed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εναλλαγή ολοκλήρωσης"
+          }
+        }
+      }
+    },
+    "Toggled note pin" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εναλλαγή καρφιτσώματος σημείωσης"
+          }
+        }
+      }
+    },
+    "Toggled todo" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εναλλαγή εκκρεμότητας"
+          }
+        }
+      }
+    },
+    "Touch ID or the password was not accepted. Try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το Touch ID ή το συνθηματικό δεν έγινε αποδεκτό. Δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "Touch ID or your account password unlocks MedNotes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes ξεκλειδώνει με το Touch ID ή με το συνθηματικό του λογαριασμού σας."
+          }
+        }
+      }
+    },
+    "Try a different filter." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δοκιμάστε διαφορετικό φίλτρο."
+          }
+        }
+      }
+    },
+    "Type" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τύπος"
+          }
+        }
+      }
+    },
+    "Type [[ somewhere ]] inside a note to create links, and they will show up here." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πληκτρολογήστε [[ κάπου ]] μέσα σε μια σημείωση για να δημιουργήσετε συνδέσμους, και θα εμφανιστούν εδώ."
+          }
+        }
+      }
+    },
+    "Type [[ to link this note to another note or a patient." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πληκτρολογήστε [[ για να συνδέσετε αυτή τη σημείωση με άλλη σημείωση ή με ασθενή."
+          }
+        }
+      }
+    },
+    "Type to search" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πληκτρολογήστε για αναζήτηση"
+          }
+        }
+      }
+    },
+    "Unknown" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άγνωστη"
+          }
+        }
+      }
+    },
+    "Unknown patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άγνωστος ασθενής"
+          }
+        }
+      }
+    },
+    "Unlock" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ξεκλείδωμα"
+          }
+        }
+      }
+    },
+    "Unlock MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ξεκλείδωμα του MedNotes"
+          }
+        }
+      }
+    },
+    "Unlock was cancelled. Try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το ξεκλείδωμα ακυρώθηκε. Δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "Unnamed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χωρίς όνομα"
+          }
+        }
+      }
+    },
+    "Unnamed Patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανώνυμος ασθενής"
+          }
+        }
+      }
+    },
+    "Unpin" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ξεκαρφίτσωμα"
+          }
+        }
+      }
+    },
+    "Untitled" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χωρίς τίτλο"
+          }
+        }
+      }
+    },
+    "Upcoming" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επερχόμενα"
+          }
+        }
+      }
+    },
+    "Updated %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ενημερώθηκε %@"
+          }
+        }
+      }
+    },
+    "Use %@ from AMKA" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρήση %@ από τον ΑΜΚΑ"
+          }
+        }
+      }
+    },
+    "Use an existing one" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρήση υπάρχοντος προορισμού"
+          }
+        }
+      }
+    },
+    "Use it" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρήση"
+          }
+        }
+      }
+    },
+    "Vaccine" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμβόλιο"
+          }
+        }
+      }
+    },
+    "Valid until" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ισχύει έως"
+          }
+        }
+      }
+    },
+    "Vault mirroring off" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατοπτρισμός Vault ανενεργός"
+          }
+        }
+      }
+    },
+    "Vault mirroring on" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατοπτρισμός Vault ενεργός"
+          }
+        }
+      }
+    },
+    "Verified backup: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαληθευμένο αντίγραφο ασφαλείας: %@"
+          }
+        }
+      }
+    },
+    "Weight" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Βάρος"
+          }
+        }
+      }
+    },
+    "Weight (kg)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Βάρος (kg)"
+          }
+        }
+      }
+    },
+    "What leaves MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τι φεύγει από το MedNotes"
+          }
+        }
+      }
+    },
+    "When" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πότε"
+          }
+        }
+      }
+    },
+    "Where I left off" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εκεί που σταμάτησα"
+          }
+        }
+      }
+    },
+    "Writes every note as a readable Markdown file in the Vault folder, so Obsidian can open them. The files are not encrypted, which is why this is off by default. Turning it off leaves the existing files in place." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γράφει κάθε σημείωση ως αναγνώσιμο αρχείο Markdown στον φάκελο Vault, ώστε να ανοίγει από το Obsidian. Τα αρχεία δεν είναι κρυπτογραφημένα, γι’ αυτό η επιλογή είναι απενεργοποιημένη από προεπιλογή. Η απενεργοποίηση αφήνει τα υπάρχοντα αρχεία στη θέση τους."
+          }
+        }
+      }
+    },
+    "Writes every note as a readable Markdown file to a folder you choose, for use in another app. The result is plaintext. This replaces the old continuous mirror, which no longer runs." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Γράφει κάθε σημείωση ως αναγνώσιμο αρχείο Markdown σε φάκελο της επιλογής σας, για χρήση σε άλλη εφαρμογή. Το αποτέλεσμα δεν είναι κρυπτογραφημένο. Αυτή η λειτουργία αντικαθιστά τον παλαιό συνεχή αντικατοπτρισμό, ο οποίος δεν λειτουργεί πια."
+          }
+        }
+      }
+    },
+    "^[%lld minutes](inflect: true) without activity" : {
+      "localizations" : {
+        "el" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld λεπτό χωρίς δραστηριότητα"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld λεπτά χωρίς δραστηριότητα"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "added %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "προστέθηκαν %lld"
+          }
+        }
+      }
+    },
+    "all-day flag" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ένδειξη «Ολοήμερο»"
+          }
+        }
+      }
+    },
+    "attachment %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "συνημμένο %@"
+          }
+        }
+      }
+    },
+    "attachment %@ does not match its digest" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "το συνημμένο %@ δεν αντιστοιχεί στη σύνοψή του"
+          }
+        }
+      }
+    },
+    "attachment %@ has the wrong length" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "το συνημμένο %@ έχει λάθος μήκος"
+          }
+        }
+      }
+    },
+    "calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ημερολόγιο"
+          }
+        }
+      }
+    },
+    "calendar MedNotes created" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "δημιουργήθηκε από το MedNotes"
+          }
+        }
+      }
+    },
+    "cm" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cm"
+          }
+        }
+      }
+    },
+    "completion" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ολοκλήρωση"
+          }
+        }
+      }
+    },
+    "could not create %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "αποτυχία δημιουργίας του αρχείου %@"
+          }
+        }
+      }
+    },
+    "could not open staging file" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "αποτυχία ανοίγματος του προσωρινού αρχείου"
+          }
+        }
+      }
+    },
+    "created %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "δημιουργήθηκαν %lld"
+          }
+        }
+      }
+    },
+    "due day" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ημέρα προθεσμίας"
+          }
+        }
+      }
+    },
+    "e.g. 850 mg" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "π.χ. 850 mg"
+          }
+        }
+      }
+    },
+    "e.g. spouse, daughter" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "π.χ. σύζυγος, κόρη"
+          }
+        }
+      }
+    },
+    "e.g. twice daily" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "π.χ. δύο φορές την ημέρα"
+          }
+        }
+      }
+    },
+    "esc" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esc"
+          }
+        }
+      }
+    },
+    "event %@ references missing patient %@, unlinked" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "το συμβάν %@ παραπέμπει σε ασθενή %@ που δεν βρέθηκε, ο σύνδεσμος αφαιρέθηκε"
+          }
+        }
+      }
+    },
+    "events" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "συμβάντα"
+          }
+        }
+      }
+    },
+    "integrity check returned %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ο έλεγχος ακεραιότητας επέστρεψε %@"
+          }
+        }
+      }
+    },
+    "kg" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kg"
+          }
+        }
+      }
+    },
+    "link" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "σύνδεσμος"
+          }
+        }
+      }
+    },
+    "list" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "λίστα"
+          }
+        }
+      }
+    },
+    "missing table %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "λείπει ο πίνακας %@"
+          }
+        }
+      }
+    },
+    "name@example.com" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "onoma@example.com"
+          }
+        }
+      }
+    },
+    "note %@ references missing patient %@, unlinked" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "η σημείωση %@ παραπέμπει σε ασθενή %@ που δεν βρέθηκε, ο σύνδεσμος αφαιρέθηκε"
+          }
+        }
+      }
+    },
+    "notes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "σημειώσεις"
+          }
+        }
+      }
+    },
+    "patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ασθενείς"
+          }
+        }
+      }
+    },
+    "priority" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "προτεραιότητα"
+          }
+        }
+      }
+    },
+    "pulled %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "λήφθηκαν %lld"
+          }
+        }
+      }
+    },
+    "pushed %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "στάλθηκαν %lld"
+          }
+        }
+      }
+    },
+    "removed %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "αφαιρέθηκαν %lld"
+          }
+        }
+      }
+    },
+    "start and end dates" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ημερομηνίες έναρξης και λήξης"
+          }
+        }
+      }
+    },
+    "the restored copy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "το αντίγραφο που επαναφέρθηκε"
+          }
+        }
+      }
+    },
+    "title" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "τίτλος"
+          }
+        }
+      }
+    },
+    "todo %@ references missing patient %@, unlinked" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "η εκκρεμότητα %@ παραπέμπει σε ασθενή %@ που δεν βρέθηκε, ο σύνδεσμος αφαιρέθηκε"
+          }
+        }
+      }
+    },
+    "todos" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "εκκρεμότητες"
+          }
+        }
+      }
+    },
+    "unsupported date format" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "μη υποστηριζόμενη μορφή ημερομηνίας"
+          }
+        }
+      }
+    },
+    "updated %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ενημερώθηκαν %lld"
+          }
+        }
+      }
+    },
+    "{{date}}, {{time}} and {{patient}} are filled in when a template is inserted into a note. Built-in templates can be edited here and reset to their shipped copy; custom templates can be deleted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Τα {{date}}, {{time}} και {{patient}} συμπληρώνονται όταν ένα πρότυπο εισάγεται σε σημείωση. Τα ενσωματωμένα πρότυπα μπορούν να τροποποιηθούν εδώ και να επανέλθουν στην αρχική τους μορφή· τα προσαρμοσμένα μπορούν να διαγραφούν."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

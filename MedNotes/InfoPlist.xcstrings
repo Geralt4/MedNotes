@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSCalendarsFullAccessUsageDescription" : {
+      "comment" : "Privacy - Calendars Full Access Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes χρειάζεται πρόσβαση στο ημερολόγιό σας για να δημιουργεί και να διαχειρίζεται ιατρικά ραντεβού."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MedNotes needs access to your calendar to create and manage medical appointments."
+          }
+        }
+      }
+    },
+    "NSRemindersFullAccessUsageDescription" : {
+      "comment" : "Privacy - Reminders Full Access Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes χρειάζεται πρόσβαση στις Υπενθυμίσεις για να συγχρονίζει τις εκκρεμότητες ιατρικής παρακολούθησης."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MedNotes needs access to Reminders to sync medical follow-up tasks."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

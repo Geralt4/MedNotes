@@ -1,0 +1,22 @@
+{
+  "originHash" : "1c15b06873f1e95aa5df4c8d728ff44ae5c5a4e8694b9c4f2fcb55d9e4ca00a4",
+  "pins" : [
+    {
+      "identity" : "sqlcipher.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sqlcipher/SQLCipher.swift.git",
+      "state" : {
+        "revision" : "39f212458aeb88e33bdac2200a793a3f0d55d32b"
+      }
+    },
+    {
+      "identity" : "swift-sodium",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jedisct1/swift-sodium.git",
+      "state" : {
+        "revision" : "cfd195c76882aa9b997560ca7cb95d72fbf5db00"
+      }
+    }
+  ],
+  "version" : 3
+}

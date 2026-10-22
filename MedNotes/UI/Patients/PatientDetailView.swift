@@ -1,0 +1,219 @@
+import SwiftUI
+
+struct PatientDetailView: View {
+    @EnvironmentObject private var session: AppSession
+    @State private var draft: Patient?
+    @State private var original: Patient?
+    @State private var isLoading = true
+    @State private var showDeleteConfirm = false
+    /// The record whose "First name" field takes focus when its editor appears:
+    /// only ever the patient the user just created, never one they arrowed to.
+    @State private var autofocusPatientId: UUID?
+    /// This editor's registration with the session, so a lock saves the
+    /// draft before the store closes; see `OpenEditorDraft`.
+    @State private var lockToken = UUID()
+
+    private var loadId: String {
+        "\(session.selectedPatientId?.uuidString ?? "none")-\(session.patientEpoch)"
+    }
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if draft != nil {
+                editorView
+            } else {
+                Text("Patient not found")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: loadId) {
+            await loadPatient()
+        }
+        .onAppear {
+            let draft = $draft, original = $original
+            session.registerOpenEditor(lockToken) {
+                draft.wrappedValue.map { .patient($0, edited: $0 != original.wrappedValue) }
+            }
+        }
+        .onDisappear {
+            session.unregisterOpenEditor(lockToken)
+            guard let d = draft else { return }
+            if hasChanges {
+                Task {
+                    if session.selectedPatientId == d.id {
+                        _ = await session.save(d)
+                    } else if await session.patientExists(id: d.id) == true {
+                        // Selection moved elsewhere or was cleared; still autosave
+                        // this patient's edits as long as it still exists.
+                        _ = await session.save(d)
+                    }
+                }
+            } else if d.isUntouchedNewRecord {
+                // Module switch or cleared selection while a fresh, untouched
+                // record was open: it was never meant to be kept.
+                Task { await session.discardIfUntouched(d) }
+            }
+        }
+        .confirmationDialog(
+            isArchived ? "Delete this patient permanently?" : "Archive this patient?",
+            isPresented: $showDeleteConfirm, titleVisibility: .visible
+        ) {
+            Button(isArchived ? "Delete" : "Archive", role: isArchived ? .destructive : nil) {
+                let permanent = isArchived
+                Task {
+                    if permanent {
+                        await session.deleteSelectedPatient()
+                    } else {
+                        await session.archiveSelectedPatient()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(isArchived
+                ? "This cannot be undone."
+                : "Notes, todos and appointments stay linked, and the record can be restored from the Archived list.")
+        }
+    }
+
+    private func loadPatient() async {
+        let selectedId = session.selectedPatientId
+        if let d = draft, d.id == selectedId, hasChanges {
+            return
+        }
+        if hasChanges, let d = draft, let selectedId, d.id != selectedId {
+            if await session.save(d) == false {
+                session.selectPatient(d.id)
+                return
+            }
+        } else if let d = draft, d.id != selectedId, d.isUntouchedNewRecord {
+            // Leaving a record the user created and never touched: drop it
+            // rather than leave a "Unnamed Patient" row behind.
+            await session.discardIfUntouched(d)
+        }
+        let switching = draft?.id != selectedId
+        let showLoading = draft == nil || switching
+        if showLoading { isLoading = true }
+        defer { if showLoading { isLoading = false } }
+        if switching { autofocusPatientId = nil }
+        let priorDraft = draft
+        let loaded = await session.loadSelectedPatient()
+        if Task.isCancelled { return }
+        guard let patient = loaded, patient.id == selectedId else {
+            // Only clear when the editor wasn't touched during the load.
+            if draft == priorDraft {
+                draft = nil
+                original = nil
+            }
+            return
+        }
+        // Don't clobber edits made while the load was in flight.
+        guard draft == priorDraft else { return }
+        draft = patient
+        original = patient
+        if session.consumeFocusRequest(for: patient.id) {
+            autofocusPatientId = patient.id
+        }
+    }
+
+    private var hasChanges: Bool {
+        draft != nil && draft != original
+    }
+
+    private var isArchived: Bool {
+        draft?.isArchived ?? false
+    }
+
+    @ViewBuilder
+    private var editorView: some View {
+        if let patient = draft {
+            PatientEditorForm(
+                draft: Binding(
+                    get: { draft ?? patient },
+                    // A field can commit while its editor is being torn down
+                    // for another patient; a stale form must never overwrite
+                    // the record that replaced it.
+                    set: { updated in
+                        if draft?.id == updated.id { draft = updated }
+                    }),
+                focusesNameOnAppear: patient.id == autofocusPatientId,
+                // The AMKA column is unique across all patients, archived
+                // ones included, so the directory is the right haystack.
+                duplicateAMKA: { amka in
+                    session.patientDirectory.first {
+                        $0.id != patient.id && AMKA.normalized($0.profile.amka) == amka
+                    }
+                }
+            )
+            // An archived record is read until it is restored.
+            .disabled(patient.isArchived)
+            // Fresh editor state and scroll position per patient.
+            .id(patient.id)
+            .softTopEdge()
+            .toolbar {
+                if patient.isArchived {
+                    ArchivedPatientToolbar(
+                        onRestore: { Task { await session.unarchivePatient(id: patient.id) } },
+                        onDelete: { showDeleteConfirm = true })
+                } else {
+                    activeToolbar
+                }
+            }
+        }
+    }
+
+    private var activeToolbar: some ToolbarContent {
+        EditorToolbar(
+            hasChanges: hasChanges,
+            onRevert: { draft = original },
+            onSave: {
+                if let d = draft {
+                    Task {
+                        // Only refresh the editor from the store when the
+                        // user hasn't typed during the save window.
+                        if await session.save(d),
+                           let latest = await session.loadSelectedPatient(),
+                           latest.id == d.id,
+                           draft?.profile == d.profile,
+                           draft?.medical == d.medical {
+                            draft = latest
+                            original = latest
+                        }
+                    }
+                }
+            },
+            onDelete: { showDeleteConfirm = true },
+            destructiveLabel: "Archive",
+            destructiveSymbol: "archivebox",
+            destructiveRole: nil
+        )
+    }
+}
+
+/// Toolbar for an archived patient: restore, or delete for good.
+private struct ArchivedPatientToolbar: ToolbarContent {
+    let onRestore: () -> Void
+    let onDelete: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .help("Delete permanently")
+            .accessibilityLabel("Delete permanently")
+        }
+        ToolbarSpacerCompat()
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onRestore) {
+                Label("Restore", systemImage: "arrow.uturn.backward")
+            }
+            .prominentActionButtonStyle()
+            .help("Restore to the active list")
+        }
+    }
+}
