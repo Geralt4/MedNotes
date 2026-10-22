@@ -146,6 +146,11 @@ struct SyncDestinationWizard: View {
             if selectedSourceID == nil, let first = sources.first { selectedSourceID = first.identifier }
             if selectedCandidateID == nil, let first = existing.first { selectedCandidateID = first.calendarIdentifier }
         }
+        // The acknowledgment is for the destination the user looked at. A new
+        // account, list/calendar or mode needs its own.
+        .onChange(of: mode) { acknowledgedCloud = false }
+        .onChange(of: selectedSourceID) { acknowledgedCloud = false }
+        .onChange(of: selectedCandidateID) { acknowledgedCloud = false }
     }
 
     private var newContainerChooser: some View {

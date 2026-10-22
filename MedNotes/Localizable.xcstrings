@@ -248,6 +248,16 @@
         }
       }
     },
+    "%lld files skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αρχεία παραλείφθηκαν"
+          }
+        }
+      }
+    },
     "%lld missing remotely" : {
       "localizations" : {
         "el" : {
@@ -6708,6 +6718,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "λίστα"
+          }
+        }
+      }
+    },
+    "list MedNotes created" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "δημιουργήθηκε από το MedNotes"
           }
         }
       }

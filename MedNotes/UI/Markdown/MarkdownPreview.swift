@@ -62,7 +62,7 @@ struct MarkdownPreview: View {
                 flushParagraph()
                 continue
             }
-            if trimmed == "---" || trimmed == "***" {
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
                 flushParagraph()
                 out.append(.divider)
                 continue
@@ -97,9 +97,14 @@ struct MarkdownPreview: View {
     private static func headingLevel(of line: String) -> (level: Int, text: String)? {
         let hashes = line.prefix(while: { $0 == "#" })
         guard (1...4).contains(hashes.count) else { return nil }
-        let rest = line.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces)
-        guard !rest.isEmpty else { return nil }
-        return (hashes.count, rest)
+        // ATX headings need a space after the hashes; "#tag" is content, as
+        // in the rest of the app. Without this, a note opening on a tag loses
+        // the hash and renders as a heading.
+        let rest = line.dropFirst(hashes.count)
+        guard rest.first == " " else { return nil }
+        let text = rest.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+        return (hashes.count, text)
     }
 
     /// Case-insensitive: `- [X] done` is valid Markdown, but callers pass the

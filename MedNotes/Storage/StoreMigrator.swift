@@ -176,18 +176,21 @@ actor StoreMigrator {
         let todos = try await plainReader.loadAllTodos(includeCompleted: true)
         let events = try await plainReader.loadAllEvents()
         try await encrypted.importBatch(patients: patients, notes: notes, todos: todos, events: events)
-        let counts = try await encrypted.counts()
-        report.patients = counts["patients"] ?? 0
-        report.notes = counts["notes"] ?? 0
-        report.todos = counts["todo_items"] ?? 0
-        report.events = counts["calendar_events"] ?? 0
 
-        // Audit rows carry no PHI but preserve the user's history.
+        // Audit rows carry no PHI but preserve the user's history. Copy them
+        // before taking the counts the validation pass below compares against;
+        // otherwise every store with an audit trail fails validation.
         let audit = try await plainReader.recentAuditLogs(limit: 100_000)
         for entry in audit {
             try await encrypted.logAudit(entry)
         }
         try await plainReader.close()
+
+        let counts = try await encrypted.counts()
+        report.patients = counts["patients"] ?? 0
+        report.notes = counts["notes"] ?? 0
+        report.todos = counts["todo_items"] ?? 0
+        report.events = counts["calendar_events"] ?? 0
 
         try writeJournal(makeJournal(phase: .stagingAttachments, counts: counts))
         progress?(.stagingAttachments)
@@ -250,8 +253,15 @@ actor StoreMigrator {
         progress?(.swapping)
 
         // Swap: encrypted DB beside the live file, then the attachment tree.
-        try swapInEncryptedDatabase(from: stagingDBURL)
-        try swapInAttachments(stagingRoot: stagingAttachments)
+        // If either half fails, put the plaintext store back as a whole: a new
+        // database with the old attachments (or vice versa) is not a store.
+        do {
+            try swapInEncryptedDatabase(from: stagingDBURL)
+            try swapInAttachments(stagingRoot: stagingAttachments)
+        } catch {
+            restorePlaintextStore()
+            throw error
+        }
         report.plaintextRemoved = true
 
         try writeJournal(makeJournal(phase: .complete, counts: counts, attachments: report.attachments))
@@ -278,8 +288,16 @@ actor StoreMigrator {
         let fm = FileManager.default
         let dest = dataRoot.databaseURL
         let old = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
-        _ = try? fm.replaceItemAt(old, withItemAt: dest)
-        _ = try? fm.replaceItemAt(dest, withItemAt: stagingDBURL)
+        // Drop a leftover from an earlier failed attempt, never the live file.
+        if fm.fileExists(atPath: old.path) { try fm.removeItem(at: old) }
+        try fm.moveItem(at: dest, to: old)
+        do {
+            try fm.moveItem(at: stagingDBURL, to: dest)
+        } catch {
+            // The live database is the only copy that matters: put it back.
+            try? fm.moveItem(at: old, to: dest)
+            throw error
+        }
         for suffix in ["-wal", "-shm"] {
             try? fm.removeItem(atPath: dest.path + suffix)
         }
@@ -292,7 +310,8 @@ actor StoreMigrator {
         // `DataRoot` creates `Attachments/` up front, so the destination
         // normally exists and must be moved aside rather than overwritten.
         if fm.fileExists(atPath: dest.path) {
-            _ = try? fm.replaceItemAt(old, withItemAt: dest)
+            if fm.fileExists(atPath: old.path) { try fm.removeItem(at: old) }
+            try fm.moveItem(at: dest, to: old)
         }
         do {
             try fm.moveItem(at: stagingRoot, to: dest)
@@ -302,6 +321,27 @@ actor StoreMigrator {
                 try? fm.moveItem(at: old, to: dest)
             }
             throw error
+        }
+    }
+
+    /// Puts both halves of the plaintext store back after a failed swap. The
+    /// database is restored first: if it cannot be, the old attachments stay
+    /// in their kept folder rather than being deleted.
+    private func restorePlaintextStore() {
+        let fm = FileManager.default
+        let oldDB = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
+        if fm.fileExists(atPath: oldDB.path) {
+            try? fm.removeItem(at: dataRoot.databaseURL)
+            try? fm.moveItem(at: oldDB, to: dataRoot.databaseURL)
+            for suffix in ["-wal", "-shm"] {
+                try? fm.removeItem(atPath: dataRoot.databaseURL.path + suffix)
+            }
+        }
+        let oldAttachments = dataRoot.rootURL
+            .appendingPathComponent("Plaintext.old.Attachments", isDirectory: true)
+        if fm.fileExists(atPath: oldAttachments.path) {
+            try? fm.removeItem(at: dataRoot.attachmentsURL)
+            try? fm.moveItem(at: oldAttachments, to: dataRoot.attachmentsURL)
         }
     }
 

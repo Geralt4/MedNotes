@@ -66,7 +66,7 @@ struct ImportFlowSheet: View {
             Text(verbatim: Self.summary(of: report))
                 .font(.headline)
             if report.filesSkipped > 0 {
-                Text("\(report.filesSkipped) attachments skipped")
+                Text("\(report.filesSkipped) files skipped")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

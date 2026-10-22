@@ -28,8 +28,9 @@ enum BackupPassphrasePolicy {
         while characters.count < generatedLength {
             guard let bytes = sodium.randomBytes.buf(length: 32) else { continue }
             for byte in bytes {
-                // Rejection sampling keeps the distribution uniform.
-                guard byte < 250 else { continue }
+                // Rejection sampling keeps the distribution uniform: 224 is
+                // 7 × 32, so every alphabet position gets the same count.
+                guard byte < 224 else { continue }
                 characters.append(crockfordAlphabet[Int(byte) % crockfordAlphabet.count])
                 if characters.count == generatedLength { break }
             }

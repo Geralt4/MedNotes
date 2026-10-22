@@ -1282,17 +1282,22 @@ final class AppSession: ObservableObject {
     /// access to have been granted; `Sync Now` is what raises the dialog.
     func presentDestinationWizard(for bridge: SyncBridgeType) async {
         guard !PreviewSeed.isActive else { return }
+        guard let store else { return }
+        // The disclosure names what would leave the app. Count the whole
+        // store, not the list column's current search or filter: a filtered
+        // view would understate it.
         let recordSummary: String
         let fields: [String]
+        let recordCount: Int
         switch bridge {
         case .calendar:
-            let count = events.count
-            recordSummary = String(localized: "\(count) calendar event(s) from MedNotes.")
+            recordCount = (try? await store.events.loadAll().count) ?? events.count
+            recordSummary = String(localized: "\(recordCount) calendar event(s) from MedNotes.")
             fields = [String(localized: "title"), String(localized: "notes"),
                       String(localized: "start and end dates"), String(localized: "all-day flag")]
         case .reminders:
-            let count = todos.count
-            recordSummary = String(localized: "\(count) todo(s) from MedNotes.")
+            recordCount = (try? await store.todos.loadAll().count) ?? todos.count
+            recordSummary = String(localized: "\(recordCount) todo(s) from MedNotes.")
             fields = [String(localized: "title"), String(localized: "notes"),
                       String(localized: "due day"), String(localized: "completion"),
                       String(localized: "priority")]
@@ -1310,7 +1315,7 @@ final class AppSession: ObservableObject {
                     identifier: $0.identifier, title: $0.title, type: $0.type, isCloud: $0.isCloud)
             }
             existing = appleCalendar.destinationCandidates(
-                recordCount: events.count, transmittedFields: fields)
+                recordCount: recordCount, transmittedFields: fields)
             create = { try self.appleCalendar.createMedNotesCalendar(inSource: $0) }
         case .reminders:
             sources = appleReminders.sourceCandidates().map {
@@ -1318,11 +1323,10 @@ final class AppSession: ObservableObject {
                     identifier: $0.identifier, title: $0.title, type: $0.type, isCloud: $0.isCloud)
             }
             existing = appleReminders.destinationCandidates(
-                recordCount: todos.count, transmittedFields: fields)
+                recordCount: recordCount, transmittedFields: fields)
             create = { try self.appleReminders.createMedNotesList(inSource: $0) }
         }
 
-        guard let store else { return }
         confirm = { candidate in
             let destination = try await store.destinations.confirm(bridge: bridge, candidate: candidate)
             try? await store.audit.log(
@@ -1383,6 +1387,7 @@ final class AppSession: ObservableObject {
         var next: [SyncBridgeType: SyncDestinationViewState] = [:]
         for destination in (try? await store.destinations.allDestinations()) ?? [] {
             next[destination.bridgeType] = SyncDestinationViewState(
+                bridge: destination.bridgeType,
                 calendarTitle: destination.calendarTitle,
                 sourceTitle: destination.sourceTitle,
                 sourceType: destination.sourceType,
@@ -1637,10 +1642,12 @@ final class AppSession: ObservableObject {
 
     func inspectBackup(at fileURL: URL, passphrase: String) async throws -> BackupManifest {
         guard let store else { throw BackupError.invalidArchive }
-        // v1 archives are accepted read-only; v2 is the write format.
+        // v1 archives are accepted read-only; v2 is the write format. Only a
+        // file that is not v2 at all is tried as v1: a wrong passphrase or a
+        // damaged v2 archive must report that, not "not a MedNotes backup".
         do {
             return try store.backups.inspectEncryptedBackup(at: fileURL, passphrase: passphrase)
-        } catch {
+        } catch BackupArchiveV2.ArchiveError.notAnArchive {
             return try store.backups.inspectLegacyBackup(at: fileURL, passphrase: passphrase)
         }
     }
@@ -1691,6 +1698,13 @@ final class AppSession: ObservableObject {
         await reloadPatientDirectory()
         await reloadTodos()
         await reloadEvents()
+        // The restore marked every destination stale in the database; make
+        // Settings › Sync show that instead of the pre-restore confirmation.
+        await refreshSyncDestinations()
+        // Health and pass summaries belonged to the store just replaced.
+        integrityWarning = nil
+        lastCalendarSyncSummary = nil
+        lastRemindersSyncSummary = nil
         backupFlow = nil
         notice = String(localized: "Restored \(DisplayCopy.backupName(manifest.name)): \(BackupFlowSheet.summary(of: manifest)). Reconnect Calendar and Reminders before syncing again.")
     }
@@ -2310,6 +2324,10 @@ final class AppSession: ObservableObject {
         let patient = Patient.newRecord()
         do {
             try await store.patients.save(patient)
+            // A new patient is active. Creating one while the Archived list is
+            // showing would select a row that list does not contain, so follow
+            // it to the list it belongs to before setting the selection.
+            if patientFilter != .active { patientFilter = .active }
             selectedPatientId = patient.id
             pendingFocusRecordId = patient.id
             patientEpoch += 1
@@ -2320,6 +2338,7 @@ final class AppSession: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             if await patientExists(id: patient.id) == true {
+                if patientFilter != .active { patientFilter = .active }
                 selectedPatientId = patient.id
                 pendingFocusRecordId = patient.id
                 if !patientSearchText.isEmpty { patientSearchText = "" }
@@ -3379,6 +3398,9 @@ final class AppSession: ObservableObject {
         pendingFocusRecordId = nil
         return true
     }
+
+    /// Graph has no records of its own, so ⌘N has nothing to create there.
+    var canCreateInCurrentModule: Bool { selectedModule != .graph }
 
     func createInCurrentModule() async {
         switch selectedModule {

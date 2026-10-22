@@ -87,6 +87,9 @@ struct SyncSettingsPane: View {
 
 /// What Settings › Sync reports about one bridge's chosen destination.
 struct SyncDestinationViewState: Equatable {
+    /// Which bridge this destination belongs to, so an app-created container
+    /// is named as a calendar or a list, not always a calendar.
+    var bridge: SyncBridgeType = .calendar
     var calendarTitle: String
     var sourceTitle: String
     var sourceType: String
@@ -105,7 +108,10 @@ struct SyncDestinationViewState: Equatable {
     }
 
     private var appCreatedLabel: String {
-        String(localized: "calendar MedNotes created")
+        switch bridge {
+        case .calendar: return String(localized: "calendar MedNotes created")
+        case .reminders: return String(localized: "list MedNotes created")
+        }
     }
 }
 

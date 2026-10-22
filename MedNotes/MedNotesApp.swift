@@ -44,7 +44,7 @@ private struct MedNotesCommands: Commands {
                 Task { await session.createInCurrentModule() }
             }
             .keyboardShortcut("n")
-            .disabled(!session.canUseStore)
+            .disabled(!session.canUseStore || !session.canCreateInCurrentModule)
         }
 
         // Locking applies to the whole session, so it lives in the app menu

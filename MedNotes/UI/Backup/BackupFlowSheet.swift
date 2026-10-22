@@ -101,6 +101,9 @@ struct BackupFlowSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .labelsHidden()
                     .onSubmit { inspect(fileURL) }
+                    // A checked manifest describes the passphrase used for the
+                    // check; editing the field invalidates it.
+                    .onChange(of: passphrase) { manifest = nil }
             }
             if let manifest {
                 VStack(alignment: .leading, spacing: Chrome.Space.xs) {
@@ -159,6 +162,7 @@ struct BackupFlowSheet: View {
     private func inspect(_ fileURL: URL) {
         isWorking = true
         failure = nil
+        manifest = nil
         Task {
             do {
                 manifest = try await session.inspectBackup(at: fileURL, passphrase: passphrase)

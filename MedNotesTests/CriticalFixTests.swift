@@ -597,6 +597,79 @@ final class PreMigrationBackupTests: XCTestCase {
         await plain.close()
         await target.close()
     }
+
+    /// A real plaintext store has an audit trail (the services write one).
+    /// Migration used to take its expected counts before copying those rows,
+    /// then compare them against the copied table, so any used store failed
+    /// validation with `audit_logs: N rows, expected 0`.
+    func testMigrationKeepsAStoreWithAuditHistory() async throws {
+        let root = try makeRoot()
+        let plaintext = try Database(path: root.databaseURL.path)
+        let audit = AuditService(db: plaintext)
+        let patients = PatientService(db: plaintext, audit: audit)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Audited"
+        patient.profile.lastName = "Patient"
+        try await patients.save(patient)
+        let auditRows = try await plaintext.counts()["audit_logs"] ?? 0
+        XCTAssertGreaterThan(auditRows, 0)
+        await plaintext.close()
+
+        let backupURL = root.rootURL.appendingPathComponent("pre-migration.mednotesbackup")
+        let backupDB = try Database(path: root.databaseURL.path)
+        let backup = BackupService(
+            db: backupDB, fileStore: nil, restorePointsRoot: root.restorePointsURL)
+        _ = try await backup.createEncryptedBackup(
+            name: "Pre-encryption", to: backupURL, passphrase: passphrase)
+        await backupDB.close()
+
+        let keyManager = InMemoryKeyManager()
+        let migrator = StoreMigrator(dataRoot: root, keyManager: keyManager)
+        let report = try await migrator.migrate(
+            backupDestination: backupURL, passphrase: passphrase)
+        XCTAssertEqual(report.patients, 1)
+        try await migrator.finishCleanup()
+
+        let rootKey = try XCTUnwrap(keyManager.rootKey())
+        let databaseKey = try StoreKeyContext.subkey(
+            rootKey: rootKey, context: StoreKeyContext.database)
+        let reopened = try Database(path: root.databaseURL.path, key: databaseKey)
+        let counts = try await reopened.counts()
+        XCTAssertEqual(counts["patients"], 1)
+        XCTAssertEqual(counts["audit_logs"], auditRows)
+        await reopened.close()
+    }
+
+    /// Missing-key recovery installs a restored database directly, without
+    /// `BackupService.installStaged`'s post-restore suspension. It must not
+    /// leave a confirmed destination ready to receive writes.
+    func testRecoverySuspendsSyncDestinations() async throws {
+        let root = try makeRoot()
+        let source = try AppStore.testStore(dataRoot: root)
+        let candidate = SyncDestinationCandidate(
+            calendarIdentifier: "cal-recovery", calendarTitle: "MedNotes",
+            sourceIdentifier: "src", sourceTitle: "iCloud", sourceType: "calDAV",
+            isAppCreated: true, recordCount: 1, transmittedFields: ["title"],
+            requiresCloudAcknowledgment: true)
+        _ = try await source.destinations.confirm(bridge: .calendar, candidate: candidate)
+        let archive = root.rootURL.appendingPathComponent("recovery.mednotesbackup")
+        _ = try await source.backups.createEncryptedBackup(
+            name: "Recovery", to: archive, passphrase: passphrase)
+        await source.close()
+
+        let manager = InMemoryKeyManager()
+        _ = try await StoreRecovery(dataRoot: root, keyManager: manager)
+            .recover(from: archive, passphrase: passphrase)
+        let rootKey = try XCTUnwrap(manager.rootKey())
+        let databaseKey = try StoreKeyContext.subkey(
+            rootKey: rootKey, context: StoreKeyContext.database)
+        let reopened = try Database(path: root.databaseURL.path, key: databaseKey)
+        let destination = try await reopened.syncDestination(bridge: .calendar)
+        XCTAssertEqual(destination?.state, SyncDestination.ConnectionState.needsReconnection)
+        XCTAssertNil(destination?.confirmedAt)
+        XCTAssertFalse(SyncDestinationCore.mayWrite(destination))
+        await reopened.close()
+    }
 }
 
 final class LegacyImportAttachmentTests: XCTestCase {
@@ -669,4 +742,5 @@ final class LegacyImportAttachmentTests: XCTestCase {
         XCTAssertTrue(objects.isEmpty, "the staged ciphertext must be removed: \(objects)")
         await store.close()
     }
+
 }

@@ -59,6 +59,20 @@ final class SessionFlowTests: XCTestCase {
         XCTAssertEqual(session.patients.count, 1)
     }
 
+    /// "+" in the Archived list creates an active patient. The list has to
+    /// follow it there; otherwise the just-created record is selected but its
+    /// row is in the other filter.
+    func testNewPatientSwitchesFromArchivedToActive() async throws {
+        let session = try await makeSession()
+        session.patientFilter = .archived
+        await session.newPatient()
+        XCTAssertEqual(session.patientFilter, .active)
+        let id = try XCTUnwrap(session.selectedPatientId)
+        try await waitUntil("the active list shows the new patient") {
+            session.patients.contains { $0.id == id }
+        }
+    }
+
     func testUntouchedNewPatientIsDiscardedOnLeave() async throws {
         let session = try await makeSession()
         await session.newPatient()

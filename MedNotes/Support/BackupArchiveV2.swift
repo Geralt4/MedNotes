@@ -578,6 +578,10 @@ enum BackupArchiveV2 {
                 }
                 try await sink(.attachmentChunk(record.payload))
             case .end:
+                // The end marker must carry the FINAL tag. An authenticated
+                // MESSAGE-tagged "end" is not the end of a writer's stream and
+                // would let a truncated archive pass.
+                guard opened.reader.finished else { throw ArchiveError.missingFinalTag }
                 sawEnd = true
                 try await sink(.end)
             }

@@ -373,6 +373,17 @@ final class ObsidianCoreTests: XCTestCase {
         XCTAssertEqual(seen.map(\.1), [false, true, true])
     }
 
+    /// A tag with no space after the hash is content, not an ATX heading. The
+    /// sample store opens a note on "#cardiology and #respiratory"; rendering
+    /// that as a heading dropped both hashes from the preview.
+    func testHashTagIsNotAHeading() {
+        let blocks = MarkdownPreview.parseBlocks("#cardiology and #respiratory")
+        guard case let .paragraph(text)? = blocks.first else {
+            return XCTFail("expected a paragraph, got \(blocks)")
+        }
+        XCTAssertEqual(text, "#cardiology and #respiratory")
+    }
+
     // MARK: - Linking
 
     func testExtractAnchorsDeduplicatesAndSkipsNesting() {

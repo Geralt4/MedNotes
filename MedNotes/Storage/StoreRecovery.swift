@@ -110,6 +110,11 @@ actor StoreRecovery {
             let fk = try await validation.foreignKeyCheck()
             guard fk == 0 else { throw BackupError.foreignKeyViolations(fk) }
             try await validation.validateExpectedSchema()
+            // A recovered store is a restored backup: no bridge may write to a
+            // destination until the user confirms it again, exactly as after a
+            // normal restore. Suspend them in the snapshot before it is swapped
+            // in, so the live store never carries a confirmed destination.
+            try await validation.suspendSyncDestinations()
             // Every row's file must exist and match its recorded length and
             // digest before the unreadable store is moved aside.
             try await validation.verifyAttachmentDigests(fileStore: store)
