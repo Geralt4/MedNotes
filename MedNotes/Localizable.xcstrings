@@ -3868,6 +3868,16 @@
         }
       }
     },
+    "Nothing was imported. See the errors above." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν εισήχθη τίποτα. Δείτε τα σφάλματα παραπάνω."
+          }
+        }
+      }
+    },
     "OK" : {
       "localizations" : {
         "el" : {

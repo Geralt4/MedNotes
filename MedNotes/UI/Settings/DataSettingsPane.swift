@@ -74,6 +74,7 @@ struct DataSettingsPane: View {
     @State private var exportFailure: String?
     @State private var exportedSummary: String?
     @State private var vaultReport: VaultReconciliation.Report?
+    @State private var vaultFailure: String?
     @State private var pendingVaultDelete = false
 
     /// See `GeneralSettingsPane.height`; a check's result adds two rows, an
@@ -86,6 +87,7 @@ struct DataSettingsPane: View {
         if let vaultReport {
             let listed = vaultReport.vaultOnly.count + vaultReport.divergent.count
             height += 225 + 37 * CGFloat(min(listed, 6)) + (vaultReport.parseFailures.isEmpty ? 0 : 37)
+            if vaultFailure != nil { height += 24 }
         }
         if exportedSummary != nil { height += 24 }
         if exportFailure != nil { height += 24 }
@@ -292,6 +294,12 @@ struct DataSettingsPane: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                    if let vaultFailure {
+                        Text(verbatim: vaultFailure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let legacyVaultURL {
                         Button("Show Mirror in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([legacyVaultURL])
@@ -311,6 +319,7 @@ struct DataSettingsPane: View {
             summary = await loadSummary()
             restorePoints = await loadRestorePoints()
             vaultReport = await legacyVaultReport()
+            vaultFailure = nil
         }
         .confirmationDialog("Delete this restore point?", isPresented: Binding(
             get: { pendingDelete != nil },
@@ -331,8 +340,9 @@ struct DataSettingsPane: View {
                     do {
                         try await deleteLegacyVault?()
                         vaultReport = nil
+                        vaultFailure = nil
                     } catch {
-                        exportFailure = error.localizedDescription
+                        vaultFailure = error.localizedDescription
                     }
                 }
             }

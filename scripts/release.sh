@@ -61,19 +61,22 @@ if ! grep -q '\*\* TEST SUCCEEDED \*\*' "$OUT/tests.log"; then
   echo "tests did not pass; refusing to release" >&2
   exit 1
 fi
-SKIPPED="$(grep -c "^Test case '.*' skipped" "$OUT/tests.log" || true)"
+SKIPPED="$(grep -ci '^Test Case .* skipped' "$OUT/tests.log" || true)"
 if [[ "$SKIPPED" -gt 3 ]]; then
   echo "unexpected skips ($SKIPPED > 3); refusing to release" >&2
   exit 1
 fi
 
 step "Archive (Release, hardened runtime)"
+# The version the caller names is the version the app must report, not only
+# the name of the DMG.
 xcodebuild \
   -project MedNotes.xcodeproj \
   -scheme MedNotes \
   -configuration Release \
   -derivedDataPath "$DERIVED" \
   -archivePath "$ARCHIVE" \
+  MARKETING_VERSION="$VERSION" \
   DEVELOPMENT_TEAM="$MEDNOTES_TEAM_ID" \
   CODE_SIGN_IDENTITY="$MEDNOTES_SIGN_IDENTITY" \
   CODE_SIGN_STYLE=Manual \

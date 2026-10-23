@@ -128,7 +128,8 @@ explicit.**
 ### Release
 
 - Apple Events automation entitlement removed; only sandbox, user-selected
-  read/write, Calendar and Reminders remain.
+  read/write, app-scoped security-scoped bookmarks (for the import folder),
+  Calendar and Reminders remain.
 - `scripts/release.sh` archives with manual Developer ID signing and hardened
   runtime, verifies the signature and entitlement allowlist, builds and signs a
   DMG, notarizes with `notarytool`, staples, validates with `stapler` and

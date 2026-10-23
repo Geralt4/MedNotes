@@ -2,7 +2,8 @@
 """Fails a release when an entitlement outside the allowlist is present.
 
 The shipped binary may hold only what its features need: the sandbox,
-user-selected read/write files, and Calendar and Reminders access. Anything
+user-selected read/write files, app-scoped bookmarks (so the chosen import
+folder is remembered), and Calendar and Reminders access. Anything
 else — Apple Events, network clients, full disk access, debugging — is a
 policy regression and stops the release.
 """
@@ -13,6 +14,7 @@ import sys
 ALLOWED = {
     "com.apple.security.app-sandbox",
     "com.apple.security.files.user-selected.read-write",
+    "com.apple.security.files.bookmarks.app-scope",
     "com.apple.security.personal-information.calendars",
     "com.apple.security.personal-information.reminders",
 }
@@ -42,12 +44,15 @@ def main(path: str) -> int:
 
     failures = sorted((entitlements & FORBIDDEN))
     unexpected = sorted(entitlements - ALLOWED - FORBIDDEN)
+    missing = sorted(ALLOWED - entitlements)
 
     if failures:
         print("forbidden entitlements present: " + ", ".join(failures))
     if unexpected:
         print("entitlements outside the allowlist: " + ", ".join(unexpected))
-    if failures or unexpected:
+    if missing:
+        print("required entitlements missing: " + ", ".join(missing))
+    if failures or unexpected or missing:
         return 1
 
     print("entitlement allowlist ok: " + ", ".join(sorted(entitlements)))
@@ -55,4 +60,7 @@ def main(path: str) -> int:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(f"usage: {sys.argv[0]} <entitlements.plist>", file=sys.stderr)
+        sys.exit(2)
     sys.exit(main(sys.argv[1]))

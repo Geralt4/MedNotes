@@ -160,6 +160,10 @@ struct BackupFlowSheet: View {
     }
 
     private func inspect(_ fileURL: URL) {
+        // Return can submit the field while a check is already running; a
+        // second Argon2 derivation over the same file would race the first
+        // result into the sheet.
+        guard !isWorking else { return }
         isWorking = true
         failure = nil
         manifest = nil

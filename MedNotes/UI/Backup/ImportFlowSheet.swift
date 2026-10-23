@@ -98,9 +98,15 @@ struct ImportFlowSheet: View {
                 }
             }
             if report.totalImported == 0 {
-                Text("Nothing new to import: every record in the folder is already in MedNotes.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                if report.errors.isEmpty {
+                    Text("Nothing new to import: every record in the folder is already in MedNotes.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Nothing was imported. See the errors above.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(Chrome.Space.md)

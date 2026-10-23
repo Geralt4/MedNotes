@@ -92,6 +92,16 @@ quit_running_app() {
   return 1
 }
 
+# A live capture may set the app's language in its container preferences.
+# Remove it on every exit path, including the early one that leaves the app
+# running when Screen Recording is missing.
+restore_app_language() {
+  local prefs="$1"
+  if [ -n "${LANG_CODE:-}" ]; then
+    defaults delete "$prefs" AppleLanguages >/dev/null 2>&1 || true
+  fi
+}
+
 live_capture() {
   echo "🏗  Building Debug…"
   xcodebuild -project MedNotes.xcodeproj -scheme MedNotes \
@@ -154,6 +164,7 @@ live_capture() {
     if ! screencapture -x -o -l"$wid" "$OUT_DIR/launch-${appearance}${suffix}.png" 2>/dev/null; then
       echo "⚠️  screencapture failed — Screen Recording is probably not granted." >&2
       echo "    The seeded app is running; review it by eye, or use --rows." >&2
+      restore_app_language "$prefs"
       return 0
     fi
     echo "   captured launch-${appearance}${suffix}.png"
@@ -192,9 +203,7 @@ live_capture() {
     done
   done
   quit_running_app || true
-  if [ -n "${LANG_CODE:-}" ]; then
-    defaults delete "$prefs" AppleLanguages >/dev/null 2>&1 || true
-  fi
+  restore_app_language "$prefs"
 }
 
 # Fronts the running MedNotes through its process and confirms it, so a
