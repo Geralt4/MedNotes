@@ -104,6 +104,15 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         }
     }
 
+    /// Re-reads access after the user may have changed it in System Settings.
+    /// Never prompts.
+    func refreshAccessState() {
+        let current = Self.initialState()
+        guard current != state else { return }
+        state = current
+        if current == .granted { lastError = nil }
+    }
+
     /// How far back/forward external changes are pulled on each sync pass.
     static let pullWindow: TimeInterval = 366 * 24 * 3600
 

@@ -314,6 +314,27 @@ final class ObsidianCoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: root.rootURL)
     }
 
+    /// The mirror carries patient mentions and the pin flag too. A note that
+    /// differs only in one of those is not identical, and must be shown to the
+    /// user before the mirror is deleted.
+    func testVaultReconciliationSeesPatientAndPinDifferences() {
+        let id = UUID()
+        let database = Note(id: id, title: "same", content: "same", tags: ["t"])
+        var pinned = database
+        pinned.isPinned = true
+        let pinnedReport = VaultReconciliation.reconcile(
+            vaultNotes: [.init(note: pinned, relativePath: "same.md")],
+            databaseNotes: [database])
+        XCTAssertEqual(pinnedReport.divergent.map(\.outcome), [.divergent])
+
+        var mentioned = database
+        mentioned.mentionedPatients = [UUID()]
+        let mentionedReport = VaultReconciliation.reconcile(
+            vaultNotes: [.init(note: mentioned, relativePath: "same.md")],
+            databaseNotes: [database])
+        XCTAssertEqual(mentionedReport.divergent.count, 1)
+    }
+
     /// Dropping a file into Vault/ is the advertised Obsidian workflow, and
     /// README promises resolved edges land in `note_links`. Reconcile imported
     /// the note but never relinked it, so its [[links]] were missing from

@@ -391,6 +391,34 @@ final class FilePanelLockTests: XCTestCase {
                        ["notes=3 bytes=\(report.bytesWritten)"])
     }
 
+    /// A note that cannot be written must not be silently counted as part of
+    /// a successful export. The other notes still go, and Settings › Data says
+    /// the export was incomplete instead of claiming all of them.
+    func testAnExportThatCannotWriteOneNoteSaysSo() async throws {
+        let panels = ModalPanelsDouble()
+        let session = try await session(panels, notes: 3)
+        let store = try XCTUnwrap(session.store)
+        let notes = try await store.notes.loadAll()
+        let folder = tempDir.appendingPathComponent("export", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // A directory where this note's file belongs makes that one write fail.
+        let blockedName = notes[0].id.uuidString + ".md"
+        try FileManager.default.createDirectory(
+            at: folder.appendingPathComponent(blockedName), withIntermediateDirectories: true)
+        panels.answer = folder
+        panels.closesWhen = { true }
+
+        let report = try await session.exportMarkdownVault()
+
+        XCTAssertNil(report)
+        XCTAssertNil(session.notice, "a partial export must not be announced as a full one")
+        XCTAssertEqual(
+            session.markdownExportInterruption,
+            String(localized: "The Markdown export wrote \(2) of \(3) notes to “\("export")”; \(1) could not be written. Export again to write them all."))
+        let written = contents(of: folder).filter { $0.hasSuffix(".md") && $0 != blockedName }
+        XCTAssertEqual(written.count, 2, "the other notes must still be written")
+    }
+
     func testCancellingTheExportPanelReportsNothing() async throws {
         let panels = ModalPanelsDouble()
         let session = try await session(panels)

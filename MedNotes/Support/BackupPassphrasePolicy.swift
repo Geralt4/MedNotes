@@ -21,7 +21,7 @@ enum BackupPassphrasePolicy {
     }
 
     /// Generates a 24-character Crockford Base32 passphrase, grouped as
-    /// `XXXXX-XXXXX-XXXXX-XXXXX-X` for legibility.
+    /// `XXXXX-XXXXX-XXXXX-XXXXX-XXXX` for legibility.
     static func generate() -> String {
         let sodium = Sodium()
         var characters: [Character] = []

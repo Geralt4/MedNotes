@@ -5800,6 +5800,16 @@
         }
       }
     },
+    "The Markdown export wrote %lld of %lld notes to “%@”; %lld could not be written. Export again to write them all." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εξαγωγή Markdown έγραψε %lld από τις %lld σημειώσεις στο «%@»· %lld δεν μπόρεσαν να γραφτούν. Εξαγάγετε ξανά για να γραφτούν όλες."
+          }
+        }
+      }
+    },
     "The migration journal is unreadable. The original store is untouched." : {
       "localizations" : {
         "el" : {

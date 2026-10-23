@@ -134,7 +134,14 @@ final class KeychainKeyManager: KeyManager {
         if let existing = try rootKey() { return existing }
         let key = StoreKeyContext.newRootKey()
         let status = add(key)
-        if status == errSecDuplicateItem { return try rootKey() ?? key }
+        if status == errSecDuplicateItem {
+            // Another process added it between the read above and this add.
+            // Returning the un-stored `key` would tell the caller a key exists
+            // while the Keychain holds a different one, and the next launch
+            // would see an encrypted store with no usable key.
+            guard let existing = try rootKey() else { throw KeyManagerError.missingRootKey }
+            return existing
+        }
         guard status == errSecSuccess else { throw KeyManagerError.keychainFailure(status) }
         return key
     }

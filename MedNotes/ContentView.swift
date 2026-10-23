@@ -93,8 +93,9 @@ struct ContentView: View {
             Text(verbatim: session.notice ?? "")
         }
         .confirmationDialog(session.pendingDeleteTitle, isPresented: $session.confirmDelete, titleVisibility: .visible) {
-            Button(session.pendingDeleteTitle.hasPrefix(String(localized: "Archive")) ? "Archive" : "Delete",
-                   role: .destructive) {
+            let archives = session.pendingDeletionArchives
+            Button(archives ? "Archive" : "Delete",
+                   role: archives ? nil : .destructive) {
                 Task { await session.deleteInCurrentModule() }
             }
             Button("Cancel", role: .cancel) {}

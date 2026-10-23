@@ -197,6 +197,8 @@ final class BackupRestoreTests: XCTestCase {
         let generated = BackupPassphrasePolicy.generate()
         let stripped = generated.replacingOccurrences(of: "-", with: "")
         XCTAssertEqual(stripped.count, 24)
+        XCTAssertEqual(generated.split(separator: "-").map(\.count), [5, 5, 5, 5, 4],
+                       "the groups are five characters except the last")
         XCTAssertTrue(stripped.allSatisfy { "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains($0) })
         XCTAssertTrue(BackupPassphrasePolicy.isAcceptable(stripped))
         XCTAssertFalse(BackupPassphrasePolicy.isAcceptable("too short"))

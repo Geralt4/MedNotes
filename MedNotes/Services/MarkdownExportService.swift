@@ -206,6 +206,8 @@ enum VaultReconciliation {
             let same = existing.title == entry.note.title
                 && existing.content == entry.note.content
                 && existing.tags == entry.note.tags
+                && existing.mentionedPatients == entry.note.mentionedPatients
+                && existing.isPinned == entry.note.isPinned
             report.items.append(Item(
                 noteID: entry.note.id, title: existing.title,
                 outcome: same ? .identical : .divergent,

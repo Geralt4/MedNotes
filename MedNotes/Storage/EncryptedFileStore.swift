@@ -108,7 +108,12 @@ actor EncryptedFileStore: AttachmentStore {
         let destination = try url(for: id)
 
         let sodium = Sodium()
-        let salt = Data(sodium.randomBytes.buf(length: Self.saltLength) ?? [])
+        // An empty salt would make every caller derive the same stream key and
+        // would write a container whose header cannot be read back.
+        guard let saltBytes = sodium.randomBytes.buf(length: Self.saltLength) else {
+            throw StoreError.corruptOrWrongKey
+        }
+        let salt = Data(saltBytes)
         guard let streamKey = streamKey(salt: salt),
               let push = sodium.secretStream.xchacha20poly1305.initPush(secretKey: streamKey) else {
             throw StoreError.corruptOrWrongKey

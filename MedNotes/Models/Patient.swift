@@ -184,7 +184,14 @@ enum BloodType: String, LenientEnum, CaseIterable, Hashable {
 
     static func parse(_ raw: String) -> BloodType {
         if let exact = Self(rawValue: raw) { return exact }
-        switch raw.replacingOccurrences(of: " ", with: "").uppercased() {
+        // The display strings use the typographic minus sign, and legacy data
+        // may contain it or an en dash, so accept every form the UI emits.
+        let canonical = raw
+            .replacingOccurrences(of: "\u{2212}", with: "-")
+            .replacingOccurrences(of: "\u{2013}", with: "-")
+            .replacingOccurrences(of: " ", with: "")
+            .uppercased()
+        switch canonical {
         case "A+": return .aPositive
         case "A-": return .aNegative
         case "B+": return .bPositive

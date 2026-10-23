@@ -1744,6 +1744,31 @@ final class SecurityTests: XCTestCase {
         XCTAssertFalse(SyncDestinationCore.mayWrite(stale))
     }
 
+    /// Rechoosing a destination updates the row in place. The row's id is what
+    /// the EventKit markers and the object map point at, so the value returned
+    /// by a second confirmation must stay the same.
+    func testReconfirmingADestinationKeepsItsIdentity() async throws {
+        let root = try makeRoot()
+        let store = try AppStore.testStore(dataRoot: root)
+        let firstCandidate = SyncDestinationCandidate(
+            calendarIdentifier: "cal-1", calendarTitle: "MedNotes",
+            sourceIdentifier: "src-1", sourceTitle: "iCloud", sourceType: "calDAV",
+            isAppCreated: true, recordCount: 0, transmittedFields: [],
+            requiresCloudAcknowledgment: true)
+        let secondCandidate = SyncDestinationCandidate(
+            calendarIdentifier: "cal-2", calendarTitle: "MedNotes 2",
+            sourceIdentifier: "src-2", sourceTitle: "iCloud", sourceType: "calDAV",
+            isAppCreated: false, recordCount: 0, transmittedFields: [],
+            requiresCloudAcknowledgment: true)
+
+        let first = try await store.destinations.confirm(bridge: .calendar, candidate: firstCandidate)
+        let second = try await store.destinations.confirm(bridge: .calendar, candidate: secondCandidate)
+        XCTAssertEqual(first.id, second.id, "reconfirmation allocated a new destination id")
+        let stored = try await store.destinations.destination(for: .calendar)
+        XCTAssertEqual(stored?.id, first.id)
+        XCTAssertEqual(stored?.calendarIdentifier, "cal-2")
+    }
+
     func testDestinationWithADifferentIdentifierIsNotMatchedByTitle() {
         let destination = SyncDestination(
             bridgeType: .calendar, calendarIdentifier: "cal-A", calendarTitle: "MedNotes",

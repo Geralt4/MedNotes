@@ -260,6 +260,14 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertEqual(TodoPriority.parse("high"), .high)
         XCTAssertEqual(BloodType.parse("A+"), .aPositive)
         XCTAssertEqual(BloodType.parse("O-"), .oNegative)
+        XCTAssertEqual(BloodType.parse("A\u{2212}"), .aNegative,
+                       "the display string uses a typographic minus sign")
+        XCTAssertEqual(BloodType.parse("AB\u{2013}"), .abNegative)
+        for type in BloodType.allCases {
+            XCTAssertEqual(
+                BloodType.parse(DisplayCopy.bloodType(type)), type,
+                "a value the UI displays must decode back to the same blood type")
+        }
         XCTAssertEqual(BloodType.parse("not-a-blood-type"), .unknown)
         XCTAssertNotEqual(BloodType.parse("not-a-blood-type"), .oNegative)
     }

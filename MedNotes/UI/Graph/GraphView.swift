@@ -101,13 +101,23 @@ private struct GraphCanvas: View {
             let count = max(nodes.count, 1)
             let usableHeight = size.height - 80
             for (index, node) in nodes.enumerated() {
-                let jitterX = CGFloat(abs(node.id.hashValue % 47) - 23)
                 positions[node.id] = CGPoint(
-                    x: size.width * column.x + jitterX,
+                    x: size.width * column.x + Self.jitter(for: node.id),
                     y: 40 + usableHeight * (CGFloat(index) + 0.5) / CGFloat(count))
             }
         }
         return positions
+    }
+
+    /// Stable across launches: `String.hashValue` is seeded per process, which
+    /// would move every node each time the app opened.
+    private static func jitter(for id: String) -> CGFloat {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in id.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return CGFloat(Int(hash % 47) - 23)
     }
 
     var body: some View {

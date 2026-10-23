@@ -190,6 +190,15 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         }
     }
 
+    /// Re-reads access after the user may have changed it in System Settings.
+    /// Never prompts.
+    func refreshAccessState() {
+        let current = Self.initialState()
+        guard current != state else { return }
+        state = current
+        if current == .granted { lastError = nil }
+    }
+
     func requestAccess() async -> Bool {
         // A seeded run must never even raise the TCC prompt: granting it would
         // arm `push` for every fabricated todo.

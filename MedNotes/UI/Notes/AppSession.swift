@@ -307,6 +307,8 @@ final class AppSession: ObservableObject {
     private var todoSearchTask: Task<Void, Never>?
     private var eventSearchTask: Task<Void, Never>?
     private var switcherTask: Task<Void, Never>?
+    /// Supersedes a lookup still in flight when the query changes again.
+    private var switcherGeneration = 0
     private var calendarObserverTask: Task<Void, Never>?
     private var remindersObserverTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
@@ -700,6 +702,11 @@ final class AppSession: ObservableObject {
     func appDidBecomeActive() {
         obscureWhenReady = false
         isObscured = false
+        // The user may have granted or revoked access in System Settings while
+        // the app was inactive; the pill and Settings › Sync should agree with
+        // the privacy pane as soon as they are visible again.
+        appleCalendar.refreshAccessState()
+        appleReminders.refreshAccessState()
     }
 
     private var activationObservers: [AnyCancellable] = []
@@ -1562,6 +1569,12 @@ final class AppSession: ObservableObject {
             markdownExportInterruption = String(localized: "MedNotes locked during the Markdown export: \(report.notesWritten) of \(noteCount) notes were written to “\(url.lastPathComponent)” as plaintext before it stopped. Export again to write them all.")
             return nil
         }
+        if !report.failures.isEmpty {
+            // A partial export must not read as a complete one. The report
+            // names the notes that were written; this says the rest were not.
+            markdownExportInterruption = String(localized: "The Markdown export wrote \(report.notesWritten) of \(noteCount) notes to “\(url.lastPathComponent)”; \(report.failures.count) could not be written. Export again to write them all.")
+            return nil
+        }
         notice = String(localized: "Exported \(report.notesWritten) notes as plaintext Markdown.")
         return report
     }
@@ -2027,6 +2040,10 @@ final class AppSession: ObservableObject {
             await finishOpening()
         } catch {
             await migrator.rollbackStaging()
+            // The wizard is part of the curtain, which goes away with
+            // `isMigrating`; without this the window would sit on the startup
+            // spinner with no explanation and no way to retry but relaunch.
+            initError = error.localizedDescription
             throw error
         }
     }
@@ -2939,29 +2956,45 @@ final class AppSession: ObservableObject {
             var report = SyncPassReport()
             for local in locals where needsPush(local) {
                 let synced = try await appleCalendar.push(local, to: destination)
-                try await store.events.saveSyncResult(synced)
-                report.pushed += 1
+                // A save during the push has already written a newer row.
+                // Storing this snapshot over it would undo that edit; leave
+                // the row dirty so the next pass pushes the newer version.
+                if let latest = try? await store.events.load(id: synced.id),
+                   latest.updatedAt <= synced.updatedAt {
+                    try await store.events.saveSyncResult(synced)
+                    report.pushed += 1
+                }
             }
             locals = try await store.events.loadAll()
             let result = try await appleCalendar.pull(localEvents: locals, from: destination)
+            var pulled = 0
             for updated in result.updates {
-                try await store.events.saveSyncResult(updated)
+                if let latest = try? await store.events.load(id: updated.id),
+                   latest.updatedAt <= updated.updatedAt {
+                    try await store.events.saveSyncResult(updated)
+                    pulled += 1
+                }
             }
             for created in result.creations {
-                try await store.events.save(created)
+                // Not `save`: that stamps `updatedAt` past `lastSyncDate`, so
+                // the imported row would read as a local edit and be pushed
+                // straight back to Calendar on the next pass.
+                try await store.events.saveSyncResult(created)
             }
-            report.pulled = result.updates.count
+            report.pulled = pulled
             report.created = result.creations.count
             report.conflicts = result.conflictingIDs.count
             report.remoteMissing = result.remoteMissing
             appleCalendar.consumePendingExternalChanges()
             lastCalendarSyncSummary = report.summary
+            var warnings: [String] = []
             if !result.conflictingIDs.isEmpty {
-                errorMessage = String(localized: "Calendar conflict: \(result.conflictingIDs.count) event(s) had unsynced local edits that were overwritten by newer versions from Apple Calendar.")
+                warnings.append(String(localized: "Calendar conflict: \(result.conflictingIDs.count) event(s) had unsynced local edits that were overwritten by newer versions from Apple Calendar."))
             }
             if !result.remoteMissing.isEmpty {
-                errorMessage = String(localized: "Calendar: \(result.remoteMissing.count) event(s) are missing from the chosen calendar. Reconnect or resolve them manually; nothing was deleted.")
+                warnings.append(String(localized: "Calendar: \(result.remoteMissing.count) event(s) are missing from the chosen calendar. Reconnect or resolve them manually; nothing was deleted."))
             }
+            if !warnings.isEmpty { errorMessage = warnings.joined(separator: "\n\n") }
             eventEpoch += 1
             await reloadEvents()
         } catch {
@@ -3033,13 +3066,23 @@ final class AppSession: ObservableObject {
             var report = SyncPassReport()
             for local in locals where needsPush(local) {
                 let synced = try await appleReminders.push(local, to: destination)
-                try await store.todos.saveSyncResult(synced)
-                report.pushed += 1
+                // As for Calendar: a newer local edit must not be overwritten
+                // by the snapshot this push started from.
+                if let latest = try? await store.todos.load(id: synced.id),
+                   latest.updatedAt <= synced.updatedAt {
+                    try await store.todos.saveSyncResult(synced)
+                    report.pushed += 1
+                }
             }
             locals = try await store.todos.loadAll()
             let result = try await appleReminders.pull(localTodos: locals, from: destination)
+            var pulled = 0
             for updated in result.updates {
-                try await store.todos.saveSyncResult(updated)
+                if let latest = try? await store.todos.load(id: updated.id),
+                   latest.updatedAt <= updated.updatedAt {
+                    try await store.todos.saveSyncResult(updated)
+                    pulled += 1
+                }
             }
             for created in result.creations {
                 // Not `save`: that would stamp `updatedAt` past `lastSyncDate`
@@ -3049,18 +3092,20 @@ final class AppSession: ObservableObject {
                     action: "todo_sync_import", entityType: "todo", entityId: created.id.uuidString,
                     details: "todo imported from the Apple Reminders destination")
             }
-            report.pulled = result.updates.count
+            report.pulled = pulled
             report.created = result.creations.count
             report.conflicts = result.conflictingIDs.count
             report.remoteMissing = result.remoteMissing
             appleReminders.consumePendingExternalChanges()
             lastRemindersSyncSummary = report.summary
+            var warnings: [String] = []
             if !result.conflictingIDs.isEmpty {
-                errorMessage = String(localized: "Reminders conflict: \(result.conflictingIDs.count) todo(s) had unsynced local edits that were overwritten by newer versions from Apple Reminders.")
+                warnings.append(String(localized: "Reminders conflict: \(result.conflictingIDs.count) todo(s) had unsynced local edits that were overwritten by newer versions from Apple Reminders."))
             }
             if !result.remoteMissing.isEmpty {
-                errorMessage = String(localized: "Reminders: \(result.remoteMissing.count) todo(s) are missing from the chosen list. Reconnect or resolve them manually; nothing was deleted.")
+                warnings.append(String(localized: "Reminders: \(result.remoteMissing.count) todo(s) are missing from the chosen list. Reconnect or resolve them manually; nothing was deleted."))
             }
+            if !warnings.isEmpty { errorMessage = warnings.joined(separator: "\n\n") }
             todoEpoch += 1
             await reloadTodos()
         } catch {
@@ -3096,6 +3141,8 @@ final class AppSession: ObservableObject {
 
     func updateSwitcherResults() async {
         guard let store else { return }
+        switcherGeneration &+= 1
+        let generation = switcherGeneration
         let query = switcherText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             let notes = query.isEmpty
@@ -3128,8 +3175,13 @@ final class AppSession: ObservableObject {
                     SwitcherHit(id: $0.id, kind: .event, title: DisplayCopy.title($0.title), subtitle: String(localized: "Event"))
                 })
             }
+            // A cancellation only stops the debounce sleep. A lookup that was
+            // already running finishes after the newer one started; its
+            // results must not overwrite the query the user is typing now.
+            guard generation == switcherGeneration else { return }
             switcherResults = Array(hits.prefix(12))
         } catch {
+            guard generation == switcherGeneration else { return }
             switcherResults = []
         }
     }
@@ -3432,7 +3484,7 @@ final class AppSession: ObservableObject {
         }
     }
 
-    private var pendingDeletionArchives: Bool {
+    var pendingDeletionArchives: Bool {
         let module = pendingDeletion?.module ?? selectedModule
         guard module == .patients else { return false }
         return !(pendingDeletion?.isPermanent ?? (patientFilter == .archived))

@@ -78,6 +78,10 @@ struct EventDetailView: View {
                 session.selectEvent(d.id)
                 return
             }
+            // The save bumps `eventEpoch`, which restarts this task. Without
+            // marking the saved draft clean, the restart saves it again and is
+            // restarted in turn; see the same guard in `NoteDetailView`.
+            if draft == d { original = d }
         } else if let d = draft, d.id != selectedId, d.isUntouchedNewRecord {
             // Leaving a record the user created and never touched: drop it
             // rather than leave a "New Event" row behind.

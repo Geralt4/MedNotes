@@ -104,9 +104,13 @@ struct SyncDestinationStore: Sendable {
 
     /// Saves a confirmed destination. `consentAt` is stamped inside the
     /// database layer so no caller can confirm without a recorded consent.
+    /// Reconfirmation keeps the row's existing id: the object map and the
+    /// markers already written to EventKit point at it.
     func confirm(bridge: SyncBridgeType, candidate: SyncDestinationCandidate) async throws -> SyncDestination {
         let now = Date()
+        let existing = try await db.syncDestination(bridge: bridge)
         let destination = SyncDestination(
+            id: existing?.id ?? UUID(),
             bridgeType: bridge,
             calendarIdentifier: candidate.calendarIdentifier,
             calendarTitle: candidate.calendarTitle,
