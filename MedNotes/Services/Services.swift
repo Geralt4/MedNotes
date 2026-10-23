@@ -34,7 +34,9 @@ actor PatientService {
         self.fileStore = fileStore
     }
 
-    func save(_ patient: Patient) async throws {
+    /// `knownFileIDs`: the attachment ids the editor loaded this draft with,
+    /// when the caller has them; see `Database.savePatient`.
+    func save(_ patient: Patient, knownFileIDs: Set<UUID>? = nil) async throws {
         var stored = patient
         stored.lastModified = Date()
         // The archive flag changes only through `archive` and `unarchive`. An
@@ -66,7 +68,8 @@ actor PatientService {
             }
             promoted = try FilePromote.apply(staged)
             try await db.savePatient(
-                stored, attachmentReferences: patient.files.filter { $0.data == nil })
+                stored, attachmentReferences: patient.files.filter { $0.data == nil },
+                knownFileIDs: knownFileIDs)
             promoted?.commit()
             promoted = nil
         } catch {

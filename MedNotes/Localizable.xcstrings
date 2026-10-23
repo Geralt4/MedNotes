@@ -6030,12 +6030,12 @@
         }
       }
     },
-    "This patient's attachments changed after you opened the record. Reopen it to see the current files, then repeat your edit." : {
+    "This patient's attachments changed after you opened the record. Use Revert to load the current files, then repeat your edit." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Τα συνημμένα του ασθενούς άλλαξαν αφού ανοίξατε την εγγραφή. Ανοίξτε την ξανά για να δείτε τα τρέχοντα αρχεία και επαναλάβετε την αλλαγή."
+            "value" : "Τα συνημμένα του ασθενούς άλλαξαν αφού ανοίξατε την εγγραφή. Χρησιμοποιήστε την Επαναφορά για να φορτώσετε τα τρέχοντα αρχεία και επαναλάβετε την αλλαγή."
           }
         }
       }

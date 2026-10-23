@@ -45,11 +45,11 @@ struct PatientDetailView: View {
             if hasChanges {
                 Task {
                     if session.selectedPatientId == d.id {
-                        _ = await session.save(d)
+                        _ = await saveDraft(d)
                     } else if await session.patientExists(id: d.id) == true {
                         // Selection moved elsewhere or was cleared; still autosave
                         // this patient's edits as long as it still exists.
-                        _ = await session.save(d)
+                        _ = await saveDraft(d)
                     }
                 }
             } else if d.isUntouchedNewRecord {
@@ -86,7 +86,7 @@ struct PatientDetailView: View {
             return
         }
         if hasChanges, let d = draft, let selectedId, d.id != selectedId {
-            if await session.save(d) == false {
+            if await saveDraft(d) == false {
                 session.selectPatient(d.id)
                 return
             }
@@ -122,6 +122,12 @@ struct PatientDetailView: View {
         if session.consumeFocusRequest(for: patient.id) {
             autofocusPatientId = patient.id
         }
+    }
+
+    /// Saves with the attachment ids this editor loaded, so a save from a draft
+    /// older than the stored record cannot delete files it never saw.
+    private func saveDraft(_ d: Patient) async -> Bool {
+        await session.save(d, knownFileIDs: original.map { Set($0.files.map(\.id)) })
     }
 
     private var hasChanges: Bool {
@@ -179,7 +185,7 @@ struct PatientDetailView: View {
                     Task {
                         // Only refresh the editor from the store when the
                         // user hasn't typed during the save window.
-                        if await session.save(d),
+                        if await saveDraft(d),
                            let latest = await session.loadSelectedPatient(),
                            latest.id == d.id,
                            draft?.profile == d.profile,

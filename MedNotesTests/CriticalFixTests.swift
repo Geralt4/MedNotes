@@ -458,6 +458,45 @@ final class AttachmentVersionTests: XCTestCase {
         await store.close()
     }
 
+    /// The first draft adds a file; the older draft still lists only the first
+    /// file. Saving it with the ids it was loaded with must not delete the new
+    /// file.
+    func testStaleDraftCannotDeleteAFileItNeverSaw() async throws {
+        let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
+        let store = try AppStore.testStore(dataRoot: root)
+        var patient = Patient.newRecord()
+        patient.files = [PatientFile(name: "scan.txt", type: .other, data: Data("ONE".utf8))]
+        try await store.patients.save(patient)
+        let firstLoaded = try await store.patients.load(id: patient.id)
+        var first = try XCTUnwrap(firstLoaded)
+        let olderLoaded = try await store.patients.load(id: patient.id)
+        var older = try XCTUnwrap(olderLoaded)
+        let known = Set(older.files.map(\.id))
+
+        let added = PatientFile(name: "second.txt", type: .other, data: Data("TWO".utf8))
+        first.files.append(added)
+        try await store.patients.save(first, knownFileIDs: known)
+
+        older.profile.firstName = "Renamed"
+        do {
+            try await store.patients.save(older, knownFileIDs: known)
+            XCTFail("a draft that never saw a stored file must not delete it")
+        } catch is StaleAttachmentError {}
+        let bytes = try await store.patients.loadFileData(patientId: patient.id, fileId: added.id)
+        XCTAssertEqual(bytes, Data("TWO".utf8))
+
+        // A deliberate removal of a file the draft was loaded with still works.
+        let freshLoaded = try await store.patients.load(id: patient.id)
+        var fresh = try XCTUnwrap(freshLoaded)
+        let freshKnown = Set(fresh.files.map(\.id))
+        fresh.files.removeAll { $0.id == added.id }
+        try await store.patients.save(fresh, knownFileIDs: freshKnown)
+        let remaining = try await store.patients.load(id: patient.id)
+        XCTAssertEqual(remaining?.files.count, 1)
+        await store.close()
+    }
+
     func testSuccessfulReplacementRemovesThePreviousObject() async throws {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }

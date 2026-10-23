@@ -14,7 +14,7 @@ struct RestoreRollbackError: Error, LocalizedError {
 /// another save replaced or removed the file after the draft was loaded.
 struct StaleAttachmentError: Error, LocalizedError {
     var errorDescription: String? {
-        String(localized: "This patient's attachments changed after you opened the record. Reopen it to see the current files, then repeat your edit.")
+        String(localized: "This patient's attachments changed after you opened the record. Use Revert to load the current files, then repeat your edit.")
     }
 }
 
@@ -590,10 +590,18 @@ actor Database {
     /// `attachmentReferences` is for editor saves: the draft's file entries that
     /// carried no bytes, which must still match the stored rows as the draft
     /// saw them. Importers and restores write whole records and pass nil.
-    func savePatient(_ patient: Patient, attachmentReferences: [PatientFile]? = nil) throws {
+    /// `knownFileIDs` are the attachment ids the draft was loaded with: a stored
+    /// row outside that set (and outside the draft) was added by another save
+    /// and must not be deleted as if the draft had removed it.
+    func savePatient(
+        _ patient: Patient, attachmentReferences: [PatientFile]? = nil,
+        knownFileIDs: Set<UUID>? = nil
+    ) throws {
         try transaction {
             if let attachmentReferences {
-                try requireCurrentAttachmentReferences(patientId: patient.id, references: attachmentReferences)
+                try requireCurrentAttachmentReferences(
+                    patientId: patient.id, references: attachmentReferences,
+                    known: knownFileIDs.map { $0.union(patient.files.map(\.id)) })
             }
             try insertPatient(patient)
             try syncPatientFiles(patientId: patient.id, files: patient.files)
@@ -609,13 +617,18 @@ actor Database {
     /// and writing it back would repoint the row at a deleted object and let
     /// the post-commit sweep delete the current one. Runs inside the save
     /// transaction so no other save can interleave.
-    private func requireCurrentAttachmentReferences(patientId: UUID, references: [PatientFile]) throws {
-        guard !references.isEmpty else { return }
+    private func requireCurrentAttachmentReferences(
+        patientId: UUID, references: [PatientFile], known: Set<UUID>?
+    ) throws {
         let s = try conn.prepare("SELECT id, storage_id FROM patient_files WHERE patient_id = ?")
         s.bind(1, patientId.uuidString)
         var current: [String: String] = [:]
         while try s.step() {
             if let fid = s.columnText(0) { current[fid.uppercased()] = s.columnText(1) ?? "" }
+        }
+        if let known {
+            let knownKeys = Set(known.map { $0.uuidString.uppercased() })
+            if current.keys.contains(where: { !knownKeys.contains($0) }) { throw StaleAttachmentError() }
         }
         for file in references {
             guard let stored = current[file.id.uuidString.uppercased()],

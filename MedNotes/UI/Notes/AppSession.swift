@@ -2372,10 +2372,10 @@ final class AppSession: ObservableObject {
     }
 
     @discardableResult
-    func save(_ patient: Patient) async -> Bool {
+    func save(_ patient: Patient, knownFileIDs: Set<UUID>? = nil) async -> Bool {
         guard let store else { return false }
         do {
-            try await store.patients.save(patient)
+            try await store.patients.save(patient, knownFileIDs: knownFileIDs)
             patientEpoch += 1
             await reloadPatients()
             await reloadPatientDirectory()
