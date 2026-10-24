@@ -588,22 +588,81 @@ struct LinkedPatientPicker: View {
 struct TagEditor: View {
     @Binding var tags: [String]
     var prompt: LocalizedStringKey = "Add a tag"
+    /// Shows a "+" chip in place of the always-visible field, for a footer
+    /// where adding a tag is occasional; the field opens on demand.
+    var collapsesField = false
 
     @State private var newTag = ""
+    @State private var isAdding = false
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Chrome.Space.sm) {
-            if !tags.isEmpty {
-                FlowLayout {
-                    ForEach(tags, id: \.self) { tag in
-                        TagChip(text: tag) {
-                            tags.removeAll { $0 == tag }
-                        }
+        if collapsesField {
+            collapsible
+        } else {
+            VStack(alignment: .leading, spacing: Chrome.Space.sm) {
+                if !tags.isEmpty {
+                    FlowLayout {
+                        chips
                     }
                 }
+                EditorAddRow(prompt: prompt, text: $newTag, action: add)
             }
-            EditorAddRow(prompt: prompt, text: $newTag, action: add)
         }
+    }
+
+    private var chips: some View {
+        ForEach(tags, id: \.self) { tag in
+            TagChip(text: tag) {
+                tags.removeAll { $0 == tag }
+            }
+        }
+    }
+
+    private var collapsible: some View {
+        FlowLayout {
+            chips
+            if isAdding {
+                TextField(prompt, text: $newTag)
+                    .textFieldStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .frame(width: 140)
+                    .padding(.horizontal, Chrome.Space.sm)
+                    .padding(.vertical, 3)
+                    .background(Chrome.chipFill, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.55)))
+                    .focused($fieldFocused)
+                    // Stays open after a tag, for the next one.
+                    .onSubmit(add)
+                    .onExitCommand { close() }
+                    .onChange(of: fieldFocused) { _, focused in
+                        if !focused, newTag.trimmingCharacters(in: .whitespaces).isEmpty { close() }
+                    }
+            } else {
+                Button {
+                    isAdding = true
+                    // The field must exist before it can take focus.
+                    DispatchQueue.main.async { fieldFocused = true }
+                } label: {
+                    Label { Text("Add tag") } icon: { Image(systemName: "plus") }
+                        .labelStyle(AddTagLabelStyle(showsTitle: tags.isEmpty))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Chrome.Space.sm)
+                        .padding(.vertical, 3)
+                        .background(Chrome.chipFill, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(prompt)
+                .accessibilityLabel(prompt)
+            }
+        }
+    }
+
+    private func close() {
+        newTag = ""
+        isAdding = false
     }
 
     private func add() {
@@ -611,5 +670,17 @@ struct TagEditor: View {
         guard !tag.isEmpty, !tags.contains(tag) else { return }
         tags.append(tag)
         newTag = ""
+    }
+}
+
+/// The "+" chip: icon only once there are tags beside it, "+ Add tag" alone.
+private struct AddTagLabelStyle: LabelStyle {
+    let showsTitle: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Chrome.Space.xxs + 1) {
+            configuration.icon
+            if showsTitle { configuration.title }
+        }
     }
 }

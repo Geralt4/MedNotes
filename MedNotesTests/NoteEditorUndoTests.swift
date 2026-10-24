@@ -72,6 +72,58 @@ final class NoteEditorUndoTests: XCTestCase {
         XCTAssertGreaterThan(typed.session.noteEpoch, epochBefore)
     }
 
+    /// The body's Markdown is drawn as attributes on its text view. That must
+    /// never become an edit: the heading is styled, typing and undo keep the
+    /// text exact and styled, and the undone note is not saved on leaving.
+    func testStyledMarkdownStaysOutOfTheTextAndUndo() async throws {
+        let content = "# Assessment\n\nPatient reports **improved** dyspnea."
+        let typed = try await openAndType(content: content)
+        let headingStyled = { Self.fontSize(typed.body, at: 3) > NSFont.preferredFont(forTextStyle: .body).pointSize }
+        try await poll(headingStyled, "the heading was never styled")
+
+        typed.undoManager.undo()
+        XCTAssertEqual(typed.body.string, content)
+        typed.undoManager.redo()
+        XCTAssertEqual(typed.body.string, typed.typedText)
+        typed.undoManager.undo()
+        XCTAssertEqual(typed.body.string, content)
+        try await poll(headingStyled, "undo lost the heading's style")
+        XCTAssertFalse(typed.undoManager.canUndo, "styling left a step on the undo stack")
+
+        let epochBefore = typed.session.noteEpoch
+        typed.session.select(typed.other.id)
+        _ = try await textView(in: typed.window, showing: typed.other.content)
+        XCTAssertEqual(typed.session.noteEpoch, epochBefore, "styling made an unchanged note save")
+    }
+
+    /// On a wide pane the body still spans it, so a click or scroll in the
+    /// margins reaches the text, while the text itself keeps to the
+    /// readable column; on a narrow one the text starts at the edge.
+    func testBodySpansThePaneWithTextInTheReadableColumn() async throws {
+        let session = try await makeSession()
+        let note = try await makeNote(in: session, title: "Wide", content: "Seen on the ward.")
+        session.select(note.id)
+        for (width, wide) in [(CGFloat(1400), true), (CGFloat(640), false)] {
+            let window = host(NoteDetailView().environmentObject(session), width: width)
+            let body = try await textView(in: window, showing: note.content)
+            let scroll = try XCTUnwrap(body.enclosingScrollView)
+            XCTAssertEqual(scroll.frame.width, width, accuracy: 2, "the body no longer spans the pane")
+            let textStart = {
+                let glyph = window.convertFromScreen(body.firstRect(
+                    forCharacterRange: NSRange(location: 0, length: 1), actualRange: nil))
+                return scroll.convert(glyph.origin, from: nil).x
+            }
+            let column = (width - Chrome.readableWidth) / 2
+            if wide {
+                // The inset is set a turn after the body appears.
+                try await poll({ textStart() > column }, "text is not in the column")
+            } else {
+                XCTAssertLessThan(textStart(), 40, "a narrow pane should not indent the text")
+            }
+            window.orderOut(nil)
+        }
+    }
+
     /// The whole path through the real editor: "[[" typed above existing
     /// text opens the popover at the caret, a click on the suggestion
     /// completes the link there and keeps the rest of the note, and ⌘Z
@@ -169,6 +221,20 @@ final class NoteEditorUndoTests: XCTestCase {
         XCTAssertTrue(body.string.contains(" Typed here."))
         return Typed(session: session, note: note, other: other, window: window, body: body,
                      undoManager: undoManager, typedText: body.string)
+    }
+
+    private static func fontSize(_ body: NSTextView, at location: Int) -> CGFloat {
+        guard let storage = body.textStorage, location < storage.length else { return 0 }
+        return (storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont)?.pointSize ?? 0
+    }
+
+    /// Waits for main-queue work (the styling is deferred a turn) by
+    /// suspending, which a nested run loop would not let run.
+    private func poll(_ condition: () -> Bool, _ message: String) async throws {
+        for _ in 0..<100 where !condition() {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(condition(), message)
     }
 
     private func undoTypingThenLeave(content: String) async throws {
@@ -303,11 +369,11 @@ final class NoteEditorUndoTests: XCTestCase {
     /// Borderless: AppKit moves a titled window at x -20000 onto a screen
     /// (measured, onto the built-in display at (160, 437)), so every run of
     /// these tests used to show its windows to whoever sat at the Mac.
-    private func host<V: View>(_ view: V) -> NSWindow {
-        let hosting = NSHostingView(rootView: view.frame(width: 640, height: 480))
-        hosting.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+    private func host<V: View>(_ view: V, width: CGFloat = 640) -> NSWindow {
+        let hosting = NSHostingView(rootView: view.frame(width: width, height: 480))
+        hosting.frame = NSRect(x: 0, y: 0, width: width, height: 480)
         let window = NSWindow(
-            contentRect: NSRect(x: -20000, y: -20000, width: 640, height: 480),
+            contentRect: NSRect(x: -20000 - width, y: -20000, width: width, height: 480),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = hosting

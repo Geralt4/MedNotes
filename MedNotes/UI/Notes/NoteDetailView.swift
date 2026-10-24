@@ -118,6 +118,10 @@ struct NoteDetailView: View {
             if let text = bodyEditor.textAfterUndo($0, of: draft) { draft?.content = text }
         }
         .background(WindowReader { bodyEditor.attach(to: $0) })
+        // Typing, undo, templates and reverts all change the body; opening a
+        // note or leaving Preview brings up a fresh text view. Each restyles.
+        .onChange(of: draft?.content, initial: true) { bodyEditor.restyleSoon(draft) }
+        .onChange(of: "\(draft?.id.uuidString ?? "")-\(isPreviewing)") { bodyEditor.restyleSoon(draft) }
         .onDisappear {
             session.unregisterOpenEditor(lockToken)
             guard let d = draft else { return }
@@ -363,78 +367,16 @@ struct NoteDetailView: View {
     @ViewBuilder
     private func noteEditor(_ current: Note, anchor: String?) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: Chrome.Space.md) {
-                TextField("Title", text: Binding(
-                    get: { draft?.title ?? "" },
-                    set: { draft?.title = $0 }
-                ))
-                .textFieldStyle(.plain)
-                .font(.title2.weight(.semibold))
-                .focused($isTitleFocused)
-
-                Spacer()
-
-                Menu {
-                    ForEach(templates) { template in
-                        Button(template.name) {
-                            applyTemplate(template)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "doc.badge.plus")
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .menuStyle(.button)
-                .fixedSize()
-                .help("Insert clinical template")
-                .accessibilityLabel("Insert clinical template")
-
-                Button {
-                    isPreviewing.toggle()
-                } label: {
-                    Image(systemName: isPreviewing ? "pencil" : "eye")
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.plain)
-                .help(isPreviewing ? "Edit" : "Preview")
-                .accessibilityLabel(isPreviewing ? "Edit" : "Preview")
-
-                Button {
-                    if var d = draft {
-                        d.isPinned.toggle()
-                        draft = d
-                        if var orig = original {
-                            orig.isPinned = d.isPinned
-                            original = orig
-                        }
-                        Task {
-                            if await session.togglePin(d) == false,
-                               let latest = await session.loadSelectedNote() {
-                                if var current = draft, current.id == latest.id {
-                                    current.isPinned = latest.isPinned
-                                    current.updatedAt = latest.updatedAt
-                                    draft = current
-                                }
-                                if var orig = original, orig.id == latest.id {
-                                    orig.isPinned = latest.isPinned
-                                    orig.updatedAt = latest.updatedAt
-                                    original = orig
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: draft?.isPinned == true ? "pin.fill" : "pin")
-                        .symbolRenderingMode(.hierarchical)
-                        .symbolEffect(.bounce, value: draft?.isPinned == true)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(draft?.isPinned == true ? Color.accentColor : .secondary)
-                .help(draft?.isPinned == true ? "Unpin" : "Pin")
-                .accessibilityLabel(draft?.isPinned == true ? "Unpin" : "Pin")
-            }
+            TextField("Title", text: Binding(
+                get: { draft?.title ?? "" },
+                set: { draft?.title = $0 }
+            ))
+            .textFieldStyle(.plain)
+            .font(.title2.weight(.semibold))
+            .focused($isTitleFocused)
             .padding(.horizontal, Chrome.Space.lg)
             .padding(.vertical, Chrome.Space.md)
+            .readableColumn()
 
             Divider()
 
@@ -442,25 +384,37 @@ struct NoteDetailView: View {
                 ScrollView {
                     MarkdownPreview(markdown: "# \(d.title.isEmpty ? String(localized: "Untitled") : d.title)\n\n\(d.content)")
                         .padding(Chrome.Space.md)
+                        .readableColumn()
                 }
                 .frame(minHeight: 220)
             } else {
-                ZStack(alignment: .bottomLeading) {
-                    TextEditor(text: Binding(
-                        get: { draft?.content ?? "" },
-                        set: { draft?.content = $0 }
-                    ))
-                    // A text view per note, so selection, scroll position and
-                    // typing state never carry over from the previous one.
-                    .id(current.id)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, Chrome.Space.md)
-                    .padding(.vertical, Chrome.Space.sm)
+                // Full width, with the text held to the readable column by
+                // margins inside the editor: a click or scroll anywhere in the
+                // pane reaches the text, and the scroller sits at the edge.
+                GeometryReader { geometry in
+                    let margin = max(0, (geometry.size.width - Chrome.readableWidth) / 2)
+                    ZStack(alignment: .bottomLeading) {
+                        TextEditor(text: Binding(
+                            get: { draft?.content ?? "" },
+                            set: { draft?.content = $0 }
+                        ))
+                        // A text view per note, so selection, scroll position and
+                        // typing state never carry over from the previous one.
+                        .id(current.id)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(.vertical, Chrome.Space.sm)
+                        // `contentMargins` does not reach a TextEditor's text
+                        // (measured); the inset is set on its text view.
+                        .onChange(of: margin, initial: true) {
+                            bodyEditor.setHorizontalInset(margin + Chrome.Space.md, for: draft)
+                        }
 
-                    if let anchor {
-                        wikiAnchorPopover(anchor)
-                            .padding(Chrome.Space.md)
+                        if let anchor {
+                            wikiAnchorPopover(anchor)
+                                .padding(Chrome.Space.md)
+                                .padding(.leading, margin)
+                        }
                     }
                 }
             }
@@ -468,22 +422,21 @@ struct NoteDetailView: View {
             Divider()
 
             linkedMentionsPanel
+                .readableColumn()
 
             Divider()
 
             VStack(alignment: .leading, spacing: Chrome.Space.sm) {
-                Text("Tags")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 TagEditor(tags: Binding(
                     get: { draft?.tags ?? [] },
                     set: { draft?.tags = $0 }
-                ))
+                ), collapsesField: true)
                 if let created = draft?.createdAt, let updated = draft?.updatedAt {
-                    HStack(spacing: Chrome.Space.lg) {
+                    HStack(spacing: Chrome.Space.xs) {
                         Text("Created \(created.formatted(date: .abbreviated, time: .shortened))")
+                        Text(verbatim: "·")
                         Text("Updated \(updated.formatted(date: .abbreviated, time: .shortened))")
-                        Spacer()
+                        Text(verbatim: "·")
                         Text("\(draft?.wordCount ?? 0) words")
                     }
                     .font(.caption2)
@@ -492,33 +445,133 @@ struct NoteDetailView: View {
             }
             .padding(.horizontal, Chrome.Space.lg)
             .padding(.vertical, 10)
+            .readableColumn()
         }
         .toolbar {
-            EditorToolbar(
+            NoteToolbar(
+                templates: templates,
+                isPreviewing: isPreviewing,
+                isPinned: draft?.isPinned == true,
                 hasChanges: hasChanges,
+                onTemplate: applyTemplate,
+                onTogglePreview: { isPreviewing.toggle() },
+                onTogglePin: togglePin,
                 onRevert: { replaceDraft(with: original) },
-                onSave: {
-                    if let d = draft {
-                        Task {
-                            // Only refresh the editor from the store when the
-                            // user hasn't typed during the save window; the
-                            // editable fields are compared against the snapshot
-                            // that was saved (system fields like updatedAt may
-                            // legitimately differ via reconcile).
-                            if await session.save(d),
-                               let latest = await session.loadSelectedNote(),
-                               latest.id == d.id,
-                               draft?.title == d.title,
-                               draft?.content == d.content,
-                               draft?.tags == d.tags {
-                                replaceDraft(with: latest)
-                                original = latest
-                            }
-                        }
-                    }
-                },
-                onDelete: { showDeleteConfirm = true }
-            )
+                onSave: save,
+                onDelete: { showDeleteConfirm = true })
+        }
+    }
+
+    private func save() {
+        guard let d = draft else { return }
+        Task {
+            // Only refresh the editor from the store when the user hasn't
+            // typed during the save window; the editable fields are compared
+            // against the snapshot that was saved (system fields like
+            // updatedAt may legitimately differ via reconcile).
+            if await session.save(d),
+               let latest = await session.loadSelectedNote(),
+               latest.id == d.id,
+               draft?.title == d.title,
+               draft?.content == d.content,
+               draft?.tags == d.tags {
+                replaceDraft(with: latest)
+                original = latest
+            }
+        }
+    }
+
+    /// Pins at once, outside the save flow: the store is told directly, and
+    /// the draft and its baseline both take the flag so it reads as no edit.
+    private func togglePin() {
+        guard var d = draft else { return }
+        d.isPinned.toggle()
+        draft = d
+        if var orig = original {
+            orig.isPinned = d.isPinned
+            original = orig
+        }
+        Task {
+            if await session.togglePin(d) == false,
+               let latest = await session.loadSelectedNote() {
+                if var current = draft, current.id == latest.id {
+                    current.isPinned = latest.isPinned
+                    current.updatedAt = latest.updatedAt
+                    draft = current
+                }
+                if var orig = original, orig.id == latest.id {
+                    orig.isPinned = latest.isPinned
+                    orig.updatedAt = latest.updatedAt
+                    original = orig
+                }
+            }
+        }
+    }
+}
+
+/// The note's actions, all in the toolbar so the pane opens on the title:
+/// Delete, then template, preview and pin, then Revert and Save after a change.
+private struct NoteToolbar: ToolbarContent {
+    let templates: [NoteTemplate]
+    let isPreviewing: Bool
+    let isPinned: Bool
+    let hasChanges: Bool
+    let onTemplate: (NoteTemplate) -> Void
+    let onTogglePreview: () -> Void
+    let onTogglePin: () -> Void
+    let onRevert: () -> Void
+    let onSave: () -> Void
+    let onDelete: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .help("Delete")
+            .accessibilityLabel("Delete")
+        }
+        ToolbarSpacerCompat()
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                ForEach(templates) { template in
+                    Button(template.name) { onTemplate(template) }
+                }
+            } label: {
+                Image(systemName: "doc.badge.plus")
+            }
+            .menuIndicator(.hidden)
+            .disabled(templates.isEmpty)
+            .help("Insert clinical template")
+            .accessibilityLabel("Insert clinical template")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onTogglePreview) {
+                Image(systemName: isPreviewing ? "pencil" : "eye")
+            }
+            .help(isPreviewing ? "Edit" : "Preview")
+            .accessibilityLabel(isPreviewing ? "Edit" : "Preview")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onTogglePin) {
+                Image(systemName: isPinned ? "pin.fill" : "pin")
+                    .symbolEffect(.bounce, value: isPinned)
+            }
+            .help(isPinned ? "Unpin" : "Pin")
+            .accessibilityLabel(isPinned ? "Unpin" : "Pin")
+        }
+        if hasChanges {
+            ToolbarSpacerCompat()
+            ToolbarItem(placement: .primaryAction) {
+                Button("Revert", action: onRevert)
+                    .help("Discard changes")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save", action: onSave)
+                    .keyboardShortcut("s")
+                    .prominentActionButtonStyle()
+                    .help("Save changes (⌘S)")
+            }
         }
     }
 }

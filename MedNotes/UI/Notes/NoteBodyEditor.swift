@@ -23,10 +23,24 @@ final class NoteBodyEditor: ObservableObject {
     /// through the binding anyway, so only a change here needs one.
     private var anchorAtCaret: String?
     private var refreshPending = false
+    private var stylePending = false
+    private var styleNote: Note?
+    /// The text view last styled. Kept apart from `textView`: finding the
+    /// body to style it must not count as the body being known, which
+    /// decides how a link completion edits (through the view, or the draft).
+    private weak var styledView: NSTextView?
+    /// Left and right inset of the body's text, which holds it to the
+    /// readable column while the text view spans the pane.
+    private var horizontalInset: CGFloat = 0
 
     /// The window the editor is in; text views elsewhere are never taken.
+    ///
+    /// A `nil` is ignored. SwiftUI rebuilds the reader behind the editor,
+    /// and the outgoing reader reports leaving its window *after* the new
+    /// one reported arriving (logged live), which used to clear the window
+    /// for good. The editor's own window going away releases it anyway.
     func attach(to window: NSWindow?) {
-        guard window !== self.window else { return }
+        guard let window, window !== self.window else { return }
         self.window = window
         textView = nil
         noteID = nil
@@ -63,6 +77,7 @@ final class NoteBodyEditor: ObservableObject {
         // and the draft's update redraws anyway, reading the caret then.
         let caughtUp = candidate.textStorage?.length == (note.content as NSString).length
         if adopted || (anchorMoved && caughtUp) { refreshSoon() }
+        if adopted { restyleSoon(note) }
     }
 
     /// The link being typed at the body's caret.
@@ -131,6 +146,135 @@ final class NoteBodyEditor: ObservableObject {
               let undoManager = notification.object as? UndoManager,
               undoManager === textView.undoManager else { return nil }
         return Self.shows(textView, note) ? nil : textView.string
+    }
+
+    // MARK: - Markdown styling
+
+    /// Draws the body's Markdown (headings, bold, italic, dimmed markers and
+    /// front matter) once the current event is handled.
+    ///
+    /// Only attributes change, never the string. Measured on macOS 26
+    /// (TextKit 2) with a harness: an attribute-only edit of the text storage
+    /// posts no text change, never reaches the binding, registers no undo,
+    /// and typing, undo and redo around it keep their text. It is skipped
+    /// while text is marked, so a composition is never touched. Coalesced:
+    /// a burst of changes styles once, with the latest note.
+    func restyleSoon(_ note: Note?) {
+        guard let note else { return }
+        styleNote = note
+        guard !stylePending else { return }
+        stylePending = true
+        DispatchQueue.main.async { [weak self] in self?.restylePending(attempt: 0) }
+    }
+
+    /// A note just selected has no text view in the window yet when its
+    /// draft arrives (measured: the first try found none), so a miss retries
+    /// for a moment rather than leaving the note plain until it is typed in.
+    private func restylePending(attempt: Int) {
+        guard let note = styleNote else {
+            stylePending = false
+            return
+        }
+        if restyle(note) || attempt >= 20 {
+            stylePending = false
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.restylePending(attempt: attempt + 1)
+        }
+    }
+
+    /// Whether the body's text view was found and styled.
+    @discardableResult
+    private func restyle(_ note: Note) -> Bool {
+        let view: NSTextView?
+        if let known = textView, noteID == note.id, known.window != nil {
+            // Typing may have moved it ahead of `note`; it is still the body,
+            // and the styling reads its own text.
+            view = known
+        } else if let styledView, styledView.window === window, Self.shows(styledView, note) {
+            view = styledView
+        } else {
+            // A note just opened: nothing has reported yet, so look for the
+            // text view in this window showing exactly its body.
+            view = window?.contentView.flatMap { Self.findBody(showing: note, in: $0) }
+        }
+        guard let view, let storage = view.textStorage else { return false }
+        applyInset(to: view)
+        // Mid-composition: done for now; committing it is a change, which
+        // asks again.
+        guard !view.hasMarkedText() else { return true }
+        // Each change restyles the whole body, which a clinical note never
+        // notices; past this size (an imported dump) it stays plain instead.
+        guard storage.length <= Self.styledLengthLimit else { return true }
+        styledView = view
+        Self.apply(MarkdownStyler.spans(in: view.string), to: storage)
+        return true
+    }
+
+    private static let styledLengthLimit = 60_000
+
+    /// Sets the body's horizontal text inset, now on the text view showing
+    /// `note` and on every one found after (a new note, leaving Preview).
+    func setHorizontalInset(_ inset: CGFloat, for note: Note?) {
+        horizontalInset = inset
+        restyleSoon(note)
+    }
+
+    /// Layout only: changing the inset touches neither the text nor undo.
+    private func applyInset(to view: NSTextView) {
+        guard abs(view.textContainerInset.width - horizontalInset) > 0.5 else { return }
+        view.textContainerInset = NSSize(width: horizontalInset, height: view.textContainerInset.height)
+    }
+
+    private static func findBody(showing note: Note, in view: NSView) -> NSTextView? {
+        if let candidate = view as? NSTextView, candidate.isEditable, !candidate.isFieldEditor,
+           shows(candidate, note) {
+            return candidate
+        }
+        for subview in view.subviews {
+            if let found = findBody(showing: note, in: subview) { return found }
+        }
+        return nil
+    }
+
+    private static func apply(_ spans: [MarkdownStyler.Span], to storage: NSTextStorage) {
+        let base = NSFont.preferredFont(forTextStyle: .body)
+        let size = base.pointSize
+        let manager = NSFontManager.shared
+        let full = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        // The editor's own defaults (measured): body font, text colour.
+        storage.addAttributes([.font: base, .foregroundColor: NSColor.textColor], range: full)
+        for span in spans {
+            switch span.role {
+            case .heading(let level):
+                let scale: CGFloat = [1.5, 1.3, 1.15][min(level, 3) - 1]
+                storage.addAttribute(.font, value: NSFont.systemFont(ofSize: (size * scale).rounded(), weight: .bold),
+                                     range: span.range)
+            case .bold:
+                storage.enumerateAttribute(.font, in: span.range) { value, range, _ in
+                    let font = value as? NSFont ?? base
+                    storage.addAttribute(.font, value: manager.convert(font, toHaveTrait: .boldFontMask), range: range)
+                }
+            case .italic:
+                storage.enumerateAttribute(.font, in: span.range) { value, range, _ in
+                    let font = value as? NSFont ?? base
+                    storage.addAttribute(.font, value: manager.convert(font, toHaveTrait: .italicFontMask), range: range)
+                }
+            case .syntaxMarker:
+                storage.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: span.range)
+            case .frontMatter:
+                storage.addAttributes([
+                    .font: NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular),
+                    .foregroundColor: NSColor.secondaryLabelColor
+                ], range: span.range)
+            case .wikiLink:
+                storage.addAttribute(.foregroundColor, value: NSColor(named: "AccentColor") ?? .controlAccentColor,
+                                     range: span.range)
+            }
+        }
+        storage.endEditing()
     }
 
     private func bodyTextView(showing note: Note) -> NSTextView? {

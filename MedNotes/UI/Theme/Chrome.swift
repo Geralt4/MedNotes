@@ -4,12 +4,22 @@ extension View {
     func prominentActionButtonStyle() -> some View {
         self.buttonStyle(.borderedProminent)
     }
+
+    /// Caps the view at `Chrome.readableWidth` and centres that column in
+    /// the space it is given; narrower than that, it fills it.
+    func readableColumn() -> some View {
+        frame(maxWidth: Chrome.readableWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+    }
 }
 
 enum Chrome {
     static let chipFill = Color.primary.opacity(0.06)
     static let chipFillStrong = Color.primary.opacity(0.10)
     static let editorFill = Color.primary.opacity(0.045)
+    /// Widest a column of body text runs before lines get too long to read:
+    /// about 75–80 characters at the body size.
+    static let readableWidth: CGFloat = 720
 
     enum Space {
         static let xxs: CGFloat = 2
