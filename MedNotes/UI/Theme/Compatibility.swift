@@ -25,6 +25,19 @@ extension View {
         modifier(SoftTopEdgeModifier())
     }
 
+    /// Holds the detail column's share of the toolbar while it shows no
+    /// record. With nothing there, macOS 26 lays the list column's buttons
+    /// out at the window's trailing edge, and they jump back over the list
+    /// as soon as a record is selected. No-op below macOS 26.
+    @ViewBuilder
+    func detailToolbarAnchor() -> some View {
+        if #available(macOS 26.0, *) {
+            toolbar { ToolbarSpacer(.flexible) }
+        } else {
+            self
+        }
+    }
+
     /// Pins `bar` above a list. On macOS 26+ it is a safe-area *bar*, the
     /// API for controls above scrolling content: the soft top edge then
     /// treats it as a bar and blurs only the rows scrolling under it.

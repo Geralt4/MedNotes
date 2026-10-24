@@ -183,6 +183,7 @@ struct ModuleEmptyState: View {
             actionTitle: actionTitle,
             action: action
         )
+        .detailToolbarAnchor()
     }
 }
 
