@@ -24,6 +24,18 @@ extension View {
     func softTopEdge() -> some View {
         modifier(SoftTopEdgeModifier())
     }
+
+    /// Pins `bar` above a list. On macOS 26+ it is a safe-area *bar*, the
+    /// API for controls above scrolling content: the soft top edge then
+    /// treats it as a bar and blurs only the rows scrolling under it.
+    @ViewBuilder
+    func topBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        if #available(macOS 26.0, *) {
+            safeAreaBar(edge: .top, content: bar)
+        } else {
+            safeAreaInset(edge: .top, content: bar)
+        }
+    }
 }
 
 // MARK: Empty states

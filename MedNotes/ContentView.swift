@@ -5,6 +5,10 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Banners sit below the split view: above it they pushed the
+            // toolbar's reserved height into the content, leaving a blurred
+            // band over the list search fields (macOS 26).
+            content
             #if DEBUG
             // `PreviewSeed.isActive` is already a hardcoded `false` in release,
             // so the branch is dead there either way; the `#if` also keeps the
@@ -18,7 +22,6 @@ struct ContentView: View {
                     session.integrityWarning = nil
                 }
             }
-            content
         }
         // The overlays below are only as big as this stack. It fills the
         // window whatever `content` shows: the startup error view sizes to its
@@ -134,7 +137,7 @@ struct ContentView: View {
                             GraphNodeListView()
                         }
                     }
-                    .navigationSplitViewColumnWidth(min: 240, ideal: 320, max: 440)
+                    .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 440)
                     .id(session.selectedModule)
                 } detail: {
                     detailView
@@ -142,7 +145,7 @@ struct ContentView: View {
                 .navigationSplitViewStyle(.balanced)
             }
         }
-        // Centres a startup error in the space below the banners instead of
+        // Centres a startup error in the space above the banners instead of
         // leaving it at the top of the stack.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

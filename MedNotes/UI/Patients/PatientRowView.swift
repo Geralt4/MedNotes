@@ -27,10 +27,21 @@ struct PatientRowView: View {
 
             // Trailing rather than stacked under the name: a patient with
             // active conditions then stands the same height as one without,
-            // so the list keeps an even rhythm while scrolling.
+            // so the list keeps an even rhythm while scrolling. A dot and a
+            // count rather than a worded pill, so the name keeps the width.
             if activeConditions > 0 {
-                StatusPill("\(activeConditions) active", tint: .orange)
-                    .accessibilityLabel("\(activeConditions) active conditions")
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 6, height: 6)
+                    Text(verbatim: "\(activeConditions)")
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.orange)
+                }
+                .help("\(activeConditions) active conditions")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(activeConditions) active conditions")
             }
         }
         .padding(.vertical, Chrome.Row.verticalPadding)
@@ -41,8 +52,8 @@ struct PatientRowView: View {
         [
             patient.profile.hasKnownDateOfBirth && patient.profile.age >= 0
                 ? String(localized: "\(patient.profile.age)y") : nil,
-            patient.profile.amka.isEmpty ? nil : patient.profile.amka,
-            patient.profile.phone.isEmpty ? nil : patient.profile.phone
+            // The phone is left to the detail view: a third item never fit.
+            patient.profile.amka.isEmpty ? nil : patient.profile.amka
         ].compactMap { $0 }
     }
 

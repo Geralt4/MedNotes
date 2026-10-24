@@ -52,7 +52,7 @@ struct NoteListView: View {
         // Search lives in the column, not the toolbar: as a toolbar item
         // macOS pins it to a fixed width at the window's trailing edge,
         // which pushed this list's own buttons across the split divider.
-        .safeAreaInset(edge: .top) {
+        .topBar {
             ListSearchField(
                 prompt: "Search notes",
                 text: Binding(
