@@ -20,23 +20,22 @@ struct TodoRowView: View {
 
             VStack(alignment: .leading, spacing: Chrome.Row.contentSpacing) {
                 HStack(spacing: Chrome.Row.inlineSpacing) {
+                    // Reminders' marks rather than a worded pill: two or three
+                    // characters, so the title keeps the row's width.
+                    if let mark = priorityMark {
+                        Text(verbatim: mark)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(todo.isCompleted
+                                ? .secondary : Chrome.priorityColor(todo.priority))
+                            .accessibilityHidden(true)
+                    }
                     Text(DisplayCopy.title(todo.title))
                         .font(.headline)
                         .lineLimit(1)
                         .strikethrough(todo.isCompleted)
                         .foregroundStyle(todo.isCompleted ? .secondary : .primary)
-                        // Low priority shows no pill (below), so the priority
-                        // it would have announced is spoken here instead.
-                        .accessibilityValue(todo.priority == .low ? "Low priority" : "")
-                    Spacer(minLength: Chrome.Space.xs)
-                    // A pill on every row makes none of them read as urgent.
-                    // Low is the resting state — it earns no ink.
-                    if todo.priority != .low {
-                        StatusPill(
-                            text: DisplayCopy.priority(todo.priority),
-                            tint: Chrome.priorityColor(todo.priority)
-                        )
-                    }
+                        .accessibilityValue(Text(verbatim: priorityValue))
+                    Spacer(minLength: 0)
                 }
 
                 if !sublineParts.isEmpty {
@@ -50,6 +49,25 @@ struct TodoRowView: View {
         }
         .padding(.vertical, Chrome.Row.verticalPadding)
         .contentShape(Rectangle())
+    }
+
+    /// A mark on every row makes none of them read as urgent. Low is the
+    /// resting state — it earns no ink.
+    private var priorityMark: String? {
+        switch todo.priority {
+        case .high: return "!!!"
+        case .medium: return "!!"
+        case .low: return nil
+        }
+    }
+
+    /// The mark is hidden from VoiceOver, so the title speaks the priority.
+    private var priorityValue: String {
+        switch todo.priority {
+        case .high: return String(localized: "High priority")
+        case .medium: return String(localized: "Medium priority")
+        case .low: return String(localized: "Low priority")
+        }
     }
 
     private var dueTint: Color {

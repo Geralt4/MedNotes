@@ -3,6 +3,9 @@ import SwiftUI
 struct TagChip: View {
     let text: String
     var onRemove: (() -> Void)? = nil
+    /// The quieter form for list rows, where a tag is context rather than
+    /// something to act on: smaller, secondary, no outline.
+    var compact = false
 
     var body: some View {
         HStack(spacing: Chrome.Space.xs) {
@@ -16,11 +19,12 @@ struct TagChip: View {
                 .accessibilityLabel("Remove \(text)")
             }
         }
-        .font(.caption.weight(.medium))
-        .padding(.horizontal, Chrome.Space.sm)
-        .padding(.vertical, 3)
+        .font(compact ? .caption2.weight(.medium) : .caption.weight(.medium))
+        .foregroundStyle(compact ? .secondary : .primary)
+        .padding(.horizontal, compact ? Chrome.Space.xs + 2 : Chrome.Space.sm)
+        .padding(.vertical, compact ? 2 : 3)
         .background(Chrome.chipFill, in: Capsule())
-        .overlay(Capsule().strokeBorder(Chrome.chipFillStrong))
+        .overlay(Capsule().strokeBorder(compact ? .clear : Chrome.chipFillStrong))
     }
 }
 
@@ -251,7 +255,7 @@ struct TagChipRow: View {
         let hidden = tags.count - shown.count
         return HStack(spacing: Chrome.Space.xs) {
             ForEach(Array(shown), id: \.self) { tag in
-                TagChip(text: tag)
+                TagChip(text: tag, compact: true)
             }
             if hidden > 0 {
                 Text("+\(hidden)")

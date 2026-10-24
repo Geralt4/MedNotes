@@ -20,9 +20,15 @@ struct NoteListView: View {
                     }
                 }
             }
+            // Titled only under a Pinned section; untitled, it read as a
+            // stray gap between the two groups.
             Section {
                 ForEach(unpinned) { note in
                     noteRow(note)
+                }
+            } header: {
+                if !pinned.isEmpty, !unpinned.isEmpty {
+                    Text("Notes")
                 }
             }
         }

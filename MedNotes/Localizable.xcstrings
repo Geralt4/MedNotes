@@ -2718,6 +2718,16 @@
         }
       }
     },
+    "High priority" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Υψηλή προτεραιότητα"
+          }
+        }
+      }
+    },
     "I understand that this account may be shared, and its participants may receive this clinical data." : {
       "localizations" : {
         "el" : {
@@ -3184,6 +3194,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Μετρήσεις"
+          }
+        }
+      }
+    },
+    "Medium priority" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μεσαία προτεραιότητα"
           }
         }
       }
