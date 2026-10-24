@@ -2298,6 +2298,16 @@
         }
       }
     },
+    "Edit this event (⌘E)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επεξεργασία συμβάντος (⌘E)"
+          }
+        }
+      }
+    },
     "Edit this patient" : {
       "localizations" : {
         "el" : {
@@ -3998,6 +4008,16 @@
         }
       }
     },
+    "Now" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τώρα"
+          }
+        }
+      }
+    },
     "OK" : {
       "localizations" : {
         "el" : {
@@ -4054,6 +4074,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Άνοιγμα %@"
+          }
+        }
+      }
+    },
+    "Open patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Άνοιγμα ασθενούς"
           }
         }
       }
@@ -5346,6 +5376,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Συγχρονισμός υπενθυμίσεων τώρα"
+          }
+        }
+      }
+    },
+    "Synced with Apple Calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμένο με το Ημερολόγιο Apple"
           }
         }
       }

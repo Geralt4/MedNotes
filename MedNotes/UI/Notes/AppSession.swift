@@ -3328,6 +3328,12 @@ final class AppSession: ObservableObject {
         await revealNote(noteId)
     }
 
+    /// Opens a patient from elsewhere (an event's linked patient), revealing
+    /// it even when the patient list's search or filter would hide it.
+    func jumpToPatient(_ patientId: UUID) async {
+        await revealPatient(patientId)
+    }
+
     func loadGraph() async {
         guard let store else { return }
         do {

@@ -48,6 +48,16 @@ final class EditorRenderTests: XCTestCase {
         XCTAssertTrue(OffscreenHost.hasInk(hosting), "patient record rendered blank")
     }
 
+    func testEventRecordShowsNoInputs() {
+        let event = CalendarEvent(title: "Post-op review", description: "Check wound.",
+                                  eventType: .surgery)
+        let hosting = offscreen.host(EventRecordView(event: event, patientName: "Μαρία Αντωνοπούλου",
+                                                     onOpenPatient: {}), height: 600)
+        let found = OffscreenHost.placeholders(under: hosting)
+        XCTAssertFalse(found.contains("Title"), "the event record shows an input; found \(found.sorted())")
+        XCTAssertTrue(OffscreenHost.hasInk(hosting), "event record rendered blank")
+    }
+
     func testTodoEditorExposesItsFields() {
         let hosting = offscreen.host(TodoHost(todo: TodoItem.newRecord()), height: 700)
         let found = OffscreenHost.placeholders(under: hosting)

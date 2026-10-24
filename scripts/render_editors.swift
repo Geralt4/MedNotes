@@ -231,6 +231,14 @@ struct EditorCase {
                        view: AnyView(EventHost(event: CalendarEvent.newRecord(), patients: patients))),
             EditorCase(name: "editor-event-filled", height: 820,
                        view: AnyView(EventHost(event: filledEvent, patients: patients))),
+            EditorCase(name: "record-event-filled", height: 620,
+                       view: AnyView(EventRecordView(event: filledEvent,
+                                                     patientName: patients.first.map { DisplayCopy.patient($0) },
+                                                     onOpenPatient: {}))),
+            EditorCase(name: "record-event-allday", height: 420,
+                       view: AnyView(EventRecordView(event: CalendarEvent(
+                           title: "Study leave", startDate: Date(), endDate: Date().addingTimeInterval(2 * 86_400),
+                           isAllDay: true, eventType: .customEvent)))),
             EditorCase(name: "integrity-banner", height: 44,
                        view: AnyView(IntegrityBanner(
                            message: "2 records point to a patient that no longer exists.", onDismiss: {})),

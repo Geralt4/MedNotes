@@ -21,10 +21,18 @@ struct EventRowView: View {
                     StatusPill(text: DisplayCopy.eventType(event.eventType), tint: Chrome.eventTint(event.eventType))
                     if let patientId = event.patientId,
                        let name = session.patientName(for: patientId) {
-                        Text(name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        // A click on the name opens the patient; the rest of
+                        // the row still selects the event.
+                        Button {
+                            Task { await session.jumpToPatient(patientId) }
+                        } label: {
+                            Text(name)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open patient")
                     }
                 }
             }
