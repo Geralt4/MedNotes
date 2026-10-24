@@ -26,8 +26,10 @@ final class EditorSwitchTests: XCTestCase {
 
     func testSwitchingFromAnEditedTodoSavesOnceAndShowsTheNextTodo() async throws {
         let session = try await makeSession()
-        let first = try await makeTodo(in: session, title: "Alpha")
         let second = try await makeTodo(in: session, title: "Beta")
+        // Made last, so it is the todo the user "just created": it opens in
+        // the editor. Others open as a record, with no title field to type in.
+        let first = try await makeTodo(in: session, title: "Alpha")
 
         session.selectTodo(first.id)
         let window = try offscreen.hostForTyping(
@@ -38,7 +40,11 @@ final class EditorSwitchTests: XCTestCase {
 
         let epochBefore = session.todoEpoch
         session.selectTodo(second.id)
-        _ = try await field(in: window, value: "Beta", timeout: 15)
+        // The next todo opens as a record, which has no text field at all:
+        // the edited editor is gone and the record is showing.
+        try await waitUntilNoField(in: window, value: "Alpha!", timeout: 15)
+        XCTAssertTrue(Self.textFields(in: window.contentView).isEmpty,
+                      "an editor is still showing after switching to the next todo")
         // Let a runaway re-save loop show itself.
         try await Task.sleep(nanoseconds: 700_000_000)
         XCTAssertLessThanOrEqual(
@@ -93,6 +99,16 @@ final class EditorSwitchTests: XCTestCase {
         }
         let shown = Self.textFields(in: window.contentView).map(\.stringValue)
         return try XCTUnwrap(nil as NSTextField?, "never showed “\(value)”; fields show \(shown)")
+    }
+
+    private func waitUntilNoField(in window: NSWindow, value: String, timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            window.contentView?.layoutSubtreeIfNeeded()
+            if !Self.textFields(in: window.contentView).contains(where: { $0.stringValue == value }) { return }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTFail("the editor still shows “\(value)” after switching")
     }
 
     private static func textFields(in view: NSView?) -> [NSTextField] {

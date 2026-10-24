@@ -239,6 +239,17 @@ struct EditorCase {
                        view: AnyView(EventRecordView(event: CalendarEvent(
                            title: "Study leave", startDate: Date(), endDate: Date().addingTimeInterval(2 * 86_400),
                            isAllDay: true, eventType: .customEvent)))),
+            EditorCase(name: "record-todo-filled", height: 620,
+                       view: AnyView(TodoRecordView(todo: filledTodo,
+                                                    patientName: patients.first.map { DisplayCopy.patient($0) },
+                                                    canOpenPatient: true))),
+            EditorCase(name: "record-todo-completed", height: 420,
+                       view: AnyView(TodoRecordView(todo: {
+                           var t = filledTodo
+                           t.isCompleted = true
+                           t.completedAt = Date()
+                           return t
+                       }()))),
             EditorCase(name: "integrity-banner", height: 44,
                        view: AnyView(IntegrityBanner(
                            message: "2 records point to a patient that no longer exists.", onDismiss: {})),

@@ -112,6 +112,13 @@ enum DisplayCopy {
         return trimmed.isEmpty ? String(localized: "Untitled") : trimmed
     }
 
+    /// Initials from a whole display name: first and last word.
+    static func initials(ofName name: String) -> String {
+        let parts = name.split(separator: " ")
+        return initials(first: parts.first.map(String.init) ?? "",
+                        last: parts.count > 1 ? String(parts.last!) : "")
+    }
+
     static func initials(first: String, last: String) -> String {
         let f = first.trimmingCharacters(in: .whitespacesAndNewlines).first
         let l = last.trimmingCharacters(in: .whitespacesAndNewlines).first

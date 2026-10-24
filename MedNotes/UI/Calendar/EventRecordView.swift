@@ -75,7 +75,7 @@ struct EventRecordView: View {
     private func patientRow(_ name: String) -> some View {
         Button(action: onOpenPatient) {
             HStack(spacing: Chrome.Row.leadingSpacing) {
-                MonogramAvatar(initials: Self.initials(of: name), size: 28)
+                MonogramAvatar(initials: DisplayCopy.initials(ofName: name), size: 28)
                 Text(verbatim: name)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
@@ -86,12 +86,6 @@ struct EventRecordView: View {
         }
         .buttonStyle(.plain)
         .help("Open patient")
-    }
-
-    private static func initials(of name: String) -> String {
-        let parts = name.split(separator: " ")
-        return DisplayCopy.initials(first: parts.first.map(String.init) ?? "",
-                                    last: parts.count > 1 ? String(parts.last!) : "")
     }
 
     // MARK: - Footer

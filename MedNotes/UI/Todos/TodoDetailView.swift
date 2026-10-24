@@ -9,6 +9,9 @@ struct TodoDetailView: View {
     /// The record whose title takes focus when its editor appears: only ever
     /// the todo the user just created, never one they arrowed to.
     @State private var autofocusTodoId: UUID?
+    /// The editor is showing rather than the record. Set for a todo the user
+    /// just created, cleared whenever the selection moves.
+    @State private var isEditing = false
     /// This editor's registration with the session, so a lock saves the
     /// draft before the store closes; see `OpenEditorDraft`.
     @State private var lockToken = UUID()
@@ -103,7 +106,10 @@ struct TodoDetailView: View {
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
         defer { if showLoading { isLoading = false } }
-        if switching { autofocusTodoId = nil }
+        if switching {
+            autofocusTodoId = nil
+            isEditing = false
+        }
         let priorDraft = draft
         let loaded = await session.loadSelectedTodo()
         if Task.isCancelled { return }
@@ -121,6 +127,10 @@ struct TodoDetailView: View {
         original = todo
         if session.consumeFocusRequest(for: todo.id) {
             autofocusTodoId = todo.id
+            isEditing = true
+        } else if switching, todo.isUntouchedNewRecord {
+            // Nothing to read yet: an empty todo opens in the editor.
+            isEditing = true
         }
     }
 
@@ -167,52 +177,119 @@ struct TodoDetailView: View {
     @ViewBuilder
     private var editorView: some View {
         if let todo = draft {
-            TodoEditorForm(
-                draft: Binding(
-                    get: { draft ?? todo },
-                    // A field can commit while its editor is being torn down
-                    // for another todo; a stale form must never overwrite the
-                    // record that replaced it.
-                    set: { updated in
-                        if draft?.id == updated.id { draft = updated }
-                    }),
-                patientOptions: session.assignmentPatients(including: todo.patientId),
-                isKnownPatient: { session.patientName(for: $0) != nil },
-                onSetCompleted: setCompleted,
-                focusesTitleOnAppear: todo.id == autofocusTodoId
-            )
+            Group {
+                if isEditing {
+                    TodoEditorForm(
+                        draft: Binding(
+                            get: { draft ?? todo },
+                            // A field can commit while its editor is being torn down
+                            // for another todo; a stale form must never overwrite the
+                            // record that replaced it.
+                            set: { updated in
+                                if draft?.id == updated.id { draft = updated }
+                            }),
+                        patientOptions: session.assignmentPatients(including: todo.patientId),
+                        isKnownPatient: { session.patientName(for: $0) != nil },
+                        onSetCompleted: setCompleted,
+                        focusesTitleOnAppear: todo.id == autofocusTodoId
+                    )
+                } else {
+                    let known = todo.patientId.flatMap { session.patientName(for: $0) }
+                    let stored = todo.patientName?.trimmingCharacters(in: .whitespaces)
+                    TodoRecordView(
+                        todo: todo,
+                        // As in the list row: a stored name shows even
+                        // without a link (older and imported todos).
+                        patientName: known ?? (stored?.isEmpty == false ? stored : nil),
+                        canOpenPatient: known != nil,
+                        onOpenPatient: {
+                            if let id = todo.patientId {
+                                Task { await session.jumpToPatient(id) }
+                            }
+                        },
+                        onSetCompleted: setCompleted)
+                }
+            }
             // Fresh editor state and scroll position per todo.
             .id(todo.id)
             .softTopEdge()
             .toolbar {
-                EditorToolbar(
-                    hasChanges: hasChanges,
-                    onRevert: { draft = original },
-                    onSave: {
-                        if let d = draft {
-                            Task {
-                                // Only refresh the editor from the store when the
-                                // user hasn't typed during the save window. The
-                                // completion fields are excluded: they are owned by
-                                // the toggle/reconcile paths.
-                                if await session.save(d),
-                                   let latest = await session.loadSelectedTodo(),
-                                   latest.id == d.id,
-                                   draft?.title == d.title,
-                                   draft?.notes == d.notes,
-                                   draft?.tags == d.tags,
-                                   draft?.priority == d.priority,
-                                   draft?.dueDate == d.dueDate,
-                                   draft?.patientId == d.patientId,
-                                   draft?.patientName == d.patientName {
-                                    draft = latest
-                                    original = latest
-                                }
-                            }
-                        }
+                TodoToolbar(
+                    isEditing: isEditing,
+                    onEdit: { isEditing = true },
+                    onCancel: {
+                        draft = original
+                        isEditing = false
                     },
-                    onDelete: { showDeleteConfirm = true }
-                )
+                    onDone: save,
+                    onDelete: { showDeleteConfirm = true })
+            }
+        }
+    }
+
+    /// Saves and returns to the record. Stays in the editor when the save
+    /// fails, so the fields are still in front of the user.
+    private func save() {
+        guard let d = draft else { return }
+        guard hasChanges else {
+            isEditing = false
+            return
+        }
+        Task {
+            guard await session.save(d) else { return }
+            if draft?.id == d.id { isEditing = false }
+            // Only refresh the editor from the store when the user hasn't
+            // typed during the save window. The completion fields are
+            // excluded: they are owned by the toggle/reconcile paths.
+            if let latest = await session.loadSelectedTodo(),
+               latest.id == d.id,
+               draft?.title == d.title,
+               draft?.notes == d.notes,
+               draft?.tags == d.tags,
+               draft?.priority == d.priority,
+               draft?.dueDate == d.dueDate,
+               draft?.patientId == d.patientId,
+               draft?.patientName == d.patientName {
+                draft = latest
+                original = latest
+            }
+        }
+    }
+}
+
+/// Reading: Delete and Edit. Editing: Delete, Cancel and Done.
+private struct TodoToolbar: ToolbarContent {
+    let isEditing: Bool
+    let onEdit: () -> Void
+    let onCancel: () -> Void
+    let onDone: () -> Void
+    let onDelete: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .help("Delete")
+            .accessibilityLabel("Delete")
+        }
+        ToolbarSpacerCompat()
+        if isEditing {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Cancel", action: onCancel)
+                    .help("Discard changes")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Done", action: onDone)
+                    .keyboardShortcut("s")
+                    .prominentActionButtonStyle()
+                    .help("Save changes (⌘S)")
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit", action: onEdit)
+                    .keyboardShortcut("e")
+                    .help("Edit this todo (⌘E)")
             }
         }
     }

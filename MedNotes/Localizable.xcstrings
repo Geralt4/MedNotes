@@ -2258,6 +2258,16 @@
         }
       }
     },
+    "Due %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λήγει %@"
+          }
+        }
+      }
+    },
     "Due date" : {
       "localizations" : {
         "el" : {
@@ -2274,6 +2284,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Λήγει σήμερα"
+          }
+        }
+      }
+    },
+    "Due tomorrow" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λήγει αύριο"
           }
         }
       }
@@ -2324,6 +2344,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Επεξεργασία ασθενούς (⌘E)"
+          }
+        }
+      }
+    },
+    "Edit this todo (⌘E)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επεξεργασία εκκρεμότητας (⌘E)"
           }
         }
       }
@@ -4148,6 +4178,16 @@
         }
       }
     },
+    "Overdue · %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκπρόθεσμη · %@"
+          }
+        }
+      }
+    },
     "Passphrase" : {
       "localizations" : {
         "el" : {
@@ -5386,6 +5426,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Συγχρονισμένο με το Ημερολόγιο Apple"
+          }
+        }
+      }
+    },
+    "Synced with Apple Reminders" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συγχρονισμένη με τις Υπενθυμίσεις Apple"
           }
         }
       }

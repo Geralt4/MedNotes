@@ -191,41 +191,6 @@ struct ModuleEmptyState: View {
     }
 }
 
-struct EditorToolbar: ToolbarContent {
-    let hasChanges: Bool
-    let onRevert: () -> Void
-    let onSave: () -> Void
-    let onDelete: () -> Void
-    /// What the leading action does. Patients archive rather than delete.
-    var destructiveLabel: LocalizedStringKey = "Delete"
-    var destructiveSymbol: String = "trash"
-    var destructiveRole: ButtonRole? = .destructive
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button(role: destructiveRole, action: onDelete) {
-                Image(systemName: destructiveSymbol)
-            }
-            .help(destructiveLabel)
-            .accessibilityLabel(destructiveLabel)
-        }
-        ToolbarSpacerCompat()
-        if hasChanges {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Revert", action: onRevert)
-                    .help("Discard changes")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button("Save", action: onSave)
-                    .keyboardShortcut("s")
-                    .prominentActionButtonStyle()
-                    .help("Save changes (⌘S)")
-            }
-        }
-    }
-}
-
-
 /// One line of tag chips showing as many as the row width allows, with a
 /// trailing `+n` standing in for the rest.
 ///

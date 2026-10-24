@@ -58,6 +58,21 @@ final class EditorRenderTests: XCTestCase {
         XCTAssertTrue(OffscreenHost.hasInk(hosting), "event record rendered blank")
     }
 
+    func testTodoRecordShowsNoInputs() {
+        var todo = TodoItem.newRecord()
+        todo.title = "Chase renal panel"
+        todo.priority = .high
+        todo.tags = ["labs", "urgent"]
+        todo.notes = "Call the lab after 10."
+        let hosting = offscreen.host(TodoRecordView(todo: todo, patientName: "Γεώργιος Παπαδόπουλος",
+                                                    canOpenPatient: true), height: 600)
+        let found = OffscreenHost.placeholders(under: hosting)
+        for absent in ["Title", "Add a tag"] {
+            XCTAssertFalse(found.contains(absent), "the todo record shows an input “\(absent)”")
+        }
+        XCTAssertTrue(OffscreenHost.hasInk(hosting), "todo record rendered blank")
+    }
+
     func testTodoEditorExposesItsFields() {
         let hosting = offscreen.host(TodoHost(todo: TodoItem.newRecord()), height: 700)
         let found = OffscreenHost.placeholders(under: hosting)
