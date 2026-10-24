@@ -171,9 +171,39 @@
     "%lld active conditions" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld ενεργές παθήσεις"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ενεργή πάθηση"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ενεργές παθήσεις"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active condition"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active conditions"
+                }
+              }
+            }
           }
         }
       }
@@ -488,12 +518,32 @@
         }
       }
     },
+    "Add %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη: %@"
+          }
+        }
+      }
+    },
     "AFM" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "ΑΦΜ"
+          }
+        }
+      }
+    },
+    "Allergy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλεργία"
           }
         }
       }
@@ -2178,6 +2228,16 @@
         }
       }
     },
+    "Done" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τέλος"
+          }
+        }
+      }
+    },
     "Dosage" : {
       "localizations" : {
         "el" : {
@@ -2224,6 +2284,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Επεξεργασία"
+          }
+        }
+      }
+    },
+    "Edit this patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επεξεργασία ασθενούς"
+          }
+        }
+      }
+    },
+    "Edit this patient (⌘E)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επεξεργασία ασθενούς (⌘E)"
           }
         }
       }
@@ -3094,6 +3174,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Σήμανση ως μη ολοκληρωμένης"
+          }
+        }
+      }
+    },
+    "Measurements" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μετρήσεις"
           }
         }
       }

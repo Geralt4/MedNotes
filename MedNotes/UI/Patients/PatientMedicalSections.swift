@@ -176,7 +176,7 @@ struct PatientMedicalSections: View {
         newAllergySeverity = .moderate
     }
 
-    private static func allergyTint(_ severity: AllergySeverity) -> Color {
+    static func allergyTint(_ severity: AllergySeverity) -> Color {
         severity == .severe || severity == .lifeThreatening ? .red : .secondary
     }
 

@@ -2,8 +2,9 @@ import AppKit
 import SwiftUI
 
 /// Offscreen renders of the record editors — patient, todo, event — blank and
-/// filled, light and dark, at the two detail-column widths the split view
-/// spans, plus the three Settings panes at the settings window's width.
+/// filled — and of the patient record view, light and dark, at the two
+/// detail-column widths the split view spans, plus the three Settings panes
+/// at the settings window's width.
 /// Review artefacts for UI work; no Screen Recording grant needed.
 ///
 /// `ImageRenderer` skips AppKit-backed controls (grouped `Form`, bezeled text
@@ -216,6 +217,12 @@ struct EditorCase {
                        view: AnyView(PatientHost(patient: duplicate, others: patients))),
             EditorCase(name: "editor-patient-archived", height: 720,
                        view: AnyView(PatientHost(patient: archived, others: patients).disabled(true))),
+            EditorCase(name: "record-patient-filled", height: 1400,
+                       view: AnyView(PatientRecordHost(patient: filled))),
+            EditorCase(name: "record-patient-sparse", height: 900,
+                       view: AnyView(PatientRecordHost(patient: patients.min {
+                           PatientRecordFields($0).sections.count < PatientRecordFields($1).sections.count
+                       } ?? filled))),
             EditorCase(name: "editor-todo-new", height: 820,
                        view: AnyView(TodoHost(todo: TodoItem.newRecord(), patients: patients))),
             EditorCase(name: "editor-todo-filled", height: 820,
@@ -295,6 +302,11 @@ struct SyncSettingsHost: View {
 }
 
 // Hosts own the draft so the forms render without a session.
+
+struct PatientRecordHost: View {
+    @State var patient: Patient
+    var body: some View { PatientRecordView(patient: $patient, onEdit: {}) }
+}
 
 struct PatientHost: View {
     @State var patient: Patient

@@ -9,6 +9,9 @@ struct PatientDetailView: View {
     /// The record whose "First name" field takes focus when its editor appears:
     /// only ever the patient the user just created, never one they arrowed to.
     @State private var autofocusPatientId: UUID?
+    /// The profile editor is showing rather than the record. Set for a
+    /// record the user just created, cleared whenever the selection moves.
+    @State private var isEditing = false
     /// This editor's registration with the session, so a lock saves the
     /// draft before the store closes; see `OpenEditorDraft`.
     @State private var lockToken = UUID()
@@ -103,7 +106,10 @@ struct PatientDetailView: View {
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
         defer { if showLoading { isLoading = false } }
-        if switching { autofocusPatientId = nil }
+        if switching {
+            autofocusPatientId = nil
+            isEditing = false
+        }
         let priorDraft = draft
         let loaded = await session.loadSelectedPatient()
         if Task.isCancelled { return }
@@ -121,6 +127,10 @@ struct PatientDetailView: View {
         original = patient
         if session.consumeFocusRequest(for: patient.id) {
             autofocusPatientId = patient.id
+            isEditing = true
+        } else if switching, patient.isUntouchedNewRecord {
+            // Nothing to read yet: an empty record opens in the editor.
+            isEditing = true
         }
     }
 
@@ -141,26 +151,35 @@ struct PatientDetailView: View {
     @ViewBuilder
     private var editorView: some View {
         if let patient = draft {
-            PatientEditorForm(
-                draft: Binding(
-                    get: { draft ?? patient },
-                    // A field can commit while its editor is being torn down
-                    // for another patient; a stale form must never overwrite
-                    // the record that replaced it.
-                    set: { updated in
-                        if draft?.id == updated.id { draft = updated }
-                    }),
-                focusesNameOnAppear: patient.id == autofocusPatientId,
-                // The AMKA column is unique across all patients, archived
-                // ones included, so the directory is the right haystack.
-                duplicateAMKA: { amka in
-                    session.patientDirectory.first {
-                        $0.id != patient.id && AMKA.normalized($0.profile.amka) == amka
-                    }
+            let binding = Binding(
+                get: { draft ?? patient },
+                // A field can commit while its editor is being torn down
+                // for another patient; a stale form must never overwrite
+                // the record that replaced it.
+                set: { (updated: Patient) in
+                    if draft?.id == updated.id { draft = updated }
+                })
+            Group {
+                if isEditing && !patient.isArchived {
+                    PatientEditorForm(
+                        draft: binding,
+                        focusesNameOnAppear: patient.id == autofocusPatientId,
+                        // The AMKA column is unique across all patients, archived
+                        // ones included, so the directory is the right haystack.
+                        duplicateAMKA: { amka in
+                            session.patientDirectory.first {
+                                $0.id != patient.id && AMKA.normalized($0.profile.amka) == amka
+                            }
+                        }
+                    )
+                } else {
+                    PatientRecordView(
+                        patient: binding,
+                        onEdit: patient.isArchived ? nil : { isEditing = true })
+                        // An archived record is read until it is restored.
+                        .disabled(patient.isArchived)
                 }
-            )
-            // An archived record is read until it is restored.
-            .disabled(patient.isArchived)
+            }
             // Fresh editor state and scroll position per patient.
             .id(patient.id)
             .softTopEdge()
@@ -170,37 +189,99 @@ struct PatientDetailView: View {
                         onRestore: { Task { await session.unarchivePatient(id: patient.id) } },
                         onDelete: { showDeleteConfirm = true })
                 } else {
-                    activeToolbar
+                    PatientToolbar(
+                        isEditing: isEditing,
+                        hasChanges: hasChanges,
+                        onEdit: { isEditing = true },
+                        onRevert: { draft = original },
+                        onCancel: {
+                            draft = original
+                            isEditing = false
+                        },
+                        onSave: { save(thenLeaveEditing: false) },
+                        onDone: { save(thenLeaveEditing: true) },
+                        onArchive: { showDeleteConfirm = true })
                 }
             }
         }
     }
 
-    private var activeToolbar: some ToolbarContent {
-        EditorToolbar(
-            hasChanges: hasChanges,
-            onRevert: { draft = original },
-            onSave: {
-                if let d = draft {
-                    Task {
-                        // Only refresh the editor from the store when the
-                        // user hasn't typed during the save window.
-                        if await saveDraft(d),
-                           let latest = await session.loadSelectedPatient(),
-                           latest.id == d.id,
-                           draft?.profile == d.profile,
-                           draft?.medical == d.medical {
-                            draft = latest
-                            original = latest
-                        }
-                    }
+    /// Saves the draft. Leaves the editor only once the save succeeded, so a
+    /// failed save (a duplicate AMKA) keeps the fields in front of the user.
+    private func save(thenLeaveEditing leave: Bool) {
+        guard let d = draft else { return }
+        guard hasChanges else {
+            if leave { isEditing = false }
+            return
+        }
+        Task {
+            guard await saveDraft(d) else { return }
+            if leave, draft?.id == d.id { isEditing = false }
+            // Only refresh from the store when the user hasn't typed during
+            // the save window.
+            if let latest = await session.loadSelectedPatient(),
+               latest.id == d.id,
+               draft?.profile == d.profile,
+               draft?.medical == d.medical {
+                draft = latest
+                original = latest
+            }
+        }
+    }
+}
+
+/// Toolbar for a live patient. Reading: Archive and Edit, plus Revert and
+/// Save after a change to the medical lists, which are edited in place.
+/// Editing: Archive, Cancel and Done.
+private struct PatientToolbar: ToolbarContent {
+    let isEditing: Bool
+    let hasChanges: Bool
+    let onEdit: () -> Void
+    let onRevert: () -> Void
+    let onCancel: () -> Void
+    let onSave: () -> Void
+    let onDone: () -> Void
+    let onArchive: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onArchive) {
+                Image(systemName: "archivebox")
+            }
+            .help("Archive")
+            .accessibilityLabel("Archive")
+        }
+        ToolbarSpacerCompat()
+        if isEditing {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Cancel", action: onCancel)
+                    .help("Discard changes")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Done", action: onDone)
+                    .keyboardShortcut("s")
+                    .prominentActionButtonStyle()
+                    .help("Save changes (⌘S)")
+            }
+        } else {
+            if hasChanges {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Revert", action: onRevert)
+                        .help("Discard changes")
                 }
-            },
-            onDelete: { showDeleteConfirm = true },
-            destructiveLabel: "Archive",
-            destructiveSymbol: "archivebox",
-            destructiveRole: nil
-        )
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Save", action: onSave)
+                        .keyboardShortcut("s")
+                        .prominentActionButtonStyle()
+                        .help("Save changes (⌘S)")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit", action: onEdit)
+                    .keyboardShortcut("e")
+                    .help("Edit this patient (⌘E)")
+            }
+        }
     }
 }
 

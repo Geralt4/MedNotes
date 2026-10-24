@@ -31,6 +31,23 @@ final class EditorRenderTests: XCTestCase {
         XCTAssertTrue(OffscreenHost.hasInk(hosting), "patient editor rendered blank")
     }
 
+    func testPatientRecordShowsOnlyFilledFields() {
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Σοφία"
+        patient.profile.lastName = "Βασιλείου"
+        patient.profile.amka = "24109300442"
+        let hosting = offscreen.host(PatientRecordHost(patient: patient))
+        // Read-only values are SwiftUI text, not AppKit fields, so only the
+        // absence of empty inputs is checked here; which values appear is
+        // covered by `PatientRecordFieldsTests`.
+        let placeholders = OffscreenHost.placeholders(under: hosting)
+        for absent in ["11 digits", "Street and number", "Father's name"] {
+            XCTAssertFalse(placeholders.contains(absent), "record view shows an empty “\(absent)” box")
+        }
+        XCTAssertTrue(placeholders.contains("Add a condition"), "medical lists should stay editable")
+        XCTAssertTrue(OffscreenHost.hasInk(hosting), "patient record rendered blank")
+    }
+
     func testTodoEditorExposesItsFields() {
         let hosting = offscreen.host(TodoHost(todo: TodoItem.newRecord()), height: 700)
         let found = OffscreenHost.placeholders(under: hosting)
@@ -52,6 +69,11 @@ final class EditorRenderTests: XCTestCase {
 private struct PatientHost: View {
     @State var patient: Patient
     var body: some View { PatientEditorForm(draft: $patient) }
+}
+
+private struct PatientRecordHost: View {
+    @State var patient: Patient
+    var body: some View { PatientRecordView(patient: $patient, onEdit: {}) }
 }
 
 private struct TodoHost: View {

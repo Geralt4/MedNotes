@@ -107,24 +107,7 @@ struct PatientEditorForm: View {
     }
 
     private var headerSubtitle: String? {
-        let profile = draft.profile
-        if profile.fullName.isEmpty {
-            return String(localized: "Enter a name to identify this patient.")
-        }
-        var parts: [String] = []
-        if profile.hasKnownDateOfBirth, profile.age >= 0 {
-            parts.append(String(localized: "\(profile.age) years old"))
-        }
-        if profile.gender != .preferNotToSay {
-            parts.append(DisplayCopy.gender(profile.gender))
-        }
-        if !profile.amka.isEmpty {
-            parts.append(String(localized: "AMKA \(profile.amka)"))
-        }
-        if let bloodType = draft.medical.bloodType, bloodType != .unknown {
-            parts.append(DisplayCopy.bloodType(bloodType))
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        PatientRecordFields.headerFacts(draft)
     }
 
     // MARK: - Identity
