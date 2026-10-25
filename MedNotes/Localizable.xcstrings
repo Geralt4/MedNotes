@@ -1628,26 +1628,6 @@
         }
       }
     },
-    "Connected to %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Συνδέθηκε με «%@»"
-          }
-        }
-      }
-    },
-    "Connected to the %@ %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Συνδέθηκε με «%@» (%@)"
-          }
-        }
-      }
-    },
     "Connecting…" : {
       "localizations" : {
         "el" : {
@@ -1804,6 +1784,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Δημιουργήθηκε %@"
+          }
+        }
+      }
+    },
+    "created by MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "δημιουργήθηκε από το MedNotes"
           }
         }
       }
@@ -2574,6 +2564,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Υπάρχων προορισμός (%@)"
+          }
+        }
+      }
+    },
+    "Export" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξαγωγή"
           }
         }
       }
@@ -5490,6 +5490,16 @@
         }
       }
     },
+    "Template" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πρότυπο"
+          }
+        }
+      }
+    },
     "Template saved" : {
       "localizations" : {
         "el" : {
@@ -5906,16 +5916,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Η βάση δεδομένων, τα συνημμένα και τα σημεία επαναφοράς κρυπτογραφούνται με κλειδί που φυλάσσεται στην κλειδοθήκη του macOS και για το οποίο απαιτείται το Touch ID ή το συνθηματικό του λογαριασμού σας. Το MedNotes κλειδώνει όταν η οθόνη κλειδώνει ή τίθεται σε κατάσταση ύπνου, όταν κάνετε εναλλαγή χρηστών, μετά από %lld λεπτά χωρίς δραστηριότητα και όταν το ζητήσετε."
-          }
-        }
-      }
-    },
-    "The database, attachments and restore points are encrypted with a key in the macOS Keychain; MedNotes locks after five minutes without activity, when the screen locks, and on request. Data leaves the app only when you send records to Calendar or Reminders, run a Markdown export, or open an attachment in another app." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Η βάση δεδομένων, τα συνημμένα και τα σημεία επαναφοράς κρυπτογραφούνται με κλειδί που φυλάσσεται στην κλειδοθήκη του macOS· το MedNotes κλειδώνει μετά από πέντε λεπτά χωρίς δραστηριότητα, όταν κλειδώνει η οθόνη και όταν το ζητήσετε. Τα δεδομένα φεύγουν από την εφαρμογή μόνο όταν στέλνετε εγγραφές στο Ημερολόγιο ή στις Υπενθυμίσεις, όταν εκτελείτε μια εξαγωγή Markdown ή όταν ανοίγετε ένα συνημμένο σε άλλη εφαρμογή."
           }
         }
       }
@@ -6802,16 +6802,6 @@
         }
       }
     },
-    "calendar MedNotes created" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "δημιουργήθηκε από το MedNotes"
-          }
-        }
-      }
-    },
     "cm" : {
       "localizations" : {
         "el" : {
@@ -6968,16 +6958,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "λίστα"
-          }
-        }
-      }
-    },
-    "list MedNotes created" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "δημιουργήθηκε από το MedNotes"
           }
         }
       }
@@ -7188,6 +7168,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Τα {{date}}, {{time}} και {{patient}} συμπληρώνονται όταν ένα πρότυπο εισάγεται σε σημείωση. Τα ενσωματωμένα πρότυπα μπορούν να τροποποιηθούν εδώ και να επανέλθουν στην αρχική τους μορφή· τα προσαρμοσμένα μπορούν να διαγραφούν."
+          }
+        }
+      }
+    },
+    "“%@” calendar" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερολόγιο «%@»"
+          }
+        }
+      }
+    },
+    "“%@” list" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λίστα «%@»"
           }
         }
       }

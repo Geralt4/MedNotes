@@ -23,7 +23,9 @@ struct SyncSettingsPane: View {
     /// chosen, a "Last sync" row once a pass has run, and an error line while
     /// one stands.
     var preferredHeight: CGFloat {
-        var height: CGFloat = 600
+        // The Greek footnotes need 583 pt with neither destination nor
+        // summary (measured in the live Greek window); English needs less.
+        var height: CGFloat = 595
         if destinations[.calendar] != nil { height += Self.rowHeight }
         if destinations[.reminders] != nil { height += Self.rowHeight }
         if calendarSummary != nil { height += Self.rowHeight }
@@ -51,9 +53,10 @@ struct SyncSettingsPane: View {
                     autoSync: $calendarAutoSync,
                     onSync: onSyncCalendar,
                     identifierPrefix: "settings.sync.calendar")
-                SettingsNote("A synced event's title, notes and dates go to the calendar you chose, and from there wherever that account syncs. The event type and patient link never leave MedNotes. Choose the destination before the first write; MedNotes never picks one by name.")
             } header: {
                 DetailSectionHeader(title: "Apple Calendar", systemImage: "calendar")
+            } footer: {
+                SettingsNote("A synced event's title, notes and dates go to the calendar you chose, and from there wherever that account syncs. The event type and patient link never leave MedNotes. Choose the destination before the first write; MedNotes never picks one by name.")
             }
 
             Section {
@@ -66,18 +69,20 @@ struct SyncSettingsPane: View {
                     autoSync: $remindersAutoSync,
                     onSync: onSyncReminders,
                     identifierPrefix: "settings.sync.reminders")
-                SettingsNote("A synced todo's title, notes, due day, completion and priority go to the list you chose, and from there wherever that account syncs. The patient link and tags never leave MedNotes.")
-            } header: {
-                DetailSectionHeader(title: "Apple Reminders", systemImage: "checklist")
-            }
-
-            Section {
-                SettingsNote("Nothing is written to Apple Calendar or Reminders until you choose a destination and confirm. EventKit cannot tell whether a chosen calendar or list is shared, so any cloud account in the source may receive the data. If a destination disappears, the connection stops rather than falling back to a calendar with the same name. Restoring a backup suspends both bridges until you reconnect them.")
                 #if DEBUG
                 if PreviewSeed.isActive {
-                    SettingsNote("Syncing is disabled while running on sample data.")
+                    Text("Syncing is disabled while running on sample data.")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
                 }
                 #endif
+            } header: {
+                DetailSectionHeader(title: "Apple Reminders", systemImage: "checklist")
+            } footer: {
+                VStack(alignment: .leading, spacing: Chrome.Space.sm) {
+                    SettingsNote("A synced todo's title, notes, due day, completion and priority go to the list you chose, and from there wherever that account syncs. The patient link and tags never leave MedNotes.")
+                    SettingsNote("Nothing is written to Apple Calendar or Reminders until you choose a destination and confirm. EventKit cannot tell whether a chosen calendar or list is shared, so any cloud account in the source may receive the data. If a destination disappears, the connection stops rather than falling back to a calendar with the same name. Restoring a backup suspends both bridges until you reconnect them.")
+                }
             }
         }
         .formStyle(.grouped)
@@ -99,20 +104,17 @@ struct SyncDestinationViewState: Equatable {
     var statusText: String {
         switch state {
         case .confirmed:
-            return appCreated
-                ? String(localized: "Connected to the \(calendarTitle) \(appCreatedLabel)")
-                : String(localized: "Connected to \(calendarTitle)")
+            // Names the place only: whether it is connected is the Status
+            // row's to say, and the two used to disagree.
+            let place = bridge == .calendar
+                ? String(localized: "“\(calendarTitle)” calendar")
+                : String(localized: "“\(calendarTitle)” list")
+            return appCreated ? "\(place) · \(String(localized: "created by MedNotes"))" : place
         case .needsReconnection:
             return String(localized: "Needs reconnection")
         }
     }
 
-    private var appCreatedLabel: String {
-        switch bridge {
-        case .calendar: return String(localized: "calendar MedNotes created")
-        case .reminders: return String(localized: "list MedNotes created")
-        }
-    }
 }
 
 /// Status line, the destination, the action that fits the state, the

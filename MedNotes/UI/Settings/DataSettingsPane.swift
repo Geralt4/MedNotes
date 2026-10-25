@@ -79,10 +79,11 @@ struct DataSettingsPane: View {
 
     /// See `GeneralSettingsPane.height`; a check's result adds two rows, an
     /// overdue backup a caption, the vault report a section that grows by a
-    /// row per listed note. The base fits the Greek notes, which wrap a line
-    /// more than the English ones (measured from renders in both languages).
+    /// row per listed note. The base was re-measured when the notes became
+    /// footers: the English content plus the margin the old base kept over
+    /// it for the Greek notes, which wrap a line more.
     var preferredHeight: CGFloat {
-        var height: CGFloat = 877 + max(41, 46 * CGFloat(min(restorePoints.count, 6)))
+        var height: CGFloat = 720 + max(41, 46 * CGFloat(min(restorePoints.count, 6)))
             + (integrity == nil ? 0 : 70) + (backupIsOverdue ? 24 : 0) + (failure == nil ? 0 : 24)
         if let vaultReport {
             let listed = vaultReport.vaultOnly.count + vaultReport.divergent.count
@@ -196,7 +197,6 @@ struct DataSettingsPane: View {
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                SettingsNote("Restore points are encrypted snapshots MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose.")
                 if let summary {
                     Button("Show Backups in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([summary.backupsURL])
@@ -204,6 +204,8 @@ struct DataSettingsPane: View {
                 }
             } header: {
                 DetailSectionHeader(title: "Backups", systemImage: "externaldrive.badge.timemachine")
+            } footer: {
+                SettingsNote("Restore points are encrypted snapshots MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose.")
             }
 
             Section {
@@ -234,13 +236,15 @@ struct DataSettingsPane: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                SettingsNote("Runs SQLite's own integrity check and confirms every link between records. Backups are checked the same way before they are trusted.")
             } header: {
                 DetailSectionHeader(title: "Integrity", systemImage: "checkmark.shield")
+            } footer: {
+                SettingsNote("Runs SQLite's own integrity check and confirms every link between records. Backups are checked the same way before they are trusted.")
             }
 
+            // How the store is protected is General › Security's to say; this
+            // section is only the one way to take notes out as plaintext.
             Section {
-                SettingsNote("The database, attachments and restore points are encrypted with a key in the macOS Keychain; MedNotes locks after five minutes without activity, when the screen locks, and on request. Data leaves the app only when you send records to Calendar or Reminders, run a Markdown export, or open an attachment in another app.")
                 Button("Export Markdown Vault…") {
                     exportFailure = nil
                     exportedSummary = nil
@@ -256,7 +260,6 @@ struct DataSettingsPane: View {
                     }
                 }
                 .accessibilityIdentifier(SettingsIdentifiers.markdownExport)
-                SettingsNote("Writes every note as a readable Markdown file to a folder you choose, for use in another app. The result is plaintext. This replaces the old continuous mirror, which no longer runs.")
                 if let exportedSummary {
                     Text(verbatim: exportedSummary)
                         .font(.caption)
@@ -275,7 +278,9 @@ struct DataSettingsPane: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } header: {
-                DetailSectionHeader(title: "Privacy", systemImage: "lock.shield")
+                DetailSectionHeader(title: "Export", systemImage: "square.and.arrow.up")
+            } footer: {
+                SettingsNote("Writes every note as a readable Markdown file to a folder you choose, for use in another app. The result is plaintext. This replaces the old continuous mirror, which no longer runs.")
             }
 
             if let vaultReport {

@@ -62,6 +62,9 @@ final class SettingsRenderTests: XCTestCase {
             calendarTitle: "MedNotes", sourceTitle: "iCloud", sourceType: "calDAV",
             state: .confirmed, appCreated: true)
         XCTAssertTrue(confirmed.statusText.contains("MedNotes"))
+        // The Status row says whether it is connected; this row names the place.
+        XCTAssertFalse(confirmed.statusText.localizedCaseInsensitiveContains("connected"),
+                       confirmed.statusText)
         let stale = SyncDestinationViewState(
             calendarTitle: "MedNotes", sourceTitle: "iCloud", sourceType: "calDAV",
             state: .needsReconnection, appCreated: false)

@@ -14,8 +14,8 @@ struct GeneralSettingsPane: View {
     /// A grouped form fills whatever height it is given rather than hugging
     /// its rows, so each pane names its own and the Settings window takes it.
     /// Sized for the Greek strings, which run longer than the English:
-    /// measured from a render, the Greek content ends at 438 pt.
-    static let height: CGFloat = 462
+    /// measured in the live Greek window, the content needs 402 pt.
+    static let height: CGFloat = 415
 
     var body: some View {
         Form {
@@ -28,9 +28,10 @@ struct GeneralSettingsPane: View {
                     }
                 }
                 .accessibilityIdentifier(SettingsIdentifiers.launchPicker)
-                SettingsNote("MedNotes opens on this module. “Where I left off” returns to whichever module was showing when it last quit.")
             } header: {
                 DetailSectionHeader(title: "Launch", systemImage: "macwindow")
+            } footer: {
+                SettingsNote("MedNotes opens on this module. “Where I left off” returns to whichever module was showing when it last quit.")
             }
 
             Section {
@@ -44,10 +45,13 @@ struct GeneralSettingsPane: View {
                     Text("^[\(idleMinutes) minutes](inflect: true) without activity")
                 }
                 .accessibilityIdentifier(SettingsIdentifiers.lockInterval)
-                SettingsNote("The database, attachments and restore points are encrypted with a key held in the macOS Keychain, which requires Touch ID or your account password. MedNotes locks when the screen locks or sleeps, when you switch users, after \(idleMinutes) minutes without activity, and on request.")
-                SettingsNote("Data still leaves the app in three deliberate ways: records you send to Calendar or Reminders, a Markdown export you run yourself, and an attachment you open in another app. Each one is confirmed before it happens.")
             } header: {
                 DetailSectionHeader(title: "Security", systemImage: "lock.shield")
+            } footer: {
+                VStack(alignment: .leading, spacing: Chrome.Space.sm) {
+                    SettingsNote("The database, attachments and restore points are encrypted with a key held in the macOS Keychain, which requires Touch ID or your account password. MedNotes locks when the screen locks or sleeps, when you switch users, after \(idleMinutes) minutes without activity, and on request.")
+                    SettingsNote("Data still leaves the app in three deliberate ways: records you send to Calendar or Reminders, a Markdown export you run yourself, and an attachment you open in another app. Each one is confirmed before it happens.")
+                }
             }
         }
         .formStyle(.grouped)
@@ -55,7 +59,8 @@ struct GeneralSettingsPane: View {
     }
 }
 
-/// The explanatory paragraph under a setting: callout, secondary, wrapping.
+/// The explanatory paragraph under a settings card, as its section's footer:
+/// footnote size, secondary, wrapping, so the controls above stay the focus.
 /// Every pane has several, and a grouped form's default row text does not
 /// wrap on its own.
 struct SettingsNote: View {
@@ -73,7 +78,7 @@ struct SettingsNote: View {
 
     var body: some View {
         text
-            .font(.callout)
+            .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }

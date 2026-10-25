@@ -36,8 +36,9 @@ struct TemplatesSettingsPane: View {
     @FocusState private var isNameFocused: Bool
 
     /// See `GeneralSettingsPane.height`. The list and the content box have
-    /// fixed heights of their own, so the total does not move with the text.
-    static let height: CGFloat = 680
+    /// fixed heights of their own; only the footer note wraps with the text,
+    /// and the 41 pt below the English content leaves room for the Greek.
+    static let height: CGFloat = 786
     private static let listHeight: CGFloat = 148
     private static let contentHeight: CGFloat = 200
 
@@ -64,99 +65,66 @@ struct TemplatesSettingsPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Chrome.Space.md) {
-            Picker("New notes start from", selection: defaultSelection) {
-                Text("A blank note").tag(String?.none)
-                ForEach(templates) { template in
-                    Text(verbatim: DisplayCopy.title(template.name)).tag(String?.some(template.id))
-                }
-            }
-            .fixedSize()
-
-            List(selection: $selectedId) {
-                ForEach(templates) { template in
-                    TemplateRow(template: template)
-                        .tag(template.id)
-                }
-            }
-            .listStyle(.bordered(alternatesRowBackgrounds: true))
-            .frame(height: Self.listHeight)
-            .accessibilityLabel("Templates")
-
-            ControlGroup {
-                Button {
-                    Task { await addTemplate() }
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .help("Add a template")
-                .accessibilityLabel("Add a template")
-
-                Button {
-                    confirmDelete = true
-                } label: {
-                    Image(systemName: "minus")
-                }
-                .disabled(!selectedIsCustom)
-                .help("Delete the selected template")
-                .accessibilityLabel("Delete the selected template")
-
-                Button {
-                    Task { await duplicateSelected() }
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .disabled(draft == nil)
-                .help("Duplicate the selected template")
-                .accessibilityLabel("Duplicate the selected template")
-            }
-            .fixedSize()
-
-            EditorTextField("Name", text: Binding(
-                get: { draft?.name ?? "" },
-                set: { draft?.name = $0 }
-            ), focus: $isNameFocused, autocorrects: false)
-            .disabled(draft == nil)
-
-            EditorField("Content") {
-                EditorTextArea(text: Binding(
-                    get: { draft?.content ?? "" },
-                    set: { draft?.content = $0 }
-                ), minHeight: Self.contentHeight)
-                .frame(height: Self.contentHeight)
-                .disabled(draft == nil)
-            }
-
-            SettingsNote("{{date}}, {{time}} and {{patient}} are filled in when a template is inserted into a note. Built-in templates can be edited here and reset to their shipped copy; custom templates can be deleted.")
-
-            if let failure {
-                Text(verbatim: failure)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: Chrome.Space.sm) {
-                if let draft, draft.isBuiltIn {
-                    Button("Reset to Default") {
-                        Task { await resetSelected() }
+        // Cards like the other panes. The list keeps its own selection and
+        // arrow keys; only its chrome changes to sit inside the card.
+        Form {
+            Section {
+                Picker("New notes start from", selection: defaultSelection) {
+                    Text("A blank note").tag(String?.none)
+                    ForEach(templates) { template in
+                        Text(verbatim: DisplayCopy.title(template.name)).tag(String?.some(template.id))
                     }
-                    .disabled(!draft.isEditedBuiltIn && !hasChanges)
                 }
-                Spacer()
-                Button("Revert") {
-                    draft = original
+            }
+
+            Section {
+                List(selection: $selectedId) {
+                    ForEach(templates) { template in
+                        TemplateRow(template: template)
+                            .tag(template.id)
+                    }
                 }
-                .disabled(!hasChanges)
-                Button("Save") {
-                    Task { await saveDraft() }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .frame(height: Self.listHeight)
+                .accessibilityLabel("Templates")
+
+                listButtons
+            } header: {
+                DetailSectionHeader(title: "Templates", systemImage: "doc.on.doc")
+            }
+
+            Section {
+                EditorTextField("Name", text: Binding(
+                    get: { draft?.name ?? "" },
+                    set: { draft?.name = $0 }
+                ), focus: $isNameFocused, autocorrects: false)
+                .disabled(draft == nil)
+
+                EditorField("Content") {
+                    EditorTextArea(text: Binding(
+                        get: { draft?.content ?? "" },
+                        set: { draft?.content = $0 }
+                    ), minHeight: Self.contentHeight)
+                    .frame(height: Self.contentHeight)
+                    .disabled(draft == nil)
                 }
-                .keyboardShortcut("s")
-                .prominentActionButtonStyle()
-                .disabled(!canSave)
+
+                if let failure {
+                    Text(verbatim: failure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                saveButtons
+            } header: {
+                DetailSectionHeader(title: "Template", systemImage: "pencil")
+            } footer: {
+                SettingsNote("{{date}}, {{time}} and {{patient}} are filled in when a template is inserted into a note. Built-in templates can be edited here and reset to their shipped copy; custom templates can be deleted.")
             }
         }
-        .padding(Chrome.Space.xl)
+        .formStyle(.grouped)
         .frame(height: Self.height)
         .task {
             await reload(selecting: nil)
@@ -185,6 +153,59 @@ struct TemplatesSettingsPane: View {
     }
 
     // MARK: - Loading and selection
+
+    private var listButtons: some View {
+        ControlGroup {
+            Button {
+                Task { await addTemplate() }
+            } label: {
+                Image(systemName: "plus")
+            }
+            .help("Add a template")
+            .accessibilityLabel("Add a template")
+
+            Button {
+                confirmDelete = true
+            } label: {
+                Image(systemName: "minus")
+            }
+            .disabled(!selectedIsCustom)
+            .help("Delete the selected template")
+            .accessibilityLabel("Delete the selected template")
+
+            Button {
+                Task { await duplicateSelected() }
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .disabled(draft == nil)
+            .help("Duplicate the selected template")
+            .accessibilityLabel("Duplicate the selected template")
+        }
+        .fixedSize()
+    }
+
+    private var saveButtons: some View {
+        HStack(spacing: Chrome.Space.sm) {
+            if let draft, draft.isBuiltIn {
+                Button("Reset to Default") {
+                    Task { await resetSelected() }
+                }
+                .disabled(!draft.isEditedBuiltIn && !hasChanges)
+            }
+            Spacer()
+            Button("Revert") {
+                draft = original
+            }
+            .disabled(!hasChanges)
+            Button("Save") {
+                Task { await saveDraft() }
+            }
+            .keyboardShortcut("s")
+            .prominentActionButtonStyle()
+            .disabled(!canSave)
+        }
+    }
 
     private func reload(selecting id: String?) async {
         do {
