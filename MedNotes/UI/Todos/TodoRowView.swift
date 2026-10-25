@@ -38,10 +38,22 @@ struct TodoRowView: View {
                     Spacer(minLength: 0)
                 }
 
-                if !sublineParts.isEmpty {
-                    Text(sublineParts.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(dueTint)
+                if dueText != nil || patient != nil {
+                    HStack(spacing: 0) {
+                        if let dueText {
+                            Text(dueText)
+                                .foregroundStyle(dueTint)
+                        }
+                        if dueText != nil, patient != nil {
+                            Text(verbatim: " · ")
+                                .foregroundStyle(.secondary)
+                        }
+                        if let patient {
+                            patientLabel(patient)
+                        }
+                    }
+                    .font(.caption)
+                    .lineLimit(1)
                 }
 
                 TagChipRow(tags: todo.tags)
@@ -76,20 +88,44 @@ struct TodoRowView: View {
         return .secondary
     }
 
-    private var sublineParts: [String] {
-        var parts: [String] = []
+    private var dueText: String? {
         if todo.isOverdue, let due = todo.dueDate {
-            parts.append(String(localized: "Overdue \(due.formatted(date: .abbreviated, time: .omitted))"))
+            return String(localized: "Overdue \(due.formatted(date: .abbreviated, time: .omitted))")
         } else if todo.isDueToday {
-            parts.append(String(localized: "Today"))
+            return String(localized: "Today")
         } else if let due = todo.dueDate {
-            parts.append(due.formatted(date: .abbreviated, time: .omitted))
+            return due.formatted(date: .abbreviated, time: .omitted)
         }
+        return nil
+    }
+
+    /// The linked patient's current name, or the name stored on the todo
+    /// when there is no record to open (an id of nil).
+    private var patient: (id: UUID?, name: String)? {
         if let pid = todo.patientId, let name = session.patientName(for: pid) {
-            parts.append(name)
+            return (pid, name)
         } else if let name = todo.patientName, !name.isEmpty {
-            parts.append(name)
+            return (nil, name)
         }
-        return parts
+        return nil
+    }
+
+    @ViewBuilder
+    private func patientLabel(_ patient: (id: UUID?, name: String)) -> some View {
+        if let id = patient.id {
+            // As on the event rows: a click on the name opens the patient,
+            // the rest of the row still selects the todo.
+            Button {
+                Task { await session.jumpToPatient(id) }
+            } label: {
+                Text(patient.name)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Open patient")
+        } else {
+            Text(patient.name)
+                .foregroundStyle(.secondary)
+        }
     }
 }
