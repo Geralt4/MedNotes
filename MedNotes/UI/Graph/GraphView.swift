@@ -273,6 +273,7 @@ struct GraphCanvas: View {
         }
 
         let labelAll = viewport.scale >= Self.labelAllScale
+        var labels: [(priority: Int, node: LinkingService.GraphNode, anchor: CGPoint)] = []
         for node in graph.nodes {
             guard let unit = positions[node.id] else { continue }
             let point = project(unit, size: size)
@@ -287,10 +288,35 @@ struct GraphCanvas: View {
             }
             let inFocus = focus?.contains(node.id) ?? false
             guard !dimmed, node.kind == .patient || labelAll || inFocus else { continue }
-            let label = Text(Self.shortName(node))
-                .font(.caption2.weight(node.id == hovered ? .semibold : .regular))
-                .foregroundStyle(.secondary)
-            context.draw(label, at: CGPoint(x: point.x, y: point.y + radius + 3), anchor: .top)
+            let priority = node.id == hovered ? 0 : inFocus ? 1 : node.kind == .patient ? 2 : 3
+            labels.append((priority, node, CGPoint(x: point.x, y: point.y + radius + 3)))
+        }
+        drawLabels(labels, in: &context)
+    }
+
+    /// Labels in priority order (the hovered node, its neighbours, patients,
+    /// the rest), each skipped if it would overlap one already drawn: on a
+    /// dense patch the most relevant names stay readable instead of piling
+    /// up. The hovered node's label sits on a backing so it always reads.
+    private func drawLabels(_ labels: [(priority: Int, node: LinkingService.GraphNode, anchor: CGPoint)],
+                            in context: inout GraphicsContext) {
+        var placed: [CGRect] = []
+        for label in labels.sorted(by: { $0.priority < $1.priority }) {
+            let isHovered = label.priority == 0
+            let text = context.resolve(Text(Self.shortName(label.node))
+                .font(.caption2.weight(isHovered ? .semibold : .regular))
+                .foregroundStyle(isHovered ? .primary : .secondary))
+            let size = text.measure(in: CGSize(width: 200, height: 40))
+            let frame = CGRect(x: label.anchor.x - size.width / 2, y: label.anchor.y,
+                               width: size.width, height: size.height)
+            let padded = frame.insetBy(dx: -3, dy: -1)
+            guard !placed.contains(where: { $0.intersects(padded) }) else { continue }
+            placed.append(padded)
+            if isHovered {
+                context.fill(Path(roundedRect: padded.insetBy(dx: -2, dy: -1), cornerRadius: 5),
+                             with: .style(.background.opacity(0.9)))
+            }
+            context.draw(text, at: label.anchor, anchor: .top)
         }
     }
 
