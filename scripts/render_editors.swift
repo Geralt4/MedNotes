@@ -250,6 +250,12 @@ struct EditorCase {
                            t.completedAt = Date()
                            return t
                        }()))),
+            EditorCase(name: "graph-canvas", height: 620,
+                       view: AnyView({
+                           let graph = sampleGraph(patients: patients)
+                           return GraphCanvas(graph: graph, viewport: .constant(GraphViewport()),
+                                              layout: GraphLayout.compute(nodes: graph.nodes, edges: graph.edges))
+                       }())),
             EditorCase(name: "integrity-banner", height: 44,
                        view: AnyView(IntegrityBanner(
                            message: "2 records point to a patient that no longer exists.", onDismiss: {})),
@@ -321,6 +327,31 @@ struct SyncSettingsHost: View {
 }
 
 // Hosts own the draft so the forms render without a session.
+
+/// The sample notes and patients as a graph, linked through their [[anchors]]. No store: `Database.buildGraph` is not reachable here.
+@MainActor
+func sampleGraph(patients: [Patient]) -> LinkingService.GraphData {
+    let notes = SampleData.makeNotes(anchor: SampleData.anchor(for: Date()), patients: patients)
+    var graph = LinkingService.GraphData()
+    graph.nodes += patients.map { .init(id: "p:\($0.id)", label: $0.profile.fullName, kind: .patient) }
+    graph.nodes += notes.map { .init(id: "n:\($0.id)", label: $0.title, kind: .note) }
+    // As the store does: each [[anchor]] resolves to a patient by name or a
+    // note by title.
+    let patientsByName = Dictionary(patients.map { ($0.profile.fullName.lowercased(), $0.id) },
+                                    uniquingKeysWith: { a, _ in a })
+    let notesByTitle = Dictionary(notes.map { ($0.title.lowercased(), $0.id) }, uniquingKeysWith: { a, _ in a })
+    for note in notes {
+        for anchor in LinkingService.extractAnchors(from: note.content) {
+            let key = anchor.lowercased()
+            if let patient = patientsByName[key] {
+                graph.edges.append(.init(sourceID: "n:\(note.id)", targetID: "p:\(patient)"))
+            } else if let target = notesByTitle[key], target != note.id {
+                graph.edges.append(.init(sourceID: "n:\(note.id)", targetID: "n:\(target)"))
+            }
+        }
+    }
+    return graph
+}
 
 struct PatientRecordHost: View {
     @State var patient: Patient

@@ -2678,6 +2678,26 @@
         }
       }
     },
+    "Fit Graph" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσαρμογή γράφου"
+          }
+        }
+      }
+    },
+    "Fit Graph (⌘0)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσαρμογή γράφου (⌘0)"
+          }
+        }
+      }
+    },
     "Frequency" : {
       "localizations" : {
         "el" : {
@@ -7118,6 +7138,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ενημερώθηκαν %lld"
+          }
+        }
+      }
+    },
+    "Zoom In" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μεγέθυνση"
+          }
+        }
+      }
+    },
+    "Zoom In (⌘+)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μεγέθυνση (⌘+)"
+          }
+        }
+      }
+    },
+    "Zoom Out" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σμίκρυνση"
+          }
+        }
+      }
+    },
+    "Zoom Out (⌘−)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σμίκρυνση (⌘−)"
           }
         }
       }
