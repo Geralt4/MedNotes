@@ -405,6 +405,40 @@ final class ObsidianCoreTests: XCTestCase {
         XCTAssertEqual(text, "#cardiology and #respiratory")
     }
 
+    /// A leading `---` pair is front matter: one block of its lines, not a
+    /// rule and a run-on paragraph of YAML. Later rules stay rules.
+    func testFrontMatterIsOneBlock() {
+        let blocks = MarkdownPreview.parseBlocks("""
+        ---
+        created: 2026-10-01
+        tags: [cardiology]
+        ---
+        Seen today.
+
+        ---
+        """)
+        guard blocks.count == 3, case let .frontMatter(lines) = blocks[0] else {
+            return XCTFail("expected front matter first, got \(blocks)")
+        }
+        XCTAssertEqual(lines, ["created: 2026-10-01", "tags: [cardiology]"])
+        guard case .paragraph("Seen today.") = blocks[1], case .divider = blocks[2] else {
+            return XCTFail("got \(blocks)")
+        }
+    }
+
+    /// Without a closing `---` the first line is an ordinary rule, and an
+    /// empty pair adds no block.
+    func testUnclosedOrEmptyFrontMatter() {
+        let unclosed = MarkdownPreview.parseBlocks("---\nJust text")
+        guard unclosed.count == 2, case .divider = unclosed[0], case .paragraph("Just text") = unclosed[1] else {
+            return XCTFail("got \(unclosed)")
+        }
+        let empty = MarkdownPreview.parseBlocks("---\n---\nBody")
+        guard empty.count == 1, case .paragraph("Body") = empty[0] else {
+            return XCTFail("got \(empty)")
+        }
+    }
+
     // MARK: - Linking
 
     func testExtractAnchorsDeduplicatesAndSkipsNesting() {

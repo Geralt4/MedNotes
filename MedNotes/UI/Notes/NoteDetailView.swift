@@ -382,7 +382,8 @@ struct NoteDetailView: View {
 
             if isPreviewing, let d = draft {
                 ScrollView {
-                    MarkdownPreview(markdown: "# \(d.title.isEmpty ? String(localized: "Untitled") : d.title)\n\n\(d.content)")
+                    // The title field above stays in view; the body only.
+                    MarkdownPreview(markdown: d.content)
                         .padding(Chrome.Space.md)
                         .readableColumn()
                 }

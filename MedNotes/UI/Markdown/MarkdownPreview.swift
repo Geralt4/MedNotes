@@ -31,12 +31,29 @@ struct MarkdownPreview: View {
         case checklist(text: String, checked: Bool)
         case codeLine(String)
         case divider
+        /// The lines between a leading `---` pair, as written.
+        case frontMatter([String])
     }
 
     static func parseBlocks(_ source: String) -> [Block] {
         var out: [Block] = []
         var paragraph: [String] = []
         var inFence = false
+        var lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        // Front matter, as the note list reads it: a `---` first line through
+        // the next `---` line. Parsed line by line it became a rule and one
+        // run-on paragraph of YAML.
+        if lines.first?.trimmingCharacters(in: .whitespaces) == "---",
+           let close = lines.dropFirst().firstIndex(where: {
+               $0.trimmingCharacters(in: .whitespaces) == "---"
+           }) {
+            let properties = lines[1..<close].filter {
+                !$0.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            if !properties.isEmpty { out.append(.frontMatter(Array(properties))) }
+            lines = Array(lines[(close + 1)...])
+        }
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -44,8 +61,7 @@ struct MarkdownPreview: View {
             paragraph = []
         }
 
-        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = String(rawLine)
+        for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             if trimmed.hasPrefix("```") {
@@ -157,6 +173,18 @@ struct MarkdownPreview: View {
             }
         case .divider:
             Divider().padding(.vertical, 2)
+        case .frontMatter(let lines):
+            // Kept, but quiet: it is the note's metadata, not its text.
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    Text(verbatim: line)
+                }
+            }
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Chrome.editorFill, in: .rect(cornerRadius: Chrome.Radius.chip))
         }
     }
 
