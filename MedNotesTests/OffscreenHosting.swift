@@ -107,53 +107,6 @@ final class OffscreenHost {
         return found
     }
 
-    /// The text every text field shows — a form's value column, in effect.
-    static func fieldValues(under root: NSView) -> [String] {
-        var found: [String] = []
-        walk(root) { view in
-            if let field = view as? NSTextField, !field.stringValue.isEmpty {
-                found.append(field.stringValue)
-            }
-        }
-        return found
-    }
-
-    /// The text of every text view — a `TextEditor`'s body, in a form.
-    static func textViewContents(under root: NSView) -> [String] {
-        var found: [String] = []
-        walk(root) { view in
-            if let textView = view as? NSTextView, !textView.string.isEmpty {
-                found.append(textView.string)
-            }
-        }
-        return found
-    }
-
-    /// What each pop-up button currently shows.
-    static func popUpTitles(under root: NSView) -> [String] {
-        var found: [String] = []
-        walk(root) { view in
-            if let popUp = view as? NSPopUpButton {
-                found.append(popUp.titleOfSelectedItem ?? popUp.title)
-            }
-        }
-        return found
-    }
-
-    /// Whether each switch-style toggle is on. Read from the control, not the
-    /// bitmap: an offscreen capture draws the knob in its resting position
-    /// whatever the state, because the on-state is a layer animation
-    /// `cacheDisplay` never sees.
-    static func switchStates(under root: NSView) -> [Bool] {
-        var states: [Bool] = []
-        walk(root) { view in
-            if let toggle = view as? NSSwitch {
-                states.append(toggle.state == .on)
-            }
-        }
-        return states
-    }
-
     /// True when the drawn bitmap is more than the flat window background.
     static func hasInk(_ view: NSView) -> Bool {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return false }

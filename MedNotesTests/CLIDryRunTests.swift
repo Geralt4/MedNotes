@@ -1,5 +1,4 @@
 import XCTest
-@testable import MedNotes
 
 final class CLIDryRunTests: XCTestCase {
     private var tempDir: URL!

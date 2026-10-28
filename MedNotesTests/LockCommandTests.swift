@@ -1,6 +1,5 @@
 import AppKit
 import XCTest
-@testable import MedNotes
 
 /// The app menu's Lock MedNotes command, read from the running app's own menu
 /// bar. The test host is the MedNotes process, so `NSApp.mainMenu` is the real
