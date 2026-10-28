@@ -118,7 +118,10 @@ actor StoreMigrator {
     /// Recover before inspecting or opening either half of the live store.
     /// A completed swap is retained; an interrupted swap is rolled back.
     func recoverInterruptedMigration() throws {
-        guard let journal = try readJournal() else { return }
+        guard let journal = try readJournal() else {
+            try removeFinishedMigrationLeftovers()
+            return
+        }
         let fm = FileManager.default
         switch journal.phase {
         case .complete, .cleanup:
@@ -278,11 +281,12 @@ actor StoreMigrator {
                 // cannot be encrypted and would fail validation for ever, so
                 // the dangling record stays out of the new store (the
                 // backup made first still has it) and the user is told.
-                try await encrypted.dropAttachmentRecord(
-                    patientId: UUID(uuidString: file.patientId) ?? UUID(),
-                    fileId: UUID(uuidString: file.fileId) ?? UUID())
-                report.missingAttachments.append(
-                    file.relativePath.isEmpty ? file.fileId : (file.relativePath as NSString).lastPathComponent)
+                let patientId = UUID(uuidString: file.patientId) ?? UUID()
+                let fileId = UUID(uuidString: file.fileId) ?? UUID()
+                let name = try await encrypted.loadPatientFiles(patientId: patientId)
+                    .first { $0.id == fileId }?.name
+                try await encrypted.dropAttachmentRecord(patientId: patientId, fileId: fileId)
+                report.missingAttachments.append(name ?? file.fileId)
                 continue
             }
             let plaintext = try Data(contentsOf: source)
@@ -429,6 +433,21 @@ actor StoreMigrator {
             try? fm.removeItem(at: dataRoot.attachmentsURL)
             try? fm.moveItem(at: oldAttachments, to: dataRoot.attachmentsURL)
         }
+    }
+
+    /// With no journal, a plaintext copy beside an encrypted database is what a
+    /// finished migration left behind: its final journal write failed and the
+    /// journal was dropped (see `migrate`), or the process ended before the
+    /// cleanup ran. The swaps are done, so the copy is removed. A database that
+    /// is still plaintext, or missing, means no migration finished, and nothing
+    /// is touched.
+    private func removeFinishedMigrationLeftovers() throws {
+        let fm = FileManager.default
+        let leftover = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
+        guard fm.fileExists(atPath: leftover.path),
+              fm.fileExists(atPath: dataRoot.databaseURL.path),
+              !SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else { return }
+        try finishCleanup()
     }
 
     /// Deletes every remaining plaintext artifact and the journal. Runs after

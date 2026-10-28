@@ -11,6 +11,16 @@ import Foundation
 /// `FileWrapper.write`: the header is validated first, the archive size and
 /// iteration count are bounded, then each file is extracted one at a time with
 /// no-follow and exclusive-create semantics.
+///
+/// The payload is the flat form that `FileWrapper.serializedRepresentation`
+/// produces, not a property list. It is read back into a `FileWrapper` in
+/// memory only, which writes nothing, and only after the authentication tag
+/// has verified under the user's passphrase. A property-list payload is also
+/// accepted and walked as plain data. Both go through the same checks.
+///
+/// The key is derived from the passphrase as typed, and from its precomposed
+/// and decomposed forms if those differ, so either way of typing the same
+/// letters opens the archive.
 enum LegacyBackupReader {
     static let magic = Data("MNBK".utf8)
     static let version: UInt8 = 1
@@ -302,11 +312,6 @@ enum LegacyBackupReader {
             throw LegacyError.unsafeEntryName(relative.isEmpty ? name : relative)
         }
         guard !relative.contains("..") else { throw LegacyError.unsafeEntryName(relative) }
-    }
-
-    /// The key for a passphrase in its canonical (NFC) form.
-    static func deriveKey(passphrase: String, salt: Data, iterations: UInt32) throws -> SymmetricKey {
-        try deriveKey(exactPassphrase: BackupPassphrasePolicy.normalized(passphrase), salt: salt, iterations: iterations)
     }
 
     /// PBKDF2 over the passphrase's UTF-8 bytes exactly as given, with no

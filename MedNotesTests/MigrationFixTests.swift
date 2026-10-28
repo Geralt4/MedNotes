@@ -160,7 +160,7 @@ final class MigrationFixTests: XCTestCase {
         try await migrator.finishCleanup()
 
         XCTAssertEqual(report.attachments, 1)
-        XCTAssertEqual(report.missingAttachments.map { $0.lowercased() }, [missing.id.uuidString.lowercased()])
+        XCTAssertEqual(report.missingAttachments, ["missing.txt"], "the user is told the file's name")
         let migrated = try openMigrated(root, key: try XCTUnwrap(keys.rootKey()))
         let rows = try await migrated.loadPatientFiles(patientId: patient.id)
         XCTAssertEqual(rows.map(\.id), [present.id], "only the file that exists is carried over")
@@ -176,6 +176,11 @@ final class MigrationFixTests: XCTestCase {
         try await plain.saveNote(Note(title: "n", content: "MIGRATED-NOTE"))
         await plain.close()
         let archive = try await backup(of: root)
+        let legacyFile = root.filesURL.appendingPathComponent("patient/file")
+        try FileManager.default.createDirectory(
+            at: legacyFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("LEGACY-PLAINTEXT".utf8).write(to: legacyFile)
+        let oldDatabase = root.rootURL.appendingPathComponent("Plaintext.old.db")
 
         let keys = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
@@ -186,7 +191,13 @@ final class MigrationFixTests: XCTestCase {
         XCTAssertFalse(isPlaintext(root), "both swaps are done")
         XCTAssertFalse(FileManager.default.fileExists(atPath: StoreMigrator.journalURL(in: root).path),
                        "a stale `.swapping` journal would let recovery undo the migration")
+        // The caller's cleanup has not run (say the app ended first). The
+        // plaintext copy is still there, and launch-time recovery, which finds
+        // no journal, must remove it rather than leave it for ever.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: oldDatabase.path))
         try await migrator.recoverInterruptedMigration()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldDatabase.path), "plaintext copy removed")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.filesURL.path), "legacy files removed")
         XCTAssertFalse(isPlaintext(root), "launch-time recovery leaves the migrated store alone")
         let migrated = try openMigrated(root, key: try XCTUnwrap(keys.rootKey()))
         let notes = try await migrated.loadAllNotes()
