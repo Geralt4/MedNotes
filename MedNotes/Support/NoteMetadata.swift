@@ -17,7 +17,7 @@ import Foundation
 enum NoteMetadata {
     /// Bump when the rules change; stored rows from an older version are
     /// derived again on the next open.
-    static let version = 1
+    static let version = 2
 
     struct Heading: Equatable, Sendable {
         let level: Int
@@ -110,12 +110,31 @@ enum NoteMetadata {
         if let closing = text.range(of: #"(^|[ \t])#+[ \t]*$"#, options: .regularExpression) {
             text = String(text[..<closing.lowerBound]).trimmingCharacters(in: .whitespaces)
         }
+        // `## Plan ^plan` is the heading "Plan" carrying the block id `plan`.
+        if let (trimmed, _) = splitTrailingBlockID(Array(text.utf16)), !trimmed.isEmpty {
+            text = String(decoding: trimmed, as: UTF16.self).trimmingCharacters(in: .whitespaces)
+        }
         guard !text.isEmpty else { return nil }
         return Heading(level: hashes, text: text, key: WikiLinkParser.normalizedKey(text),
                        offset: start, length: end - start)
     }
 
     // MARK: - Block ids
+
+    /// `^id` as the last word of a line, after a space or at the start: the
+    /// line without it (trailing blanks off), and the id.
+    static func splitTrailingBlockID(_ units: [UInt16]) -> (trimmed: [UInt16], id: String)? {
+        var stop = units.count
+        while stop > 0, units[stop - 1] == 0x20 || units[stop - 1] == 0x09 { stop -= 1 }
+        var p = stop
+        while p > 0, isIDChar(units[p - 1]) { p -= 1 }
+        guard p > 0, stop - p >= 1, units[p - 1] == 0x5E else { return nil }
+        let caret = p - 1
+        guard caret == 0 || units[caret - 1] == 0x20 || units[caret - 1] == 0x09 else { return nil }
+        var keep = caret
+        while keep > 0, units[keep - 1] == 0x20 || units[keep - 1] == 0x09 { keep -= 1 }
+        return (Array(units[0..<keep]), String(decoding: units[p..<stop], as: UTF16.self))
+    }
 
     private static func blockID(_ ns: NSString, from start: Int, to end: Int) -> BlockID? {
         var stop = end

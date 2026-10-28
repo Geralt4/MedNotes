@@ -139,6 +139,14 @@ enum WikiLinkParser {
         return Scan(links: links, protectedRanges: protected)
     }
 
+    /// The fenced code blocks of a note's body (front matter excluded) exactly
+    /// as `scan` reads them, so a block parser and the index agree on what is code.
+    static func fences(in text: String) -> [NSRange] {
+        let ns = text as NSString
+        let bodyStart = FrontMatter.properties(in: ns).map { NSMaxRange($0.range) } ?? 0
+        return fenceRanges(Array(text.utf16), ns, from: bodyStart)
+    }
+
     // MARK: - Keys
 
     /// What two spellings of a name must share to count as the same: NFC,

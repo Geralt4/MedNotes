@@ -138,4 +138,12 @@ final class NoteMetadataTests: XCTestCase {
         XCTAssertEqual(WikiLinkParser.scan("`[[a]]`").links, [])
         XCTAssertEqual(WikiLinkParser.scan("`x`").protectedRanges.count, 1)
     }
+
+    func testAHeadingWithABlockIDIsTheHeadingWithoutIt() {
+        let scan = NoteMetadata.scan("## Plan ^plan\n\ntext ^t\n# ^only")
+        XCTAssertEqual(scan.headings.map(\.text), ["Plan", "^only"])
+        XCTAssertEqual(scan.headings.first?.key, "plan")
+        XCTAssertEqual(Set(scan.blocks.map(\.id)), ["plan", "t", "only"], "the id is still a block id")
+    }
 }
+
