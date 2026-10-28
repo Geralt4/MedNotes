@@ -1,8 +1,12 @@
 import XCTest
 @testable import MedNotes
 
-/// Review-only regression tests. These assert the intended behavior and are
-/// expected to fail against the unmodified source reviewed on 2026-10-22.
+/// Historical record, not part of the test target. These were the review's
+/// reproductions: they assert the intended behavior and were expected to fail
+/// against the source reviewed on 2026-10-22. The bugs are fixed, and this
+/// file no longer compiles (`BackupService.createEncryptedRestorePoint` and
+/// `AppStore.init` have different signatures). The regression tests that
+/// replaced it are in `MedNotesTests/CriticalFixTests.swift`.
 final class BugReviewReproductionTests: XCTestCase {
     private var roots: [DataRoot] = []
     private let passphrase = "review backup passphrase 2026"

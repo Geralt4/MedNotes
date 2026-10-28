@@ -8,8 +8,37 @@
 > (`knownFileIDs`), recovery clearing the stale missing-key message, Preview CRLF
 > splitting, the wiki-link newline rule and the self-link filter. `AppSession` fixes
 > were re-applied where the code now lives (`SessionBackups`, `SessionCommands`,
-> `SessionDataSettings`). The open review items (NR-n) are unchanged and not addressed.
+> `SessionDataSettings`). The open review items (NR-n) were taken up afterwards: see "Status of the open review items" below.
 > The test and build figures in the final report are from the original tree.
+
+## Status of the open review items (2026-10-28)
+
+All 46 items that were open in the final report below have been re-checked against the code as it stands now. "Fixed" means the change is in `main` with a test where one can be written without a device or an account; the cause and the change are in the commit messages.
+
+| Item | Status |
+|---|---|
+| NR-1, NR-36 | Fixed. The old Markdown mirror is no longer deleted by migration; Settings › Data imports or decides each note, and deletes only when none is undecided. |
+| NR-2, NR-3 | Fixed. Editors refresh the sync link fields from the store; the todo checkbox writes completion only. |
+| NR-4, NR-46 | Already resolved before this round (launch-time journal recovery; exact trigger check on restore). |
+| NR-5 | Fixed. Archiving writes the flag and the stamp only. |
+| NR-6, NR-18 | Fixed in the first pass. |
+| NR-7, NR-28, NR-30 | **Owner check.** Need a provisioned build, a sandboxed Back Up, and a trackpad. Not verifiable here. |
+| NR-8 | Fixed. The no-op `PRAGMA defensive` line is gone and the comment says why. |
+| NR-9, NR-10, NR-11, NR-14, NR-15, NR-20, NR-21, NR-31, NR-32, NR-47, NR-48 | Fixed. NR-11, NR-15, NR-20, NR-21, NR-31 and NR-32 are not exercised by a test; they were checked by reading the code. |
+| NR-12, NR-13 | Fixed. Repeated file ids and storage ids written in the JSON no longer move or detach files. |
+| NR-16 | Fixed for new saves. Rows saved earlier are not rewritten. |
+| NR-17, NR-22, NR-24, NR-25, NR-26 | Fixed. Tests that could not fail now can; the 2026-10-22 reproductions are labelled historical. |
+| NR-19, NR-43, NR-44 | Fixed, with limits below. |
+| NR-23, NR-29, NR-27 | Fixed. Version-1 backups from the real writer open, with the passphrase in either Unicode form. No real v1 archive has been tried. |
+| NR-33, NR-34, NR-35 | Fixed. The scripts were typechecked or syntax-checked, not run live. |
+| NR-37, NR-38, NR-39, NR-40, NR-41, NR-42 | Fixed. |
+| NR-45 | Fixed for restore ("Restore Without a Copy"). Import's own safety copy can still be blocked by an unreadable attachment. |
+
+**Limits worth knowing**
+
+- NR-43: a push now yields to an Apple edit made more than a minute after the last sync. An edit within that minute is still overwritten, and a CalDAV server that stamps our own push later than that would raise a false conflict. Owner check: on an iCloud calendar, edit in MedNotes, let it sync, edit again, and confirm no conflict warning.
+- NR-44: only objects pushed after this change carry the row id in their marker, so older ones are protected only once they have been pushed again.
+- Two local rows that share one Apple identifier (left by the old duplicate bug) are still a data-repair question.
 
 Full bug-fix pass over the MedNotes repository.
 Focus: logic errors and edge cases, error handling / null checks / async-await, cross-file mismatches.

@@ -259,11 +259,14 @@ def discover_localized_params(files: list[str]) -> set[tuple[str, str]]:
 
 def split_top_level(s: str) -> list[str]:
     out, depth, cur = [], 0, []
+    prev = ""
     for ch in s:
+        # The arrow in a closure or function type is not a closing angle bracket.
         if ch in "([{<":
             depth += 1
-        elif ch in ")]}>":
+        elif ch in ")]}" or (ch == ">" and prev != "-"):
             depth -= 1
+        prev = ch
         if ch == "," and depth == 0:
             out.append("".join(cur))
             cur = []

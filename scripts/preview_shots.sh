@@ -82,23 +82,34 @@ render_editors() {
 quit_running_app() {
   # A second seeded instance resetting the preview directory under a live one is
   # the cross-process form of deleting an open SQLite file. One at a time.
-  osascript -e 'tell application "System Events" to if exists (process "MedNotes") then tell application "MedNotes" to quit' \
-    >/dev/null 2>&1 || true
+  #
+  # Only seeded instances count, and they are ended by process id: a name match
+  # or `tell application "MedNotes" to quit` would also take the installed app
+  # you are using, or an XCTest host, which is named MedNotes too.
+  local pids pid
+  pids="$(pgrep -f -- '--preview-seed' || true)"
+  [ -n "$pids" ] || return 0
+  for pid in $pids; do
+    kill -TERM "$pid" >/dev/null 2>&1 || true
+  done
   for _ in $(seq 1 20); do
-    pgrep -x MedNotes >/dev/null 2>&1 || return 0
+    pgrep -f -- '--preview-seed' >/dev/null 2>&1 || return 0
     sleep 0.25
   done
-  echo "⚠️  MedNotes is still running; quit it and retry." >&2
+  echo "⚠️  A seeded MedNotes is still running; quit it and retry." >&2
   return 1
 }
 
 # A live capture may set the app's language in its container preferences.
 # Remove it on every exit path, including the early one that leaves the app
-# running when Screen Recording is missing.
+# running when Screen Recording is missing. Only a value this run wrote is
+# removed: a language you had set there is never touched (see live_capture).
+LANGUAGE_WRITTEN=""
 restore_app_language() {
   local prefs="$1"
-  if [ -n "${LANG_CODE:-}" ]; then
+  if [ -n "$LANGUAGE_WRITTEN" ]; then
     defaults delete "$prefs" AppleLanguages >/dev/null 2>&1 || true
+    LANGUAGE_WRITTEN=""
   fi
 }
 
@@ -134,7 +145,13 @@ live_capture() {
     local suffix=""
     local prefs="$HOME/Library/Containers/com.johnteam.MedNotes/Data/Library/Preferences/com.johnteam.MedNotes"
     if [ -n "${LANG_CODE:-}" ]; then
+      if defaults read "$prefs" AppleLanguages >/dev/null 2>&1; then
+        echo "❌ MedNotes' preferences already set AppleLanguages; not overwriting it." >&2
+        echo "   Remove it (defaults delete \"$prefs\" AppleLanguages) or run without LANG_CODE." >&2
+        return 1
+      fi
       defaults write "$prefs" AppleLanguages -array "$LANG_CODE"
+      LANGUAGE_WRITTEN=1
       suffix="-${LANG_CODE}"
     fi
     open -n "$app" --args --preview-seed=fresh

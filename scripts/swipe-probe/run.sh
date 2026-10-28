@@ -20,6 +20,17 @@ extension SwipeRevealController {
     var probeHasRow: Bool { gestureId != nil }
 }
 SEAM
+cat >> "$BUILD/Swipe.swift" <<'STUB'
+
+// Stand-in for the app's diagnostics, which write a log file the probe has no
+// use for: it prints what it decides itself.
+enum SwipeDiagnostics {
+    static func event(phase: UInt, momentum: UInt, dx: CGFloat, dy: CGFloat) {}
+    static func began() {}
+    static func axisLocked(horizontal: Bool, travelX: CGFloat, travelY: CGFloat, row: Bool) {}
+    static func settled(outcome: String, translation: CGFloat, travelX: CGFloat, velocity: CGFloat) {}
+}
+STUB
 cp scripts/swipe-probe/probe2.swift "$BUILD/main.swift"
 swiftc -O "$BUILD/main.swift" "$BUILD/Swipe.swift" -o "$BUILD/probe2"
 "$BUILD/probe2"

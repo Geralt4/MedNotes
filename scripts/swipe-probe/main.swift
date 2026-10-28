@@ -42,6 +42,7 @@ final class Recorder {
     }
 
     func handle(_ e: NSEvent) {
+        lastEventAt = ProcessInfo.processInfo.systemUptime
         if !e.momentumPhase.isEmpty {
             guard live else { return }
             if e.momentumPhase.contains(.ended) || e.momentumPhase.contains(.cancelled) {
@@ -93,6 +94,11 @@ final class Recorder {
     }
 
     private var pendingRelease = false
+    /// When the last scroll event arrived. A coast can start a moment after
+    /// the fingers lift, so a gesture is only closed once nothing has come for
+    /// longer than that gap; closing it on the next timer tick cut coasts short.
+    private var lastEventAt: TimeInterval = 0
+    private static let coastGap: TimeInterval = 0.6
 
     private func finish() {
         live = false
@@ -101,7 +107,8 @@ final class Recorder {
     }
 
     func flushIfIdle() {
-        if pendingRelease && live && g.coastEvents == 0 { finish() }
+        guard pendingRelease && live && g.coastEvents == 0 else { return }
+        if ProcessInfo.processInfo.systemUptime - lastEventAt > Self.coastGap { finish() }
     }
 
     private func record() {
@@ -138,7 +145,7 @@ final class Recorder {
         } else {
             print("  finger on glass    n/a      (no touch data on these events)")
         }
-        print("\n  MedNotes currently commits a delete at 110 pt.")
+        print("\n  MedNotes commits a delete at max(150 pt, 70% of the row's width).")
         print("  Paste this whole summary back and the thresholds get set from it.")
         print("==============================================================")
     }

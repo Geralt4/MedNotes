@@ -49,11 +49,14 @@ final class Watch {
     var n = 0
     var firstEvents: [String] = []
     var live = false
+    /// How many deletes had happened when this swipe began.
+    var deletesAtStart = 0
 
     func note(_ e: NSEvent) {
         guard e.momentumPhase.isEmpty else { return }
         if e.phase.contains(.began) {
             live = true; firstEvents = []
+            deletesAtStart = outcomes.count
             return
         }
         guard live else { return }
@@ -65,7 +68,7 @@ final class Watch {
             n += 1
             let axis = controller.probeAxisIsHorizontal
             let axisText = axis == nil ? "NONE " : (axis! ? "HORIZ" : "VERT ")
-            let outcome = outcomes.count > n - 1 ? "DELETED" :
+            let outcome = outcomes.count > deletesAtStart ? "DELETED" :
                           (controller.activeId != nil ? "opened " : "nothing")
             emit(String(format: "  swipe %d: axis %@ | travel x%.0f y%.0f | row %@ | -> %@   first events: %@",
                         n, axisText, controller.probeTravelX, controller.probeTravelY,

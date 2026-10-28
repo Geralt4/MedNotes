@@ -80,23 +80,20 @@ Test: `testRejectedPatientSaveKeepsPreviousAttachmentBytes`. This reproduction e
 
 ## Rerunning the critical reproductions
 
-Run these commands from the project root. The test source remains outside the normal test target until it is copied into the temporary project. A nonzero test exit is expected until the bugs are fixed.
+These reproductions are a historical record of the 2026-10-22 review. The bugs they show have been fixed, and `BugReviewReproductionTests.swift` in this folder no longer compiles against the current source: `BackupService.createEncryptedRestorePoint` and `AppStore.init` have different signatures now. It is not part of the test target and is kept as the evidence the review was written from.
+
+The fixes are covered by regression tests in the test target, in `MedNotesTests/CriticalFixTests.swift`. To run them from the project root:
 
 ```bash
-review_root=$(mktemp -d /private/tmp/mednotes-critical-review.XXXXXX)
-cp -R MedNotes MedNotesTests MedNotes.xcodeproj CLI scripts "$review_root/"
-cp docs/reviews/2026-10-22/BugReviewReproductionTests.swift "$review_root/MedNotesTests/"
 xcodebuild \
-  -project "$review_root/MedNotes.xcodeproj" \
+  -project MedNotes.xcodeproj \
   -scheme MedNotes \
   -destination 'platform=macOS' \
-  -derivedDataPath "$review_root/DerivedData" \
   -parallel-testing-enabled NO \
-  -only-testing:MedNotesTests/BugReviewReproductionTests \
-  -only-testing:MedNotesTests/BugReviewImportReproductionTests \
+  -only-testing:MedNotesTests/CriticalFixTests \
   test
 ```
 
-Original baseline result: `/private/tmp/MedNotesReviewBuild/Logs/Test/Test-MedNotes-2026.10.22_22-50-42-+0300.xcresult`.
+Original baseline result, from before the fixes: `/private/tmp/MedNotesReviewBuild/Logs/Test/Test-MedNotes-2026.10.22_22-50-42-+0300.xcresult`.
 
-Reproduction result: `/private/tmp/MedNotesReviewBuild/Logs/Test/Test-MedNotes-2026.10.22_22-55-49-+0300.xcresult`. That run also included one small orphan-cleanup test, which has been excluded from this critical-only report and the attached test file. All eight retained tests failed and reproduced the findings described above.
+Reproduction result, also from before the fixes: `/private/tmp/MedNotesReviewBuild/Logs/Test/Test-MedNotes-2026.10.22_22-55-49-+0300.xcresult`. That run also included one small orphan-cleanup test, which was excluded from this critical-only report and the attached test file. All eight retained tests failed and reproduced the findings described above.
