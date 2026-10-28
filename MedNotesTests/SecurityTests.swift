@@ -359,9 +359,9 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(fkViolations, 0)
         try await reopened.close()
 
-        // No plaintext artifacts survive.
+        // No plaintext artifacts survive, except the old Markdown mirror: it
+        // is kept for review (`LegacyVaultTests`).
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.filesURL.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: root.vaultURL.path))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: StoreMigrator.journalURL(in: root).path))
     }

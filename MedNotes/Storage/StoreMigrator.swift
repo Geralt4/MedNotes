@@ -387,6 +387,11 @@ actor StoreMigrator {
 
     /// Deletes every remaining plaintext artifact and the journal. Runs after
     /// the encrypted store is serving, and only deletes paths it owns.
+    ///
+    /// The old Markdown mirror (`Vault/`) is not among them: it can hold notes
+    /// that exist nowhere else, and the review that decides what to import
+    /// needs the open encrypted store. Settings › Data offers that review and
+    /// deletes the mirror only once nothing is left to decide.
     func finishCleanup() throws {
         let fm = FileManager.default
         let artifacts: [URL] = [
@@ -395,8 +400,7 @@ actor StoreMigrator {
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.db-wal"),
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.db-shm"),
             Self.stagingDirectory(in: dataRoot),
-            dataRoot.filesURL,
-            dataRoot.vaultURL
+            dataRoot.filesURL
         ]
         for url in artifacts {
             if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }

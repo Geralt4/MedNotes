@@ -73,6 +73,9 @@ struct DataSettingsPane: View {
     let legacyVaultReport: () async -> VaultReconciliation.Report?
     let legacyVaultURL: URL?
     let deleteLegacyVault: (() async throws -> Void)?
+    /// Decides what happens to the mirror's copy of the notes that need it;
+    /// returns how many were decided.
+    let resolveLegacyVault: ((LegacyVaultChoice) async throws -> Int)?
 
     @State private var summary: StorageSummary?
     @State private var restorePoints: [RestorePoint] = []
@@ -87,6 +90,7 @@ struct DataSettingsPane: View {
     @State private var vaultReport: VaultReconciliation.Report?
     @State private var vaultFailure: String?
     @State private var pendingVaultDelete = false
+    @State private var isResolvingVault = false
 
     /// See `GeneralSettingsPane.height`; a check's result adds two rows, an
     /// overdue backup a caption, the vault report a section that grows by a
@@ -100,8 +104,13 @@ struct DataSettingsPane: View {
             // a result of two rows.
             + 130 + (rebuild == nil ? 0 : 70)
         if let vaultReport {
-            let listed = vaultReport.vaultOnly.count + vaultReport.divergent.count
+            let listed = vaultReport.unresolvedVaultOnly.count + vaultReport.unresolvedDivergent.count
             height += 225 + 37 * CGFloat(min(listed, 6)) + (vaultReport.parseFailures.isEmpty ? 0 : 37)
+                // One row per bulk action (mirror-only notes, differing notes)
+                // and one for the skipped-items notice.
+                + (vaultReport.unresolvedVaultOnly.isEmpty ? 0 : 37)
+                + (vaultReport.unresolvedDivergent.isEmpty ? 0 : 37)
+                + (vaultReport.skipped.isEmpty ? 0 : 37)
             if vaultFailure != nil { height += 24 }
         }
         if exportedSummary != nil { height += 24 }
@@ -141,7 +150,9 @@ struct DataSettingsPane: View {
          exportInterruption: String? = nil,
          legacyVaultReport: @escaping () async -> VaultReconciliation.Report? = { nil },
          legacyVaultURL: URL? = nil,
-         deleteLegacyVault: (() async throws -> Void)? = nil) {
+         deleteLegacyVault: (() async throws -> Void)? = nil,
+         resolveLegacyVault: ((LegacyVaultChoice) async throws -> Int)? = nil) {
+        self.resolveLegacyVault = resolveLegacyVault
         self.loadSummary = loadSummary
         self.loadRestorePoints = loadRestorePoints
         self.deleteRestorePoint = deleteRestorePoint
@@ -340,18 +351,38 @@ struct DataSettingsPane: View {
             if let vaultReport {
                 Section {
                     SettingsNote("An old plaintext Markdown mirror is still on disk. Review it before deleting: notes that exist only there can be imported, and notes that differ are shown for a choice.")
-                    ForEach(vaultReport.vaultOnly) { item in
+                    ForEach(vaultReport.unresolvedVaultOnly) { item in
                         LabeledContent(item.title.isEmpty ? String(localized: "(untitled)") : item.title,
                                        value: String(localized: "Only in the mirror"))
                     }
-                    ForEach(vaultReport.divergent) { item in
+                    ForEach(vaultReport.unresolvedDivergent) { item in
                         LabeledContent(item.title.isEmpty ? String(localized: "(untitled)") : item.title,
                                        value: String(localized: "Differs"))
+                    }
+                    if !vaultReport.unresolvedVaultOnly.isEmpty {
+                        Button(String(localized: "Import \(vaultReport.unresolvedVaultOnly.count) note(s) only in the mirror")) {
+                            resolveVault(.importMirrorOnly)
+                        }
+                        .disabled(isResolvingVault || resolveLegacyVault == nil)
+                    }
+                    if !vaultReport.unresolvedDivergent.isEmpty {
+                        Menu(String(localized: "Decide \(vaultReport.unresolvedDivergent.count) differing note(s)")) {
+                            Button("Keep the database versions") { resolveVault(.keepDatabase) }
+                            Button("Import the mirror versions as copies") { resolveVault(.importAsCopies) }
+                            Button("Replace with the mirror versions", role: .destructive) { resolveVault(.useMirror) }
+                        }
+                        .disabled(isResolvingVault || resolveLegacyVault == nil)
                     }
                     if !vaultReport.parseFailures.isEmpty {
                         Text(verbatim: String(localized: "\(vaultReport.parseFailures.count) file(s) could not be read."))
                             .font(.caption)
                             .foregroundStyle(.orange)
+                    }
+                    if !vaultReport.skipped.isEmpty {
+                        Text(verbatim: String(localized: "\(vaultReport.skipped.count) item(s) in the mirror are not notes (folders, other files, links) and are deleted with it."))
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let vaultFailure {
                         Text(verbatim: vaultFailure)
@@ -367,6 +398,9 @@ struct DataSettingsPane: View {
                     Button("Delete Plaintext Mirror", role: .destructive) {
                         pendingVaultDelete = true
                     }
+                    // Never offered while a note exists only in the mirror, or
+                    // differs, and has not been decided.
+                    .disabled(vaultReport.hasUnresolved || isResolvingVault)
                 } header: {
                     DetailSectionHeader(title: "Old Markdown Mirror", systemImage: "doc.text")
                 }
@@ -407,7 +441,35 @@ struct DataSettingsPane: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The files are readable clinical text. Deleting them cannot be undone; APFS snapshots or backups may still hold copies.")
+            Text(vaultDeleteMessage)
+        }
+    }
+
+    /// The warning, plus how many entries go without ever having been read as
+    /// notes (folders, other files, links, files that failed to parse).
+    private var vaultDeleteMessage: String {
+        var message = String(localized: "The files are readable clinical text. Deleting them cannot be undone; APFS snapshots or backups may still hold copies.")
+        if let vaultReport {
+            let unseen = vaultReport.skipped.count + vaultReport.parseFailures.count
+            if unseen > 0 {
+                message += " " + String(localized: "\(unseen) item(s) that could not be read as notes will be deleted too.")
+            }
+        }
+        return message
+    }
+
+    private func resolveVault(_ choice: LegacyVaultChoice) {
+        guard let resolveLegacyVault else { return }
+        isResolvingVault = true
+        vaultFailure = nil
+        Task {
+            do {
+                _ = try await resolveLegacyVault(choice)
+            } catch {
+                vaultFailure = error.localizedDescription
+            }
+            vaultReport = await legacyVaultReport()
+            isResolvingVault = false
         }
     }
 

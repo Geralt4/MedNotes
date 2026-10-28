@@ -62,7 +62,8 @@ struct SettingsView: View {
                 exportInterruption: session.markdownExportInterruption,
                 legacyVaultReport: { await session.legacyVaultReport() },
                 legacyVaultURL: session.legacyVaultURL,
-                deleteLegacyVault: { try await session.deleteLegacyVault() }
+                deleteLegacyVault: { try await session.deleteLegacyVault() },
+                resolveLegacyVault: { try await session.resolveLegacyVault($0) }
             )
             // Rebuilt when the store locks and when it opens again: what the
             // pane read from the store (the legacy vault's note titles among

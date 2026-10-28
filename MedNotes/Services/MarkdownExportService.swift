@@ -157,10 +157,21 @@ enum VaultReconciliation {
     struct Report: Sendable, Equatable {
         var items: [Item] = []
         var parseFailures: [String] = []
+        /// Entries the scan does not read as notes (folders, other files,
+        /// links). Deleting the mirror removes them unseen, so they are
+        /// counted and named before the user confirms.
+        var skipped: [String] = []
+        /// Notes the user has already decided about (kept, copied or taken).
+        var resolved: Set<UUID> = []
 
         var databaseOnly: [Item] { items.filter { $0.outcome == .databaseOnly } }
         var vaultOnly: [Item] { items.filter { $0.outcome == .vaultOnly } }
         var divergent: [Item] { items.filter { $0.outcome == .divergent } }
+        /// What still needs a decision: notes only in the mirror, and notes
+        /// that differ, that the user has not resolved.
+        var unresolvedVaultOnly: [Item] { vaultOnly.filter { !resolved.contains($0.noteID) } }
+        var unresolvedDivergent: [Item] { divergent.filter { !resolved.contains($0.noteID) } }
+        var hasUnresolved: Bool { !unresolvedVaultOnly.isEmpty || !unresolvedDivergent.isEmpty }
     }
 
     struct VaultNote: Sendable {
@@ -168,17 +179,25 @@ enum VaultReconciliation {
         var relativePath: String
     }
 
-    /// Parses the vault folder without touching the database.
-    static func scan(root: URL) -> (notes: [VaultNote], failures: [String]) {
+    /// Parses the vault folder without touching the database. Hidden entries
+    /// (`.DS_Store`, an Obsidian `.obsidian` folder) are settings, not notes,
+    /// and are not reported.
+    static func scan(root: URL) -> (notes: [VaultNote], failures: [String], skipped: [String]) {
         var notes: [VaultNote] = []
         var failures: [String] = []
+        var skipped: [String] = []
         guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) else {
-            return ([], [])
+            at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]) else {
+            return ([], [], [])
         }
-        for entry in entries where entry.pathExtension == "md" {
+        for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
             let values = try? entry.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-            guard values?.isRegularFile == true, values?.isSymbolicLink != true else { continue }
+            guard entry.pathExtension == "md",
+                  values?.isRegularFile == true, values?.isSymbolicLink != true else {
+                skipped.append(entry.lastPathComponent)
+                continue
+            }
             guard let raw = try? String(contentsOf: entry, encoding: .utf8),
                   let note = MarkdownVaultDecoder.decode(raw) else {
                 failures.append(entry.lastPathComponent)
@@ -186,7 +205,7 @@ enum VaultReconciliation {
             }
             notes.append(VaultNote(note: note, relativePath: entry.lastPathComponent))
         }
-        return (notes, failures)
+        return (notes, failures, skipped)
     }
 
     static func reconcile(vaultNotes: [VaultNote], databaseNotes: [Note]) -> Report {

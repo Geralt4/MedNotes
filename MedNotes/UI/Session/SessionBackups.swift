@@ -2,6 +2,41 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// What happens to the old Markdown mirror's copy of a note the encrypted
+/// store does not match. The mirror itself is never edited.
+enum LegacyVaultChoice: Sendable, Equatable {
+    /// Notes that exist only in the mirror: add them to the store.
+    case importMirrorOnly
+    /// Notes that differ: leave the database versions as they are.
+    case keepDatabase
+    /// Notes that differ: add the mirror versions as separate notes.
+    case importAsCopies
+    /// Notes that differ: replace the database versions with the mirror's.
+    case useMirror
+
+    /// English, for the audit trail only.
+    var auditName: String {
+        switch self {
+        case .importMirrorOnly: "import mirror-only notes"
+        case .keepDatabase: "keep database versions"
+        case .importAsCopies: "import mirror versions as copies"
+        case .useMirror: "replace with mirror versions"
+        }
+    }
+}
+
+enum LegacyVaultError: LocalizedError, Equatable {
+    /// Notes in the mirror still need a decision before it can be deleted.
+    case unresolved(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .unresolved(let count):
+            String(localized: "\(count) note(s) in the mirror still need a decision.")
+        }
+    }
+}
+
 /// Backups, restore, the one-time Markdown export, file panels, and the legacy import.
 extension AppSession {
     // MARK: - Backups
@@ -157,28 +192,84 @@ extension AppSession {
         let notes = (try? await store.db.loadAllNotes()) ?? []
         var report = VaultReconciliation.reconcile(vaultNotes: scan.notes, databaseNotes: notes)
         report.parseFailures = scan.failures
+        report.skipped = scan.skipped
+        report.resolved = resolvedLegacyVaultNoteIDs
         return report
     }
 
-    /// Takes the vault's copy of a divergent note. The mirror is deleted only
-    /// after every divergent item has been resolved.
-    func resolveVaultItem(_ item: VaultReconciliation.Item, takeVaultCopy: Bool) async throws {
-        guard takeVaultCopy, let dataRoot else { return }
+    private static let resolvedLegacyVaultKey = "legacyVaultResolvedNoteIDs"
+
+    /// Notes the user has already decided about. Note ids only, never content:
+    /// "keep the database version" and "import as a copy" leave the mirror
+    /// file differing, so the decision has to outlive a relaunch.
+    private var resolvedLegacyVaultNoteIDs: Set<UUID> {
+        Set((defaults.stringArray(forKey: Self.resolvedLegacyVaultKey) ?? [])
+            .compactMap(UUID.init(uuidString:)))
+    }
+
+    private func markLegacyVaultResolved(_ ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        let all = resolvedLegacyVaultNoteIDs.union(ids)
+        defaults.set(all.map(\.uuidString).sorted(), forKey: Self.resolvedLegacyVaultKey)
+    }
+
+    /// Decides, for every note that still needs it, what happens to the
+    /// mirror's copy. The mirror itself is never edited. Returns how many
+    /// notes were decided. A lock part-way keeps the decisions already made.
+    @discardableResult
+    func resolveLegacyVault(_ choice: LegacyVaultChoice) async throws -> Int {
+        guard let dataRoot else { return 0 }
         let store = try openStore()
         let scan = VaultReconciliation.scan(root: dataRoot.vaultURL)
-        guard let entry = scan.notes.first(where: { $0.note.id == item.noteID }) else { return }
-        try await store.notes.save(entry.note)
-        noteEpoch += 1
-        await reload()
+        let databaseNotes = try await store.db.loadAllNotes()
+        var report = VaultReconciliation.reconcile(vaultNotes: scan.notes, databaseNotes: databaseNotes)
+        report.resolved = resolvedLegacyVaultNoteIDs
+        let mirror = Dictionary(scan.notes.map { ($0.note.id, $0.note) }, uniquingKeysWith: { first, _ in first })
+        let targets = choice == .importMirrorOnly ? report.unresolvedVaultOnly : report.unresolvedDivergent
+
+        var decided: [UUID] = []
+        defer { markLegacyVaultResolved(decided) }
+        for item in targets {
+            guard let note = mirror[item.noteID] else { continue }
+            switch choice {
+            case .importMirrorOnly, .useMirror:
+                try await store.notes.save(note)
+            case .importAsCopies:
+                var copy = note
+                copy.id = UUID()
+                let title = note.title.isEmpty ? String(localized: "(untitled)") : note.title
+                copy.title = String(localized: "\(title) (from mirror)")
+                try await store.notes.save(copy)
+            case .keepDatabase:
+                break
+            }
+            decided.append(item.noteID)
+        }
+        if !decided.isEmpty {
+            try? await store.audit.log(
+                action: "legacy_vault_resolve", entityType: "vault", entityId: "vault",
+                details: "Resolved \(decided.count) note(s) from the plaintext mirror (\(choice.auditName))")
+            if choice != .keepDatabase {
+                noteEpoch += 1
+                await reload()
+            }
+        }
+        return decided.count
     }
 
     /// Deletes the retired plaintext mirror. Only reached after the user has
-    /// seen the reconciliation report and confirmed.
+    /// seen the reconciliation report and confirmed, and refused while any
+    /// note that exists only there, or differs, is still undecided.
     func deleteLegacyVault() async throws {
         guard let store, let dataRoot else { return }
         let url = dataRoot.vaultURL
         guard FileManager.default.fileExists(atPath: url.path) else { return }
+        if let report = await legacyVaultReport(), report.hasUnresolved {
+            throw LegacyVaultError.unresolved(
+                report.unresolvedVaultOnly.count + report.unresolvedDivergent.count)
+        }
         try FileManager.default.removeItem(at: url)
+        defaults.removeObject(forKey: Self.resolvedLegacyVaultKey)
         try? await store.audit.log(
             action: "legacy_vault_delete", entityType: "vault", entityId: "vault",
             details: "Deleted the retired plaintext Markdown mirror")

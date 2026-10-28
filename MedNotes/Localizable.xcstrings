@@ -38,6 +38,16 @@
         }
       }
     },
+    "%@ (from mirror)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (από τον αντικατοπτρισμό)"
+          }
+        }
+      }
+    },
     "%@ The original data could not be put back: %@" : {
       "localizations" : {
         "el" : {
@@ -288,6 +298,26 @@
         }
       }
     },
+    "%lld item(s) in the mirror are not notes (folders, other files, links) and are deleted with it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στοιχεία του αντικατοπτρισμού που δεν είναι σημειώσεις (φάκελοι, άλλα αρχεία, σύνδεσμοι) και διαγράφονται μαζί του: %lld."
+          }
+        }
+      }
+    },
+    "%lld item(s) that could not be read as notes will be deleted too." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στοιχεία που δεν διαβάστηκαν ως σημειώσεις και θα διαγραφούν επίσης: %lld."
+          }
+        }
+      }
+    },
     "%lld links (%lld unresolved); %lld earlier links no longer resolve" : {
       "localizations" : {
         "el" : {
@@ -314,6 +344,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld ακόμη ετικέτες"
+          }
+        }
+      }
+    },
+    "%lld note(s) in the mirror still need a decision." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις του αντικατοπτρισμού που περιμένουν ακόμη απόφαση: %lld."
           }
         }
       }
@@ -2028,6 +2068,16 @@
         }
       }
     },
+    "Decide %lld differing note(s)" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόφαση για σημειώσεις που διαφέρουν: %lld"
+          }
+        }
+      }
+    },
     "Delete" : {
       "localizations" : {
         "el" : {
@@ -3148,6 +3198,16 @@
         }
       }
     },
+    "Import %lld note(s) only in the mirror" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή σημειώσεων που υπάρχουν μόνο στον αντικατοπτρισμό: %lld"
+          }
+        }
+      }
+    },
     "Import Legacy Data" : {
       "localizations" : {
         "el" : {
@@ -3164,6 +3224,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Εισαγωγή παλαιών δεδομένων…"
+          }
+        }
+      }
+    },
+    "Import the mirror versions as copies" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εισαγωγή των εκδόσεων του αντικατοπτρισμού ως αντιγράφων"
           }
         }
       }
@@ -3284,6 +3354,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Διατήρηση αυτόματου συγχρονισμού"
+          }
+        }
+      }
+    },
+    "Keep the database versions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διατήρηση των εκδόσεων της βάσης δεδομένων"
           }
         }
       }
@@ -5384,6 +5464,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Δύναμη απώθησης"
+          }
+        }
+      }
+    },
+    "Replace with the mirror versions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατάσταση με τις εκδόσεις του αντικατοπτρισμού"
           }
         }
       }
