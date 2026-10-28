@@ -81,8 +81,13 @@ final class SecurityTests: XCTestCase {
     func testTempStoreAndForeignKeysAreHardened() async throws {
         let root = try makeRoot()
         let db = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
-        let tempStore = try await db.indexSQL(named: "nonexistent") // harmless read
-        XCTAssertEqual(tempStore, nil)
+        // 2 is MEMORY: temp tables and sort spills never reach the disk.
+        let tempStore = try await db.pragmaForTesting("temp_store")
+        XCTAssertEqual(tempStore, "2")
+        let foreignKeys = try await db.pragmaForTesting("foreign_keys")
+        XCTAssertEqual(foreignKeys, "1")
+        let trustedSchema = try await db.pragmaForTesting("trusted_schema")
+        XCTAssertEqual(trustedSchema, "0")
         let violations = try await db.foreignKeyCheck()
         XCTAssertEqual(violations, 0)
         try await db.close()
@@ -361,6 +366,10 @@ final class SecurityTests: XCTestCase {
 
         // No plaintext artifacts survive, except the old Markdown mirror: it
         // is kept for review (`LegacyVaultTests`).
+        for leftover in ["Plaintext.old.db", "Plaintext.old.db-wal", "Plaintext.old.db-shm", "Plaintext.old.Attachments"] {
+            XCTAssertFalse(FileManager.default.fileExists(
+                atPath: root.rootURL.appendingPathComponent(leftover).path), "\(leftover) must be gone")
+        }
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.filesURL.path))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: StoreMigrator.journalURL(in: root).path))
@@ -848,6 +857,21 @@ final class SecurityTests: XCTestCase {
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)
         }
+        XCTAssertTrue(session.isReady, "precondition: the session must open its store")
+
+        // A confirmed destination, so that "refused" can only be the lock.
+        let store = try XCTUnwrap(session.store)
+        for (bridge, id) in [(SyncBridgeType.calendar, "cal-lock"), (.reminders, "list-lock")] {
+            _ = try await store.destinations.confirm(bridge: bridge, candidate: SyncDestinationCandidate(
+                calendarIdentifier: id, calendarTitle: "MedNotes", sourceIdentifier: "src",
+                sourceTitle: "iCloud", sourceType: "calDAV", isAppCreated: true, recordCount: 1,
+                transmittedFields: ["title"], requiresCloudAcknowledgment: true))
+        }
+        let calendarOpen = await session.maySync(.calendar)
+        let remindersOpen = await session.maySync(.reminders)
+        XCTAssertTrue(calendarOpen, "precondition: unlocked, with a confirmed destination, sync is allowed")
+        XCTAssertTrue(remindersOpen)
+
         await session.lockNow(reason: "test")
         let calendarMaySync = await session.maySync(.calendar)
         let remindersMaySync = await session.maySync(.reminders)

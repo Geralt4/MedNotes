@@ -45,6 +45,14 @@ final class BackupRestoreTests: XCTestCase {
     func testEncryptedBackupRoundTripsThroughAFreshStore() async throws {
         try await store.patients.save(samplePatient(name: "Before", amka: "11111111111"))
         try await store.notes.save(Note(title: "note", content: "content"))
+        // A confirmed destination in the source, so that the suspension below
+        // has something to suspend.
+        _ = try await store.destinations.confirm(bridge: .calendar, candidate: SyncDestinationCandidate(
+            calendarIdentifier: "cal-restore", calendarTitle: "MedNotes", sourceIdentifier: "src",
+            sourceTitle: "iCloud", sourceType: "calDAV", isAppCreated: true, recordCount: 1,
+            transmittedFields: ["title"], requiresCloudAcknowledgment: true))
+        let confirmed = try await store.destinations.destination(for: .calendar)
+        XCTAssertTrue(confirmed?.mayReceiveWrites ?? false, "precondition: the source may sync")
         let file = tempDir.appendingPathComponent("roundtrip.mednotesbackup")
         let manifest = try await store.backups.createEncryptedBackup(
             name: "test", to: file, passphrase: "a long enough passphrase")
@@ -72,7 +80,8 @@ final class BackupRestoreTests: XCTestCase {
         // The restored store's destinations are suspended: sync must not run
         // until the user reconfirms.
         let restoredDestination = try await target.destinations.destination(for: .calendar)
-        XCTAssertFalse(restoredDestination?.mayReceiveWrites ?? false)
+        XCTAssertNotNil(restoredDestination, "the destination came across with the backup")
+        XCTAssertFalse(restoredDestination?.mayReceiveWrites ?? true)
     }
 
     func testWrongPassphraseIsRejectedBeforeTheStoreChanges() async throws {

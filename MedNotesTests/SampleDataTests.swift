@@ -91,7 +91,12 @@ final class SampleDataTests: XCTestCase {
         try await SampleData.seed(into: store, now: now)
         let before = try await store.notes.loadAll()
 
-        let after = try await store.db.loadAllNotes()
+        // Read back through a second connection to the file, not through the
+        // connection that wrote: that is what a relaunch does.
+        try await store.db.checkpoint()
+        let reopened = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
+        let after = try await reopened.loadAllNotes()
+        await reopened.close()
         XCTAssertEqual(after.count, before.count, "reload changed the note count")
 
         let beforeStamps = Dictionary(uniqueKeysWithValues: before.map { ($0.id, $0.updatedAt) })

@@ -180,15 +180,19 @@ final class ImporterTests: XCTestCase {
         try encodeJSONData(withFile).write(
             to: sourceDir.appendingPathComponent("Patients/patient_full.json"))
 
-        let db = try makeDB()
+        // A plaintext database: the scan below reads the file itself, and an
+        // encrypted one would look clean whatever was written to it.
+        let dbPath = tempDir.appendingPathComponent("import-plain.db").path
+        let db = try Database(path: dbPath)
         let importer = JSONImporter(directoryURL: sourceDir)
         _ = try await importer.importAll(into: db) // no filesRoot
 
         // WAL mode keeps recent writes in the -wal sidecar; without this the
         // main file would look clean no matter what was written.
         try await db.checkpoint()
-        let dbPath = tempDir.appendingPathComponent("import-test.db").path
         let raw = try Data(contentsOf: URL(fileURLWithPath: dbPath))
+        XCTAssertNotNil(raw.range(of: Data(patient.profile.lastName.utf8)),
+                        "control: the scan can see text in this file, so a clean result means something")
         // JSONEncoder base64-encodes Data, so that is the form files_json holds.
         let base64 = Data(payload.base64EncodedString().prefix(64).utf8)
         XCTAssertNil(raw.range(of: base64),

@@ -80,13 +80,15 @@ actor Database {
         }
         try conn.exec("PRAGMA synchronous = NORMAL")
         try conn.exec("PRAGMA foreign_keys = ON")
-        // SQLCipher: temp tables and sort spills stay in memory only, and the
-        // defensive mode blocks writable_schema-style attacks plus the
-        // `PRAGMA` surfaces that could be used to exfiltrate page contents.
+        // SQLCipher: temp tables and sort spills stay in memory only, and an
+        // untrusted schema cannot run application functions from a view or a
+        // trigger. SQLite's defensive mode (no writable_schema, no raw writes
+        // to shadow tables) is a connection option, not a PRAGMA: it is set
+        // with `sqlite3_db_config`, which takes variadic arguments and so
+        // cannot be called from Swift. It is not in force here.
         try conn.exec("PRAGMA temp_store = MEMORY")
         try conn.exec("PRAGMA cache_size = -8000")
         try conn.exec("PRAGMA trusted_schema = OFF")
-        try conn.exec("PRAGMA defensive = ON")
     }
 
     /// The refold that failed at open has been done by a rebuild.

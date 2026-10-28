@@ -192,6 +192,13 @@ extension SQLConnection {
 }
 
 extension Database {
+    /// The value SQLite reports for a PRAGMA on this connection, as text.
+    func pragmaForTesting(_ name: String) throws -> String? {
+        let s = try conn.prepare("PRAGMA \(name)")
+        guard try s.step() else { return nil }
+        return s.columnText(0) ?? s.columnInt(0).map(String.init)
+    }
+
     /// An encrypted database at `path` using the test key derived from `root`.
     static func testDatabase(path: String, root: DataRoot) throws -> Database {
         try Database(path: path, key: TestKeys.database(for: root))
