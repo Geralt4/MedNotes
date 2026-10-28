@@ -107,6 +107,13 @@ struct ImportFlowSheet: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+            } else {
+                // The check reads the folder on its own, so these counts are
+                // what it holds, not what is new to MedNotes.
+                Text("Records already in MedNotes are updated, not added twice.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(Chrome.Space.md)

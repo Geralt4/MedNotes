@@ -563,7 +563,13 @@ private struct SwipeToDeleteContainer: ViewModifier {
                 controller.onCommit = onDelete
                 controller.startMonitoring()
             }
-            .onDisappear { controller.stopMonitoring() }
+            .onDisappear {
+                controller.stopMonitoring()
+                // The closure captures the owning view, which holds this
+                // controller: left set, neither is ever released. `onAppear`
+                // sets it again.
+                controller.onCommit = nil
+            }
     }
 }
 

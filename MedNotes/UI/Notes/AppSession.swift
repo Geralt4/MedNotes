@@ -293,6 +293,10 @@ final class AppSession: ObservableObject {
         }
     }
     @Published private(set) var isMigrating = false
+    /// Whether bootstrap found a store that is still plaintext, until its
+    /// conversion has finished. Settings reads this, not `isReady`: a locked
+    /// or recovering store is encrypted all the same.
+    @Published private(set) var storeIsPlaintext = false
     @Published private(set) var migrationReport: StoreMigrator.MigrationReport?
     @Published private(set) var needsRecovery = false
     private var idleTimer: Timer?
@@ -1007,6 +1011,7 @@ final class AppSession: ObservableObject {
         }
         isLocked = false
         initError = nil
+        storeIsPlaintext = false
         isReady = true
         restoreSelectionAfterLock()
         startIdleMonitor()
@@ -1020,7 +1025,9 @@ final class AppSession: ObservableObject {
         }
         if !hasCheckedIntegrity {
             hasCheckedIntegrity = true
-            await checkIntegrityQuietly()
+            // A lock during the check discards its result; the check then
+            // runs again at the next unlock.
+            if await checkIntegrityQuietly() == false { hasCheckedIntegrity = false }
         }
     }
 
@@ -1188,6 +1195,9 @@ final class AppSession: ObservableObject {
             .publisher(for: NSApplication.willTerminateNotification)
             .sink { _ in
                 EncryptedFileStore.purgeOrphanedTemporaries(in: DataRoot.appExternalCopiesURL)
+                // The swipe log is plaintext on disk, and its header promises
+                // it goes on lock and on exit.
+                SwipeDiagnostics.purge()
             }
     }
 
@@ -1222,6 +1232,7 @@ final class AppSession: ObservableObject {
             do {
                 if try coordinator.authenticate() == .plaintextStore {
                     // The wizard owns the screen until the store is converted.
+                    storeIsPlaintext = true
                     isMigrating = true
                     return
                 }

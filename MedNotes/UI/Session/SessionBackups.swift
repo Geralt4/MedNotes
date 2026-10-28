@@ -330,6 +330,7 @@ extension AppSession {
         guard let store, let coordinator else { return }
         let databaseKey = try coordinator.requireDatabaseKey()
         let attachmentKey = try coordinator.requireAttachmentKey()
+        let locksAtStart = lockRequests
         let manifest: BackupManifest
         do {
             do {
@@ -346,6 +347,11 @@ extension AppSession {
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
             }
+        } catch where lockRequests != locksAtStart && !Self.isRollbackFailure(error) {
+            // The lock took the restore sheet, and the error it would show,
+            // with it; ContentView holds this alert until the unlock.
+            errorMessage = String(localized: "MedNotes locked before the restore was finished. Check that your records are as you expect, then choose File › Restore from Backup… to try again.")
+            return
         } catch let error as BackupError {
             if case .rollbackFailed = error {
                 // The live files may be half replaced: nothing may use this
@@ -439,17 +445,35 @@ extension AppSession {
         return report
     }
 
+    /// A failed restore that left the live files half replaced; see
+    /// `performRestore`. That one is reported by its own path, never as a lock.
+    private static func isRollbackFailure(_ error: Error) -> Bool {
+        guard let backupError = error as? BackupError else { return false }
+        if case .rollbackFailed = backupError { return true }
+        return false
+    }
+
     /// Restore point first: the importer is idempotent, but a folder full of
     /// surprises must never be a one-way door.
     func performImport(from folderURL: URL) async throws {
         guard let store else { return }
         let accessing = folderURL.startAccessingSecurityScopedResource()
         defer { if accessing { folderURL.stopAccessingSecurityScopedResource() } }
-        _ = try await store.backups.createEncryptedRestorePoint(name: "Pre-import snapshot")
-        // Legacy JSON import stages through the encrypted attachment store:
-        // an inline file is encrypted on save, never written beside the store.
-        let report = try await JSONImporter(directoryURL: folderURL)
-            .importAll(into: store.db, filesRoot: nil, fileStore: store.fileStore)
+        let locksAtStart = lockRequests
+        let report: ImportReport
+        do {
+            _ = try await store.backups.createEncryptedRestorePoint(name: "Pre-import snapshot")
+            // Legacy JSON import stages through the encrypted attachment store:
+            // an inline file is encrypted on save, never written beside the store.
+            report = try await JSONImporter(directoryURL: folderURL)
+                .importAll(into: store.db, filesRoot: nil, fileStore: store.fileStore)
+        } catch where lockRequests != locksAtStart {
+            // As for the restore: the sheet went with the lock, so the alert
+            // that waits for the unlock says what happened. The import is
+            // atomic, so nothing half-imported is left.
+            errorMessage = String(localized: "MedNotes locked before the import was finished, so nothing was imported. Choose File › Import Legacy Data… to run it again.")
+            return
+        }
         try? await store.audit.log(
             action: "import_legacy", entityType: "import", entityId: folderURL.lastPathComponent,
             details: ImportFlowSheet.summary(of: report))

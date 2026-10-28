@@ -107,9 +107,16 @@ extension AppSession {
     /// The same checks after launch, off the critical path: nothing on a
     /// pass (a row per launch would drown the trail), the warning and an
     /// audit row on a failure.
-    func checkIntegrityQuietly() async {
-        guard let store else { return }
+    ///
+    /// Returns false when a lock landed during the check: it closed the store
+    /// under the read, so the error that came back says nothing about the
+    /// data, and neither a warning nor an audit row is made.
+    @discardableResult
+    func checkIntegrityQuietly() async -> Bool {
+        guard let store else { return true }
+        let locksAtStart = lockRequests
         let report = await runIntegrityChecks(on: store)
+        guard lockRequests == locksAtStart else { return false }
         if report.passed {
             if await store.db.searchIndexNeedsRebuild {
                 try? await store.audit.log(
@@ -119,12 +126,13 @@ extension AppSession {
             } else {
                 integrityWarning = nil
             }
-            return
+            return true
         }
         try? await store.audit.log(
             action: "integrity_check", entityType: "store", entityId: "launch",
             details: report.detail)
         integrityWarning = report.detail
+        return true
     }
 
     private func runIntegrityChecks(on store: AppStore) async -> IntegrityReport {

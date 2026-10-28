@@ -137,7 +137,16 @@ struct TemplatesSettingsPane: View {
             // unsaved edits are kept, an untouched "+" is not.
             guard let draft else { return }
             if hasChanges {
-                Task { try? await actions.save(draft) }
+                Task {
+                    guard (try? await actions.save(draft)) != nil else { return }
+                    // The pane's state outlives a tab switch. Without this the
+                    // saved edits still read as unsaved against `original`, and
+                    // Revert would bring back the text from before them.
+                    if self.draft?.id == draft.id { original = draft }
+                    if let index = templates.firstIndex(where: { $0.id == draft.id }) {
+                        templates[index] = draft
+                    }
+                }
             } else if draft.isUntouchedNewRecord {
                 Task { await actions.discardIfUntouched(draft) }
             }

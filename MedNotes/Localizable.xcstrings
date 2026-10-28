@@ -3858,6 +3858,26 @@
         }
       }
     },
+    "MedNotes locked before the import was finished, so nothing was imported. Choose File › Import Legacy Data… to run it again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε πριν ολοκληρωθεί η εισαγωγή, οπότε δεν εισήχθη τίποτα. Επιλέξτε Αρχείο › Εισαγωγή παλαιών δεδομένων… για να την εκτελέσετε ξανά."
+          }
+        }
+      }
+    },
+    "MedNotes locked before the restore was finished. Check that your records are as you expect, then choose File › Restore from Backup… to try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε πριν ολοκληρωθεί η επαναφορά. Ελέγξτε ότι οι εγγραφές σας είναι όπως τις περιμένετε και επιλέξτε Αρχείο › Επαναφορά από αντίγραφο ασφαλείας… για να δοκιμάσετε ξανά."
+          }
+        }
+      }
+    },
     "MedNotes locked during the Markdown export: %lld of %lld notes were written to “%@” as plaintext before it stopped. Export again to write them all." : {
       "localizations" : {
         "el" : {
@@ -5264,6 +5284,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Εγγραφές"
+          }
+        }
+      }
+    },
+    "Records already in MedNotes are updated, not added twice." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι εγγραφές που υπάρχουν ήδη στο MedNotes ενημερώνονται, δεν προστίθενται δεύτερη φορά."
           }
         }
       }

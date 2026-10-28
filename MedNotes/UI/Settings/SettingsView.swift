@@ -18,7 +18,7 @@ struct SettingsView: View {
         TabView {
             GeneralSettingsPane(
                 launchModule: $session.launchModule,
-                isEncrypted: session.isReady,
+                isEncrypted: !session.storeIsPlaintext,
                 idleMinutes: 5
             )
             .tabItem { Label("General", systemImage: "gearshape") }
