@@ -899,6 +899,15 @@ actor Database {
         _ = try s.step()
     }
 
+    /// Removes a row whose file the migration could not find. Only for the
+    /// encrypted copy being built: the plaintext original is not touched.
+    func dropAttachmentRecord(patientId: UUID, fileId: UUID) throws {
+        let s = try conn.prepare("DELETE FROM patient_files WHERE patient_id = ? AND id = ?")
+        s.bind(1, patientId.uuidString)
+        s.bind(2, fileId.uuidString)
+        _ = try s.step()
+    }
+
     /// Every attachment row that still lacks an encrypted storage ID. The
     /// migration uses this to stream each legacy file into the encrypted store.
     func attachmentsNeedingEncryption() throws -> [(patientId: String, fileId: String, relativePath: String)] {

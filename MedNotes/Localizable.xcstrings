@@ -218,6 +218,16 @@
         }
       }
     },
+    "%lld attachment(s) were already missing from disk and could not be carried over: %@. They are still in the backup made before encrypting." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld συνημμένα έλειπαν ήδη από τον δίσκο και δεν μεταφέρθηκαν: %@. Υπάρχουν ακόμη στο αντίγραφο ασφαλείας που έγινε πριν από την κρυπτογράφηση."
+          }
+        }
+      }
+    },
     "%lld attachments not encrypted" : {
       "localizations" : {
         "el" : {

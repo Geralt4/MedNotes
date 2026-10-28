@@ -43,6 +43,10 @@ actor StoreMigrator {
         var todos = 0
         var events = 0
         var attachments = 0
+        /// Files the plaintext store listed but no longer had on disk. Their
+        /// records are not carried over (there is nothing to encrypt); the
+        /// backup made before the conversion still has them.
+        var missingAttachments: [String] = []
         var backupTestedAt: URL?
         var plaintextRemoved = false
     }
@@ -149,6 +153,11 @@ actor StoreMigrator {
     }
 
     private func writeJournal(_ journal: Journal) throws {
+        #if DEBUG
+        if Self.failJournalWriteForTesting?(journal.phase) == true {
+            throw MigrationError.stagingFailed("journal write fault")
+        }
+        #endif
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
@@ -169,12 +178,23 @@ actor StoreMigrator {
 
     // MARK: - Migration
 
+    #if DEBUG
+    /// Makes the journal write for a phase fail, so a test can prove what the
+    /// migrator does when the last write after both swaps cannot be made.
+    nonisolated(unsafe) static var failJournalWriteForTesting: ((Phase) -> Bool)?
+    #endif
+
     /// Converts the plaintext store. `backupDestination` must already contain a
     /// v2 archive that the caller created and test-decrypted; the migrator
     /// re-verifies it before staging.
+    ///
+    /// `rootKey` is the key the caller already created (and stored) for the
+    /// new store. Without it the migrator asks the key manager, which for the
+    /// Keychain is a second read and a second user-presence prompt.
     func migrate(
         backupDestination: URL,
         passphrase: String,
+        rootKey existingKey: Data? = nil,
         progress: (@Sendable (Phase) -> Void)? = nil) async throws -> MigrationReport {
         var report = MigrationReport()
         let backupURL = backupDestination
@@ -197,7 +217,7 @@ actor StoreMigrator {
 
         // A fresh encrypted database built beside the live one. Records are
         // copied logically, so no plaintext page ever reaches the new file.
-        let key = try keyManager.createRootKey()
+        let key = try existingKey ?? keyManager.createRootKey()
         let databaseKey = try StoreKeyContext.subkey(rootKey: key, context: StoreKeyContext.database)
         let attachmentKey = try StoreKeyContext.subkey(rootKey: key, context: StoreKeyContext.attachments)
         let stagingDBURL = staging.appendingPathComponent("mednotes.db")
@@ -217,10 +237,20 @@ actor StoreMigrator {
         let events = try await plainReader.loadAllEvents()
         try await encrypted.importBatch(patients: patients, notes: notes, todos: todos, events: events)
 
-        // Audit rows carry no PHI but preserve the user's history. Copy them
-        // before taking the counts the validation pass below compares against;
-        // otherwise every store with an audit trail fails validation.
-        let audit = try await plainReader.recentAuditLogs(limit: 100_000)
+        // Custom templates, and the user's edits to the shipped ones, live in
+        // their own table, which `importBatch` does not carry.
+        for template in try await plainReader.customTemplates() {
+            try await encrypted.saveTemplate(template)
+        }
+
+        // What the source holds, taken before anything is copied from it: the
+        // number the copy is held to below. Counting the copy against itself
+        // could never fail.
+        let sourceCounts = try await plainReader.counts()
+
+        // Audit rows carry no PHI but preserve the user's history. Copy every
+        // one (no cap), before the counts the validation pass compares.
+        let audit = try await plainReader.recentAuditLogs(limit: -1)
         for entry in audit {
             try await encrypted.logAudit(entry)
         }
@@ -243,7 +273,18 @@ actor StoreMigrator {
         let legacyFiles = try await encrypted.attachmentsNeedingEncryption()
         for file in legacyFiles {
             let source = dataRoot.filesURL.appendingPathComponent(file.relativePath)
-            guard FileManager.default.fileExists(atPath: source.path) else { continue }
+            guard FileManager.default.fileExists(atPath: source.path) else {
+                // The plaintext store lists a file that is not on disk. It
+                // cannot be encrypted and would fail validation for ever, so
+                // the dangling record stays out of the new store (the
+                // backup made first still has it) and the user is told.
+                try await encrypted.dropAttachmentRecord(
+                    patientId: UUID(uuidString: file.patientId) ?? UUID(),
+                    fileId: UUID(uuidString: file.fileId) ?? UUID())
+                report.missingAttachments.append(
+                    file.relativePath.isEmpty ? file.fileId : (file.relativePath as NSString).lastPathComponent)
+                continue
+            }
             let plaintext = try Data(contentsOf: source)
             let storageID = try await store.store(plaintext)
             try await encrypted.setAttachmentEncryption(
@@ -268,16 +309,13 @@ actor StoreMigrator {
         guard fk == 0 else {
             throw MigrationError.validationFailed(String(localized: "\(fk) broken links between records"))
         }
-        for (table, expected) in counts {
-            let actual: Int
-            switch table {
-            case "patients": actual = try await encrypted.counts()["patients"] ?? 0
-            case "notes": actual = try await encrypted.counts()["notes"] ?? 0
-            case "todo_items": actual = try await encrypted.counts()["todo_items"] ?? 0
-            case "calendar_events": actual = try await encrypted.counts()["calendar_events"] ?? 0
-            case "audit_logs": actual = try await encrypted.counts()["audit_logs"] ?? 0
-            default: actual = expected
-            }
+        // Every record the source held must be in the copy. A row the source
+        // could not decode and so did not copy shows up here as a shortfall
+        // instead of vanishing.
+        let copiedCounts = try await encrypted.counts()
+        for table in ["patients", "notes", "todo_items", "calendar_events", "audit_logs"] {
+            let expected = sourceCounts[table] ?? 0
+            let actual = copiedCounts[table] ?? 0
             guard actual == expected else {
                 throw MigrationError.validationFailed(String(localized: "\(table): \(actual) rows, expected \(expected)"))
             }
@@ -304,7 +342,15 @@ actor StoreMigrator {
         }
         report.plaintextRemoved = true
 
-        try writeJournal(makeJournal(phase: .complete, counts: counts, attachments: report.attachments))
+        // Both swaps are done. If this last write cannot be made, the journal
+        // still says `.swapping`, and launch-time recovery would roll the
+        // finished migration back over the new store. No journal is the
+        // honest state: the caller runs the cleanup straight away.
+        do {
+            try writeJournal(makeJournal(phase: .complete, counts: counts, attachments: report.attachments))
+        } catch {
+            try? FileManager.default.removeItem(at: Self.journalURL(in: dataRoot))
+        }
         progress?(.complete)
         return report
     }

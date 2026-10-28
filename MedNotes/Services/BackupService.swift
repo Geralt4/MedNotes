@@ -822,7 +822,12 @@ actor BackupService {
             let todos = try await plainReader.loadAllTodos(includeCompleted: true)
             let events = try await plainReader.loadAllEvents()
             try await encrypted.importBatch(patients: patients, notes: notes, todos: todos, events: events)
-            for entry in try await plainReader.recentAuditLogs(limit: 100_000) {
+            // Custom templates, and edits to the shipped ones, are not part of
+            // `importBatch`.
+            for template in try await plainReader.customTemplates() {
+                try await encrypted.saveTemplate(template)
+            }
+            for entry in try await plainReader.recentAuditLogs(limit: -1) {
                 try await encrypted.logAudit(entry)
             }
             for file in try await encrypted.attachmentsNeedingEncryption() {

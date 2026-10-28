@@ -182,6 +182,13 @@ final class SecureStoreCoordinator: ObservableObject {
                 state = .locked
             }
             throw error
+        } catch {
+            // Anything else (a `KeyManagerError` from the key path, say) must
+            // not leave the coordinator in `.unlocking` with no message: it
+            // reads as locked, so Unlock can be tried again.
+            lastError = error.localizedDescription
+            state = .locked
+            throw error
         }
     }
 

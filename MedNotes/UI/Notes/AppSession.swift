@@ -1311,7 +1311,7 @@ final class AppSession: ObservableObject {
             // Inside the do block: a failure here reaches the wizard instead of leaving the spinner up.
             let rootKey = try coordinator.createMigrationKey()
             let report = try await migrator.migrate(
-                backupDestination: backupURL, passphrase: passphrase)
+                backupDestination: backupURL, passphrase: passphrase, rootKey: rootKey)
             swapped = true
             migrationReport = report
             try coordinator.finishMigration(rootKey: rootKey)
@@ -1332,6 +1332,10 @@ final class AppSession: ObservableObject {
                 return
             }
             await finishOpening()
+            if !report.missingAttachments.isEmpty {
+                let names = report.missingAttachments.prefix(5).joined(separator: ", ")
+                notice = String(localized: "\(report.missingAttachments.count) attachment(s) were already missing from disk and could not be carried over: \(names). They are still in the backup made before encrypting.")
+            }
         } catch {
             if !swapped { try? await migrator.recoverInterruptedMigration() }
             // The wizard is part of the curtain, which goes away with
