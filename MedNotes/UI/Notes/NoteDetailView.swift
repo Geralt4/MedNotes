@@ -5,6 +5,7 @@ struct NoteDetailView: View {
     @State private var draft: Note?
     @State private var original: Note?
     @State private var isLoading = true
+    @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
     @State private var isPreviewing = false
     @State private var templates: [NoteTemplate] = []
@@ -243,6 +244,10 @@ struct NoteDetailView: View {
     }
 
     private func loadNote() async {
+        let generation = loads.begin()
+        // Only the newest load clears the spinner, on any exit: one that was
+        // cancelled and ends late must not uncover the previous record.
+        defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedNoteId
         if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take pin state from the store so a
@@ -279,7 +284,6 @@ struct NoteDetailView: View {
         let switching = draft?.id != selectedId
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
-        defer { if showLoading { isLoading = false } }
         let priorDraft = draft
         let loaded = await session.loadSelectedNote()
         if Task.isCancelled { return }

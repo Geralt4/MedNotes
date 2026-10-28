@@ -1535,6 +1535,27 @@ actor Database {
         _ = try s.step()
     }
 
+    /// Sets a todo's completion and nothing else: the flag, its stamp (kept if
+    /// already set) and `updated_at`, which the Reminders bridge reads as a
+    /// local edit. Unlike `toggleTodoCompleted` it states the value, so a
+    /// checkbox cannot flip a todo that already changed under it.
+    func setTodoCompleted(id: UUID, completed: Bool) throws {
+        let s = try conn.prepare("""
+            UPDATE todo_items
+            SET is_completed = ?,
+                completed_at = CASE WHEN ? THEN COALESCE(completed_at, ?) ELSE NULL END,
+                updated_at = ?
+            WHERE id = ?
+            """)
+        let now = LenientDate.encodeSQL(Date())
+        s.bind(1, completed)
+        s.bind(2, completed)
+        s.bind(3, now)
+        s.bind(4, now)
+        s.bind(5, id.uuidString)
+        _ = try s.step()
+    }
+
     func updateTodoPatientNames(patientId: UUID, name: String?) throws {
         let s = try conn.prepare("UPDATE todo_items SET patient_name = ? WHERE patient_id = ?")
         s.bind(1, name)

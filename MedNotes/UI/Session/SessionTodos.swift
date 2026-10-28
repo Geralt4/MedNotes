@@ -171,6 +171,27 @@ extension AppSession {
         await deleteTodo(id: id)
     }
 
+    /// Writes a todo's completion and nothing else, for the checkbox in the
+    /// detail view. False when the write failed (the message is shown).
+    @discardableResult
+    func setTodoCompleted(id: UUID, completed: Bool) async -> Bool {
+        guard let store else { return false }
+        do {
+            try await store.todos.setCompleted(id: id, completed: completed)
+            todoEpoch += 1
+            await reloadTodos()
+            if let persisted = try? await store.todos.load(id: id) {
+                await pushTodoQuietly(persisted)
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            todoEpoch += 1
+            await reloadTodos()
+            return false
+        }
+    }
+
     func toggleTodo(id: UUID) async {
         guard let store else { return }
         do {

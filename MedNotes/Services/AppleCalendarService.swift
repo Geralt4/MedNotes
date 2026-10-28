@@ -280,7 +280,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             ek = found
         } else {
             ek = EKEvent(eventStore: store)
-            ek.title = event.title.isEmpty ? String(localized: "(untitled)") : event.title
+            ek.title = SyncDestinationCore.titleForRemote(event.title)
         }
         apply(event.fields(), to: ek)
         ek.calendar = targetCalendar
@@ -319,7 +319,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     }
 
     private func apply(_ fields: EventFields, to ek: EKEvent) {
-        ek.title = fields.title.isEmpty ? String(localized: "(untitled)") : fields.title
+        ek.title = SyncDestinationCore.titleForRemote(fields.title)
         ek.notes = fields.notes
         ek.startDate = fields.startDate
         ek.endDate = fields.isAllDay
@@ -389,7 +389,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             // One import per remote item: a recurring event yields one entry per occurrence, all sharing the identifier.
             guard imported.insert(identifier).inserted else { continue }
             result.creations.append(CalendarEvent(
-                title: ek.title ?? "",
+                title: SyncDestinationCore.titleFromRemote(ek.title),
                 description: ek.notes ?? "",
                 startDate: ek.startDate,
                 endDate: ek.endDate ?? (ek.isAllDay ? ek.startDate : ek.startDate.addingTimeInterval(1800)),
@@ -454,7 +454,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 extension EKEvent {
     func fields() -> EventFields {
         EventFields(
-            title: title ?? "",
+            title: SyncDestinationCore.titleFromRemote(title),
             notes: notes ?? "",
             startDate: startDate,
             endDate: endDate ?? (isAllDay ? startDate : startDate.addingTimeInterval(1800)),

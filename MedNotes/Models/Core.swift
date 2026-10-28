@@ -323,3 +323,25 @@ struct ImportReport: Codable, Sendable, Hashable {
         self.errors = errors
     }
 }
+
+extension TodoItem {
+    /// Takes the fields only the Apple Reminders bridge changes from the stored
+    /// row. An editor holding a copy read earlier must do this when the store
+    /// changes under it: saving the stale link fields would unlink the synced
+    /// reminder, and the next pass would import it again as a duplicate.
+    mutating func adoptSyncState(from stored: TodoItem) {
+        reminderIdentifier = stored.reminderIdentifier
+        reminderListIdentifier = stored.reminderListIdentifier
+        syncStatus = stored.syncStatus
+        lastSyncDate = stored.lastSyncDate
+    }
+}
+
+extension CalendarEvent {
+    /// As `TodoItem.adoptSyncState(from:)`, for the Apple Calendar bridge.
+    mutating func adoptSyncState(from stored: CalendarEvent) {
+        ekEventIdentifier = stored.ekEventIdentifier
+        syncStatus = stored.syncStatus
+        lastSyncDate = stored.lastSyncDate
+    }
+}

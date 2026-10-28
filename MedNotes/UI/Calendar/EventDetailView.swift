@@ -5,6 +5,7 @@ struct EventDetailView: View {
     @State private var draft: CalendarEvent?
     @State private var original: CalendarEvent?
     @State private var isLoading = true
+    @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
     /// The record whose title takes focus when its editor appears: only ever
     /// the event the user just created, never one they arrowed to.
@@ -72,8 +73,24 @@ struct EventDetailView: View {
     }
 
     private func loadEvent() async {
+        let generation = loads.begin()
+        // Only the newest load clears the spinner, on any exit: one that was
+        // cancelled and ends late must not uncover the previous record.
+        defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedEventId
         if let d = draft, d.id == selectedId, hasChanges {
+            // Keep the edits, but take the link to the synced calendar event
+            // from the store: the bridge may have made or changed it since
+            // this copy was read, and saving the stale fields would unlink it.
+            if let latest = await session.loadSelectedEvent(), latest.id == d.id,
+               var current = draft, current.id == latest.id {
+                current.adoptSyncState(from: latest)
+                draft = current
+                if var orig = original {
+                    orig.adoptSyncState(from: latest)
+                    original = orig
+                }
+            }
             return
         }
         if hasChanges, let d = draft, let selectedId, d.id != selectedId {
@@ -93,7 +110,6 @@ struct EventDetailView: View {
         let switching = draft?.id != selectedId
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
-        defer { if showLoading { isLoading = false } }
         if switching {
             autofocusEventId = nil
             isEditing = false

@@ -58,6 +58,11 @@ struct SyncDestinationWizard: View {
     @State private var acknowledgedCloud = false
     @State private var failure: String?
     @State private var isWorking = false
+    /// The container "Create" made in `createdInSourceID`, kept so that a
+    /// retry after a failed confirmation confirms it instead of creating a
+    /// second "MedNotes" calendar or list in the same account.
+    @State private var createdCandidate: SyncDestinationCandidate?
+    @State private var createdInSourceID: String?
 
     private enum Mode: String, CaseIterable {
         case newContainer
@@ -229,7 +234,13 @@ struct SyncDestinationWizard: View {
             switch mode {
             case .newContainer:
                 guard let sourceID = selectedSourceID else { return }
-                candidate = try await createInSource(sourceID)
+                if let created = createdCandidate, createdInSourceID == sourceID {
+                    candidate = created
+                } else {
+                    candidate = try await createInSource(sourceID)
+                    createdCandidate = candidate
+                    createdInSourceID = sourceID
+                }
             case .existing:
                 guard let candidateID = selectedCandidateID,
                       let found = existing.first(where: { $0.calendarIdentifier == candidateID }) else {

@@ -379,7 +379,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     }
 
     private func apply(_ fields: ReminderFields, to reminder: EKReminder, completedAt: Date?) {
-        reminder.title = fields.title.isEmpty ? String(localized: "(untitled)") : fields.title
+        reminder.title = SyncDestinationCore.titleForRemote(fields.title)
         reminder.notes = fields.notes.isEmpty ? nil : fields.notes
         if let day = fields.dueDay {
             // Same day: leave the reminder's own components alone, including
@@ -525,7 +525,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
 extension EKReminder {
     func reminderFields() -> ReminderFields {
         ReminderFields(
-            title: title ?? "",
+            title: SyncDestinationCore.titleFromRemote(title),
             notes: notes ?? "",
             dueDay: DueDay(components: dueDateComponents),
             isCompleted: isCompleted,

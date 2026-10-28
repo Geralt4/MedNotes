@@ -263,8 +263,10 @@ enum MarkdownVaultDecoder {
             let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             fields[key] = value
         }
-        let content = lines[(end + 1)...].joined(separator: "\n")
-            .drop(while: { $0.isNewline })
+        // The encoder puts one blank line between the front matter and the
+        // body. That one is the separator; any more belong to the note.
+        var content = lines[(end + 1)...].joined(separator: "\n")
+        if let first = content.first, first.isNewline { content.removeFirst() }
         guard let idString = fields["id"].map(MarkdownExportService.yamlUnescape),
               let id = UUID(uuidString: idString) else { return nil }
         let note = Note(

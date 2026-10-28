@@ -39,6 +39,11 @@ actor PatientService {
     func save(_ patient: Patient, knownFileIDs: Set<UUID>? = nil) async throws {
         var stored = patient
         stored.lastModified = Date()
+        // The unique index on AMKA compares the stored text, while the editor's
+        // duplicate check compares it without the spaces and dashes people type
+        // between groups. Storing the normalized form makes the two agree for
+        // everything saved from here on.
+        stored.profile.amka = AMKA.normalized(stored.profile.amka)
         // The archive flag changes only through `archive` and `unarchive`. An
         // editor autosaving a draft it loaded before the record was archived
         // must not quietly restore it — that is exactly what happens when a
@@ -438,6 +443,12 @@ actor TodoService {
 
     func loadAll(includeCompleted: Bool = true) async throws -> [TodoItem] {
         try await db.loadAllTodos(includeCompleted: includeCompleted)
+    }
+
+    /// The checkbox: completion only, no other field of the todo.
+    func setCompleted(id: UUID, completed: Bool) async throws {
+        try await db.setTodoCompleted(id: id, completed: completed)
+        try await audit.log(action: "todo_toggle", entityType: "todo", entityId: id.uuidString)
     }
 
     func toggle(id: UUID) async throws {

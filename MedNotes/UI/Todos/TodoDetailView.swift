@@ -5,6 +5,7 @@ struct TodoDetailView: View {
     @State private var draft: TodoItem?
     @State private var original: TodoItem?
     @State private var isLoading = true
+    @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
     /// The record whose title takes focus when its editor appears: only ever
     /// the todo the user just created, never one they arrowed to.
@@ -72,18 +73,26 @@ struct TodoDetailView: View {
     }
 
     private func loadTodo() async {
+        let generation = loads.begin()
+        // Only the newest load clears the spinner, on any exit: one that was
+        // cancelled and ends late must not uncover the previous record.
+        defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedTodoId
         if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take completion from the store so a
             // list-side toggle is not overwritten on the next save.
+            // The link to the synced reminder comes from the store too: the
+            // bridge may have made or changed it since this copy was read.
             if let latest = await session.loadSelectedTodo(), latest.id == d.id,
                var current = draft, current.id == latest.id {
                 current.isCompleted = latest.isCompleted
                 current.completedAt = latest.completedAt
+                current.adoptSyncState(from: latest)
                 draft = current
                 if var orig = original {
                     orig.isCompleted = latest.isCompleted
                     orig.completedAt = latest.completedAt
+                    orig.adoptSyncState(from: latest)
                     original = orig
                 }
             }
@@ -106,7 +115,6 @@ struct TodoDetailView: View {
         let switching = draft?.id != selectedId
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
-        defer { if showLoading { isLoading = false } }
         if switching {
             autofocusTodoId = nil
             isEditing = false
@@ -156,11 +164,14 @@ struct TodoDetailView: View {
             orig.completedAt = draft?.completedAt
             original = orig
         }
+        guard let id = draft?.id else { return }
         Task {
-            if let d = draft,
-               await session.save(d) == false,
+            // Only the checkbox is written. Saving the whole draft here would
+            // also commit every other unsaved edit, so Cancel afterwards would
+            // be a lie.
+            if await session.setTodoCompleted(id: id, completed: newValue) == false,
                let latest = await session.loadSelectedTodo(),
-               latest.id == d.id {
+               latest.id == id {
                 if var current = draft, current.id == latest.id {
                     current.isCompleted = latest.isCompleted
                     current.completedAt = latest.completedAt

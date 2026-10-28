@@ -28,6 +28,7 @@ SOURCES=(
   MedNotes/Support/WikiLinkParser.swift
   MedNotes/Support/SearchQuery.swift
   MedNotes/Support/GreekFold.swift
+  MedNotes/Support/AMKA.swift
   MedNotes/Models/Patient.swift
   MedNotes/Models/Core.swift
   MedNotes/Storage/SQLConnection.swift

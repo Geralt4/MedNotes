@@ -58,6 +58,22 @@ enum SyncDestinationCore {
         let parts = url.pathComponents.filter { $0 != "/" }
         return parts.last
     }
+
+    /// What Apple Calendar and Reminders show for a record with no title: they
+    /// want one, so the placeholder is written in its place.
+    static func titleForRemote(_ title: String) -> String {
+        title.isEmpty ? String(localized: "(untitled)") : title
+    }
+
+    /// The title read back from an Apple object. The placeholder this app
+    /// wrote (in the current language, or in English) means "no title", not a
+    /// title of that text; taken literally it would be written into the
+    /// record on the next pass.
+    static func titleFromRemote(_ remote: String?) -> String {
+        guard let remote else { return "" }
+        let placeholders: Set<String> = [String(localized: "(untitled)"), "(untitled)"]
+        return placeholders.contains(remote) ? "" : remote
+    }
 }
 
 /// What the session reports after a sync pass, including the cases the plan
