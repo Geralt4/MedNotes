@@ -71,11 +71,6 @@ struct SettingsNote: View {
         text = Text(key)
     }
 
-    /// Data — an error message, a path — shown as is.
-    init(verbatim value: String) {
-        text = Text(verbatim: value)
-    }
-
     var body: some View {
         text
             .font(.footnote)

@@ -298,13 +298,6 @@ struct AuditLogEntry: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-enum EntityCounts: Int {
-    case patients = 0
-    case notes = 1
-    case todos = 2
-    case events = 3
-}
-
 struct ImportReport: Codable, Sendable, Hashable {
     var patientsImported: Int
     var notesImported: Int

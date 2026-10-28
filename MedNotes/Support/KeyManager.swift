@@ -84,11 +84,6 @@ final class KeychainKeyManager: KeyManager {
     static let defaultService = "com.johnteam.MedNotes.devicekey"
     static let defaultAccount = "root"
 
-    struct KeychainFailure: Error {
-        let status: Int32
-        let operation: String
-    }
-
     private let service: String
     private let account: String
 

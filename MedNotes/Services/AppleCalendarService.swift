@@ -75,7 +75,6 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 
     @Published private(set) var state: AccessState
     @Published private(set) var lastError: String?
-    @Published private(set) var lastSyncDate: Date?
     @Published var hasPendingExternalChanges = false
 
     nonisolated static let medNotesCalendarTitle = "MedNotes"

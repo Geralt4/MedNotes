@@ -34,7 +34,6 @@ enum Chrome {
         static let chip: CGFloat = 8
         static let badge: CGFloat = 7
         static let card: CGFloat = 10
-        static let avatar: CGFloat = 16
     }
 
     /// Metrics shared by every list row. Notes, patients, todos and events

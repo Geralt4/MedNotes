@@ -18,11 +18,3 @@ protocol AttachmentStore: Sendable {
     /// Removes every plaintext temporary this store produced.
     func clearExternalTemporaries() async
 }
-
-/// Digest helper shared by every attachment implementation. BLAKE2b via
-/// libsodium is unavailable to the CLI's typecheck, which never calls this.
-enum AttachmentDigest {
-    static func hex(_ bytes: [UInt8]) -> String {
-        bytes.map { String(format: "%02x", $0) }.joined()
-    }
-}
