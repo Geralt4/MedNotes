@@ -24,6 +24,10 @@ final class OffscreenHost {
             contentRect: NSRect(x: -20000, y: -20000, width: width, height: height),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        // The light appearance, whatever the Mac is set to: renders and ink
+        // counts are measured against it, and Dark mode (or macOS switching
+        // to it at sunset) would otherwise change what they see.
+        window.appearance = NSAppearance(named: .aqua)
         window.contentView = hosting
         window.orderFrontRegardless()
         windows.append(window)
