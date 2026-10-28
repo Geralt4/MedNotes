@@ -3,10 +3,10 @@ import SwiftUI
 import XCTest
 @testable import MedNotes
 
-/// Hosts each editor form off screen through `OffscreenHost`, the way
-/// `scripts/render_editors.swift` does, and checks structure rather than
-/// pixels: every labelled input exists as a real text field with the
-/// placeholder it should show, and the rendered bitmap has content. This
+/// Hosts each editor form off screen through `OffscreenHost` and checks
+/// structure rather than pixels: every labelled input exists as a real text
+/// field with the placeholder it should show, and the rendered bitmap has
+/// content. This
 /// guards the class of bug that started the editor work — fields drawn
 /// invisible — without reference images that break on every macOS release.
 @MainActor

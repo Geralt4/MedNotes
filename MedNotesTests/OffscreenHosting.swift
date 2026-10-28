@@ -2,11 +2,10 @@ import AppKit
 import SwiftUI
 import XCTest
 
-/// Hosts a SwiftUI view off screen the way `scripts/render_editors.swift`
-/// does, and walks the real `NSView` tree underneath it. SwiftUI backs its
-/// macOS text fields, pop-up buttons and switches with AppKit views, so the
-/// subview tree is enough to check structure — and, unlike the accessibility
-/// tree, it has no cycles. Never walk the accessibility tree in-process: it
+/// Hosts a SwiftUI view off screen and walks the real `NSView` tree
+/// underneath it. SwiftUI backs its macOS text fields, pop-up buttons and
+/// switches with AppKit views, so the subview tree is enough to check
+/// structure — and, unlike the accessibility tree, it has no cycles. Never walk the accessibility tree in-process: it
 /// cycles and hangs the whole test run.
 @MainActor
 final class OffscreenHost {

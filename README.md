@@ -229,17 +229,15 @@ are recorded in `docs/dependencies.md` and checked by
 `scripts/scan_dependencies.py`. The CLI stays dependency-free: it typechecks
 against system modules only and never opens the encrypted store.
 
-Keep DerivedData outside `~/Documents` (Xcode's default location is fine;
-`scripts/preview_shots.sh` uses `~/Library/Developer/Xcode/DerivedData/MedNotes-local`).
+Keep DerivedData outside `~/Documents` (Xcode's default location is fine).
 The project folder is under `~/Documents`, and the sandboxed test host
 symbolicates every failed assertion by reading the build products; a Debug
 build's ad-hoc signature changes with each rebuild, so with DerivedData inside
 the project every failing test after a rebuild raises macOS's "access files in
 your Documents folder" dialog and blocks until it is answered. A passing run
 never touches it, which is why the stall looked random. The project's old
-`build/DerivedData` has been removed; `build/` now holds only the render
-harness outputs (`preview-shots`, `render-editors`, `render-rows`), and
-nothing in the repository writes DerivedData there.
+`build/DerivedData` has been removed, and nothing in the repository writes
+DerivedData there.
 
 ## Data notes
 
@@ -315,27 +313,7 @@ its destination is confirmed, and each has a "Keep in sync automatically"
 switch in Settings › Sync: off, only Sync Now moves data. A restored backup
 suspends both bridges until you reconnect them. Keep FileVault on as well.
 
-## Review harness
-
-`scripts/preview_shots.sh` renders the UI against seeded sample data without
-touching the real store (`--preview-seed=fresh` launches against an isolated
-preview root):
-
-- `--rows` renders list rows offscreen at three widths, light and dark.
-- `--editors` renders the three editors offscreen — blank, filled, the AMKA
-  advisories, disclosed medical rows — at both detail widths, light and dark,
-  and the four Settings panes at the settings window's width, plus the
-  integrity banner.
-- `--live` launches the seeded app and captures the window per module, plus a
-  fresh record in each; `LANG_CODE=el` runs it in Greek. Needs Screen Recording
-  and Accessibility.
-
-With no argument the script runs all three paths in English. The current set
-in `build/preview-shots` was made on 2026-09-13 by that run followed by a
-Greek `--live` pass: 86 PNGs, 12 row renders, 54 editors and Settings panes,
-10 live captures in English (launch plus every module) and the same 10 in
-Greek with an `-el` suffix. Live captures are taken in the system appearance;
-dark review comes from the offscreen renders.
+## Editor render tests
 
 `MedNotesTests/EditorRenderTests` hosts the editors in-process and asserts that
 every labelled field exists and the bitmap is not blank.
