@@ -390,7 +390,7 @@ def newest_derived_data() -> str | None:
     for c in cands:
         hits = glob.glob(os.path.join(c, "Build/Intermediates.noindex/MedNotes.build/*/MedNotes.build/Objects-normal/*/*.stringsdata"))
         # Only a build of this tree: a copy elsewhere has other sources.
-        if hits and json.load(open(hits[0], encoding="utf-8"))["source"].startswith(ROOT + os.sep):
+        if hits and json.load(open(hits[0], encoding="utf-8"))["source"].startswith(os.path.join(ROOT, "MedNotes") + os.sep):
             t = max(os.path.getmtime(h) for h in hits)
             if t > best_t:
                 best, best_t = c, t

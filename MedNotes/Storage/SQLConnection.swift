@@ -80,7 +80,8 @@ final class Statement {
 
     func bind(_ idx: Int32, _ value: String?) {
         if let v = value {
-            sqlite3_bind_text(handle, idx, v, -1, SQLITE_TRANSIENT)
+            // Explicit byte count: with -1, an embedded NUL would end the stored text early.
+            sqlite3_bind_text(handle, idx, v, Int32(v.utf8.count), SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(handle, idx)
         }
@@ -145,7 +146,9 @@ final class Statement {
 
     func columnText(_ i: Int32) -> String? {
         guard !columnIsNull(i), let c = sqlite3_column_text(handle, i) else { return nil }
-        return String(cString: c)
+        // Read by byte count: String(cString:) would stop at an embedded NUL.
+        let count = Int(sqlite3_column_bytes(handle, i))
+        return String(decoding: UnsafeBufferPointer(start: c, count: count), as: UTF8.self)
     }
 
     func columnInt64(_ i: Int32) -> Int64? {

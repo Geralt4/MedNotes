@@ -7,9 +7,10 @@ import XCTest
 final class SampleDataTests: XCTestCase {
     private var root: DataRoot!
     private var store: AppStore!
-    private let now = Date()
+    private var now = Date()
 
     override func setUpWithError() throws {
+        now = Date()   // XCTest builds every test instance at bundle start
         root = try DataRoot.temporary()
         store = try AppStore.testStore(dataRoot: root)
     }

@@ -201,7 +201,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// per account, explicitly chosen rather than defaulted silently.
     func sourceCandidates() -> [(identifier: String, title: String, type: String, isCloud: Bool)] {
         store.sources
-            .filter { $0.sourceType != .subscribed }
+            .filter { $0.sourceType != .subscribed && $0.sourceType != .birthdays }
             .map { source in
                 (source.sourceIdentifier, source.title, Self.sourceTypeName(source.sourceType),
                  Self.isCloudSource(source.sourceType))
@@ -377,6 +377,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         let start = Date().addingTimeInterval(-Self.pullWindow)
         let end = Date().addingTimeInterval(Self.pullWindow)
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [targetCalendar])
+        var imported = Set<String>()
         for ek in store.events(matching: predicate) {
             let identifier = ek.calendarItemIdentifier
             guard byEKID[identifier] == nil else { continue }
@@ -385,6 +386,8 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
                 marker: SyncDestinationCore.marker(from: ek.url),
                 destination: destination,
                 inDestination: true) else { continue }
+            // One import per remote item: a recurring event yields one entry per occurrence, all sharing the identifier.
+            guard imported.insert(identifier).inserted else { continue }
             result.creations.append(CalendarEvent(
                 title: ek.title ?? "",
                 description: ek.notes ?? "",

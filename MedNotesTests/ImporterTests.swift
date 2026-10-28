@@ -83,7 +83,7 @@ final class ImporterTests: XCTestCase {
         XCTAssertNil(events.first?.patientId,
                      "event references a patient that does not exist and must be unlinked")
         XCTAssertTrue(
-            report.warnings.contains { $0.contains("references missing patient") },
+            report.warnings.contains { $0.contains("9550164F") },
             "expected orphan warning, got: \(report.warnings)")
     }
 

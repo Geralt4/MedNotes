@@ -300,7 +300,7 @@ struct JSONImporter {
         let dir = directoryURL.appendingPathComponent(subfolder.rawValue, isDirectory: true)
         guard FileManager.default.fileExists(atPath: dir.path) else { return [] }
         return try FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.isRegularFileKey])
+            at: dir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])
             .filter { url in
                 url.pathExtension.lowercased() == "json"
                     && ((try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false)

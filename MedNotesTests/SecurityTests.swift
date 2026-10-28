@@ -755,6 +755,7 @@ final class SecurityTests: XCTestCase {
     func testLockingClosesTheStoreAndClearsDisplayedRecords() async throws {
         let root = try makeRoot()
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in await session.lockNow(reason: "teardown") }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)
@@ -826,6 +827,7 @@ final class SecurityTests: XCTestCase {
     func testUnlockRecreatesTheStore() async throws {
         let root = try makeRoot()
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in await session.lockNow(reason: "teardown") }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)

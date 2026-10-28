@@ -135,7 +135,7 @@ xcrun stapler validate "$DMG"
 spctl --assess --type open --context context:primary-signature -v "$DMG"
 
 step "Publish the checksum"
-shasum -a 256 "$DMG" | tee "$DMG.sha256"
+(cd "$(dirname "$DMG")" && shasum -a 256 "$(basename "$DMG")") | tee "$DMG.sha256"
 
 step "Release ready"
 echo "$DMG"

@@ -73,13 +73,14 @@ struct TodoDetailView: View {
 
     private func loadTodo() async {
         let selectedId = session.selectedTodoId
-        if var d = draft, d.id == selectedId, hasChanges {
+        if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take completion from the store so a
             // list-side toggle is not overwritten on the next save.
-            if let latest = await session.loadSelectedTodo(), latest.id == d.id {
-                d.isCompleted = latest.isCompleted
-                d.completedAt = latest.completedAt
-                draft = d
+            if let latest = await session.loadSelectedTodo(), latest.id == d.id,
+               var current = draft, current.id == latest.id {
+                current.isCompleted = latest.isCompleted
+                current.completedAt = latest.completedAt
+                draft = current
                 if var orig = original {
                     orig.isCompleted = latest.isCompleted
                     orig.completedAt = latest.completedAt

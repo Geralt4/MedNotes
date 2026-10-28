@@ -78,8 +78,9 @@ struct NoteDetailView: View {
                 autofocusNoteId = nil
             }
         }
-        .onChange(of: session.selectedNoteId) { _, id in
-            if let id { Task { await session.refreshLinks(noteId: id) } }
+        // Selection changes and saves (which relink the note) both move loadId.
+        .onChange(of: loadId) {
+            if let id = session.selectedNoteId { Task { await session.refreshLinks(noteId: id) } }
         }
         .onAppear {
             let draft = $draft, original = $original
@@ -243,13 +244,15 @@ struct NoteDetailView: View {
 
     private func loadNote() async {
         let selectedId = session.selectedNoteId
-        if var d = draft, d.id == selectedId, hasChanges {
+        if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take pin state from the store so a
             // list-side pin toggle is not overwritten on the next save.
-            if let latest = await session.loadSelectedNote(), latest.id == d.id {
-                d.isPinned = latest.isPinned
-                d.updatedAt = latest.updatedAt
-                draft = d
+            // Read the draft again after the load: typing goes on meanwhile.
+            if let latest = await session.loadSelectedNote(), latest.id == d.id,
+               var current = draft, current.id == latest.id {
+                current.isPinned = latest.isPinned
+                current.updatedAt = latest.updatedAt
+                draft = current
                 if var orig = original {
                     orig.isPinned = latest.isPinned
                     orig.updatedAt = latest.updatedAt

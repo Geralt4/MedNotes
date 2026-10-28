@@ -302,9 +302,7 @@ enum MarkdownVaultDecoder {
         }
         let trimmed = current.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { items.append(trimmed) }
-        return items.compactMap { item -> String? in
-            let unescaped = MarkdownExportService.yamlUnescape(item)
-            return unescaped.isEmpty ? nil : unescaped
-        }
+        // Quoted items were unescaped while scanning; unescaping them again would corrupt them.
+        return items.filter { !$0.isEmpty }
     }
 }

@@ -721,6 +721,7 @@ final class ModelRoundTripTests: XCTestCase {
          "patientId":"not-a-uuid"}
         """.data(using: .utf8)!
         let appointment = try decodeJSONData(Appointment.self, from: json)
-        XCTAssertNotEqual(appointment.patientId.uuidString.lowercased(), "not-a-uuid")
+        XCTAssertEqual(appointment.id.uuidString, "2720DBF2-119E-453B-8451-94F382288673")
+        XCTAssertEqual(appointment.duration, 1800)
     }
 }

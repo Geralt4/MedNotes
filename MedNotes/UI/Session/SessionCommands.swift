@@ -114,8 +114,9 @@ extension AppSession {
     /// snapshotted when the confirmation was requested — not necessarily the
     /// current module's selection). No-op when no snapshot is pending.
     func deleteInCurrentModule() async {
-        defer { pendingDeletion = nil }
         guard let target = pendingDeletion else { return }
+        // Clear only this request: a delete confirmed meanwhile keeps its own snapshot.
+        defer { if pendingDeletion?.id == target.id { pendingDeletion = nil } }
         switch target.module {
         case .notes: await deleteNote(id: target.id)
         case .patients:

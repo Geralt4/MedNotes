@@ -313,7 +313,7 @@ final class SettingsTests: XCTestCase {
         let summary = try XCTUnwrap(loadedSummary)
         let root = try XCTUnwrap(roots.last)
         XCTAssertEqual(summary.rootURL, root.rootURL)
-        XCTAssertEqual(summary.backupsURL, root.backupsURL)
+        XCTAssertEqual(summary.backupsURL, root.restorePointsURL)
         XCTAssertEqual(summary.counts["patients"], 1)
         XCTAssertEqual(summary.counts["notes"], 0)
         XCTAssertEqual(summary.hasRecords, true)

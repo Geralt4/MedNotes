@@ -219,8 +219,10 @@ final class ObsidianCoreTests: XCTestCase {
         XCTAssertEqual(prepared.byteCount, notes.reduce(0) { $0 + MarkdownExportService.encode(note: $1).utf8.count })
 
         let exportDir = root.rootURL.appendingPathComponent("Export", isDirectory: true)
-        let export = Task { try await service.write(prepared, to: exportDir) }
-        export.cancel()
+        let export = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await service.write(prepared, to: exportDir)
+        }
         let report = try await export.value
         XCTAssertTrue(report.wasCancelled)
         XCTAssertEqual(report.notesWritten, 0)
@@ -757,7 +759,7 @@ final class ObsidianCoreTests: XCTestCase {
         let root = try makeDataRoot()
         let store = try AppStore.testStore(dataRoot: root)
         let list = try await store.templates.allTemplates()
-        XCTAssertTrue(list.contains { $0.kind == .soap && $0.name == "SOAP Note" })
+        XCTAssertTrue(list.contains { $0.kind == .soap && $0.name == String(localized: "SOAP Note") })
         XCTAssertTrue(list.contains { $0.kind == .admission })
         XCTAssertTrue(list.contains { $0.kind == .discharge })
     }

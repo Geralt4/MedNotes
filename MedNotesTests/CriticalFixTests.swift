@@ -178,9 +178,8 @@ final class CriticalFixTests: XCTestCase {
             XCTAssertTrue(FileManager.default.fileExists(
                 atPath: targetRoot.attachmentsURL.appendingPathComponent(storageID).path),
                 "Recovery returned success, but \(original.name) is missing")
-            if let bytes = try? await recovered.patients.loadFileData(patientId: patient.id, fileId: original.id) {
-                XCTAssertEqual(bytes, original.data)
-            }
+            let bytes = try await recovered.patients.loadFileData(patientId: patient.id, fileId: original.id)
+            XCTAssertEqual(bytes, original.data)
         }
         await source.close()
         await recovered.close()

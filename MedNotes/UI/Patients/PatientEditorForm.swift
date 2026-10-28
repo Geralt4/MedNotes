@@ -123,8 +123,9 @@ struct PatientEditorForm: View {
                 EditorTextField("Father's name", text: Binding(
                     get: { draft.profile.fathersName ?? "" },
                     set: {
+                        // Store the text as typed: trimming on every keystroke drops a space mid-name.
                         let trimmed = $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                        draft.profile.fathersName = trimmed.isEmpty ? nil : trimmed
+                        draft.profile.fathersName = trimmed.isEmpty ? nil : $0
                     }))
                 EditorField("Gender") {
                     Picker("Gender", selection: $draft.profile.gender) {

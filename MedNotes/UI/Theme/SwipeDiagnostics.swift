@@ -31,7 +31,8 @@ enum SwipeDiagnostics {
     /// Removes the diagnostics file. Called on lock and on exit; the file
     /// carries only gesture geometry, but it is still plaintext on disk.
     static func purge() {
-        try? FileManager.default.removeItem(atPath: logPath)
+        // On the writer's queue, so a line queued before the purge cannot recreate the file after it.
+        queue.sync { try? FileManager.default.removeItem(atPath: logPath) }
     }
 
     private static let queue = DispatchQueue(label: "swipe-diagnostics")

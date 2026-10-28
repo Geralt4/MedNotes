@@ -147,7 +147,10 @@ final class SwipeRevealController: ObservableObject {
     /// Token-checked, because a list recycling rows can report the old one
     /// gone only after the new one has already bound the same id.
     func unbind(_ id: UUID, token: Int) {
-        if sinks[id]?.token == token { sinks[id] = nil }
+        guard sinks[id]?.token == token else { return }
+        sinks[id] = nil
+        // A row removed under the pointer gets no hover exit.
+        if hoveredId == id { hoveredId = nil }
     }
 
     func revealed(for id: UUID) -> CGFloat {
@@ -321,6 +324,8 @@ final class SwipeRevealController: ObservableObject {
         // No animation while the fingers are down: the reveal is the gesture,
         // not a response to it.
         move(to: id, translation: curve(gestureBase + travelX))
+        // A pause may have let the backstop settle this gesture; this movement needs its own release.
+        awaitingRelease = true
         armReleaseBackstop()
         return nil
     }
@@ -442,7 +447,7 @@ struct SwipeToDeleteRow<Content: View>: View {
                     .overlay(alignment: .trailing) {
                         panel
                             .frame(width: Self.panelWidth)
-                            .offset(x: Self.panelWidth - revealed)
+                            .offset(x: max(0, Self.panelWidth - revealed))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: Chrome.Radius.badge,
                                                 style: .continuous))

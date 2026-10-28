@@ -44,7 +44,7 @@ def main(path: str) -> int:
 
     failures = sorted((entitlements & FORBIDDEN))
     unexpected = sorted(entitlements - ALLOWED - FORBIDDEN)
-    missing = sorted(ALLOWED - entitlements)
+    missing = sorted(k for k in ALLOWED if not (isinstance(data, dict) and data.get(k) is True))
 
     if failures:
         print("forbidden entitlements present: " + ", ".join(failures))

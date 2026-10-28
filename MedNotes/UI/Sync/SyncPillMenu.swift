@@ -16,7 +16,7 @@ enum SyncBridge {
     }
 
     func openSystemSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.privacy?\(privacyPane)") else {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(privacyPane)") else {
             return
         }
         NSWorkspace.shared.open(url)

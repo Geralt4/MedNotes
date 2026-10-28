@@ -267,7 +267,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// rather than offered and then failing.
     func sourceCandidates() -> [(identifier: String, title: String, type: String, isCloud: Bool)] {
         store.sources
-            .filter { $0.sourceType != .subscribed && $0.sourceType != .exchange }
+            .filter { $0.sourceType != .subscribed && $0.sourceType != .exchange && $0.sourceType != .birthdays }
             .map { source in
                 (source.sourceIdentifier, source.title, Self.sourceTypeName(source.sourceType),
                  Self.isCloudSource(source.sourceType))

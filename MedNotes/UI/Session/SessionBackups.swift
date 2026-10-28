@@ -254,8 +254,9 @@ extension AppSession {
             if case .rollbackFailed = error {
                 // The live files may be half replaced: nothing may use this
                 // session. The folder named in the message holds the originals.
-                errorMessage = error.localizedDescription
                 await lockNow(reason: "restore-rollback-failed")
+                // Set after the lock: its teardown clears errorMessage.
+                errorMessage = error.localizedDescription
             }
             throw error
         }

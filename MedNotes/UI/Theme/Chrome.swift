@@ -332,6 +332,7 @@ enum DisplayCopy {
         case "reason=system-sleep": return String(localized: "Locked when the Mac went to sleep")
         case "reason=user-switch": return String(localized: "Locked on a user switch")
         case "reason=request": return String(localized: "Locked on request")
+        case "reason=restore-rollback-failed": return String(localized: "Locked after a restore could not be rolled back")
         default: break
         }
         let words = details.split(separator: " ")

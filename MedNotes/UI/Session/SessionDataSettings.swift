@@ -12,7 +12,7 @@ extension AppSession {
             .flatMap { $0.map { StorageSummary.LastBackup(date: $0.timestamp, name: $0.entityId) } }
         return StorageSummary(
             rootURL: dataRoot.rootURL,
-            backupsURL: dataRoot.backupsURL,
+            backupsURL: dataRoot.restorePointsURL,
             counts: counts,
             lastBackup: lastBackup)
     }

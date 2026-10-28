@@ -157,7 +157,7 @@ final class BackupRestoreTests: XCTestCase {
     }
 
     func testMissingManifestInLegacyDirectoryIsIgnored() async throws {
-        let backupsDir = tempDir.appendingPathComponent("Backups", isDirectory: true)
+        let backupsDir = root.restorePointsURL
         try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
         let orphan = backupsDir.appendingPathComponent("backup_orphan", isDirectory: true)
         try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
@@ -205,6 +205,6 @@ final class BackupRestoreTests: XCTestCase {
         // NFC normalization: a decomposed é must be accepted and normalized.
         let decomposed = "e\u{301}" + String(repeating: "x", count: 15)
         XCTAssertTrue(BackupPassphrasePolicy.isAcceptable(decomposed))
-        XCTAssertEqual(BackupPassphrasePolicy.normalized(decomposed).count, 16)
+        XCTAssertEqual(BackupPassphrasePolicy.normalized(decomposed).unicodeScalars.count, 16)
     }
 }

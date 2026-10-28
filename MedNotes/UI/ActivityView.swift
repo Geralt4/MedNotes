@@ -108,6 +108,9 @@ struct ActivityView: View {
     }
 
     private func reload() async {
-        entries = await session.recentActivity()
+        let loaded = await session.recentActivity()
+        // A lock that landed during the read has cleared the trail; keep it cleared.
+        guard session.canUseStore else { return }
+        entries = loaded
     }
 }

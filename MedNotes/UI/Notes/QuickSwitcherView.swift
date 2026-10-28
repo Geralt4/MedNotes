@@ -22,6 +22,10 @@ struct QuickSwitcherView: View {
         .onChange(of: session.switcherText) {
             selection = 0
         }
+        // Results arrive after a debounce, so the highlight restarts with them too.
+        .onChange(of: session.switcherResults) {
+            selection = 0
+        }
     }
 
     private var scrim: some View {

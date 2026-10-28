@@ -148,9 +148,12 @@ final class KeychainKeyManager: KeyManager {
     }
 
     private func add(_ key: Data) -> OSStatus {
+        // Fail closed: assigning a nil access control would drop the key from the
+        // query and store it with no user-presence gate.
+        guard let access = accessControl() else { return errSecParam }
         var query = baseQuery()
         query[kSecValueData as String] = key
-        query[kSecAttrAccessControl as String] = accessControl()
+        query[kSecAttrAccessControl as String] = access
         query[kSecAttrSynchronizable as String] = false
         return SecItemAdd(query as CFDictionary, nil)
     }

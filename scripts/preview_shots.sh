@@ -51,7 +51,7 @@ render_rows() {
 # pinned packages the Xcode build resolves. Points at the DerivedData products
 # of a completed build; run `xcodebuild build` first if this fails.
 preview_package_flags() {
-  local derived="${PREVIEW_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/MedNotes-local}"
+  local derived="${PREVIEW_DERIVED_DATA:-${DERIVED:-$HOME/Library/Developer/Xcode/DerivedData/MedNotes-local}}"
   local products="$derived/Build/Products/Debug"
   local sodium="$derived/SourcePackages/checkouts/swift-sodium/Clibsodium.xcframework/macos-arm64_arm64e_x86_64"
   # Sodium and its C shim are SwiftPM static products built with profile
@@ -184,7 +184,7 @@ live_capture() {
         echo "   for per-module shots, or click through the running app by hand."
         break
       fi
-      osascript -e "tell application \"System Events\" to keystroke \"$index\" using command down" >/dev/null 2>&1
+      osascript -e "tell application \"System Events\" to keystroke \"$index\" using command down" >/dev/null 2>&1 || break
       sleep 1
       wid="$(window_id_for_pid "$pid")"
       [ -n "$wid" ] || continue
@@ -194,7 +194,7 @@ live_capture() {
       # reviewed too; left untouched, it is discarded when the walk moves on.
       [ "$index" -le 4 ] || continue
       front_mednotes || break
-      osascript -e 'tell application "System Events" to keystroke "n" using command down' >/dev/null 2>&1
+      osascript -e 'tell application "System Events" to keystroke "n" using command down' >/dev/null 2>&1 || break
       sleep 1.5
       wid="$(window_id_for_pid "$pid")"
       [ -n "$wid" ] || continue

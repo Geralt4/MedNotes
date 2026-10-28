@@ -272,9 +272,13 @@ actor EncryptedFileStore: AttachmentStore {
         try FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
-        let safeName = preferredName
+        var safeName = preferredName
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: "\u{0}", with: "_")
+        // The copy's name gets a 37-byte UUID prefix, so keep the name under the
+        // 255-byte file-name limit. Trim from the front so the extension stays.
+        while safeName.utf8.count > 200 { safeName.removeFirst() }
         let file = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName)")
         let fd = open(file.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
         guard fd >= 0 else { throw StoreError.corruptOrWrongKey }

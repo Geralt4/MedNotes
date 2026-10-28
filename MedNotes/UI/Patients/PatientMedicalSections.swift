@@ -259,6 +259,8 @@ struct PatientMedicalSections: View {
         Binding(
             get: { medication.wrappedValue.isActive ? .active : .stopped },
             set: { state in
+                // Re-selecting the current state must not restamp the stop date or reason.
+                guard state != (medication.wrappedValue.isActive ? .active : .stopped) else { return }
                 if state == .active {
                     medication.wrappedValue.resume()
                 } else {

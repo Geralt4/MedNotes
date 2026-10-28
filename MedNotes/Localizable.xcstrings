@@ -3518,6 +3518,16 @@
         }
       }
     },
+    "Locked after a restore could not be rolled back" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κλειδώθηκε επειδή η επαναφορά δεν μπόρεσε να αναιρεθεί"
+          }
+        }
+      }
+    },
     "Locked when the Mac went to sleep" : {
       "localizations" : {
         "el" : {
@@ -4528,12 +4538,12 @@
         }
       }
     },
-    "Nothing new to import: every record in the folder is already in MedNotes." : {
+    "No records were found in this folder." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δεν υπάρχει κάτι νέο για εισαγωγή: κάθε εγγραφή του φακέλου υπάρχει ήδη στο MedNotes."
+            "value" : "Δεν βρέθηκαν εγγραφές σε αυτόν τον φάκελο."
           }
         }
       }

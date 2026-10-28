@@ -125,7 +125,7 @@ final class BackendFixTests: XCTestCase {
         let links = try await db.noteLinkCount(noteId: note.id)
         XCTAssertEqual(links, 0)
         XCTAssertTrue(
-            report.warnings.contains { $0.contains("references missing patient") },
+            report.warnings.contains { $0.contains(String(note.mentionedPatients[0].uuidString.prefix(8))) },
             "expected orphan mention warning, got: \(report.warnings)")
         let fkViolations = try await db.foreignKeyCheck()
         XCTAssertEqual(fkViolations, 0)
@@ -152,7 +152,7 @@ final class BackendFixTests: XCTestCase {
         XCTAssertNil(loaded?.patientId)
         XCTAssertNil(loaded?.patientName, "unlinked import must drop the denormalized name")
         XCTAssertTrue(
-            report.warnings.contains { $0.contains("references missing patient") },
+            report.warnings.contains { $0.contains(String(missing.uuidString.prefix(8))) },
             "expected orphan warning, got: \(report.warnings)")
     }
 
@@ -272,7 +272,7 @@ final class BackendFixTests: XCTestCase {
         XCTAssertNil(loaded?.files.first?.data, "file bytes must not be stored in the DB")
         let storageID = try XCTUnwrap(loaded?.files.first?.storageID)
         XCTAssertTrue(EncryptedFileStore.isSafeStorageID(storageID))
-        XCTAssertNotEqual(storageID, patient.files[0].id.uuidString,
+        XCTAssertNotEqual(storageID.lowercased(), patient.files[0].id.uuidString.lowercased(),
                           "the on-disk id must not be the model id")
 
         // Nothing readable beside the store.

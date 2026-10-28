@@ -58,6 +58,11 @@ struct BackupFlowSheet: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+            if !passphrase.isEmpty, let problem = BackupPassphrasePolicy.validate(passphrase) {
+                Text(verbatim: problem)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             if let failure {
                 Text(verbatim: failure)
                     .font(.caption)
@@ -82,7 +87,7 @@ struct BackupFlowSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .prominentActionButtonStyle()
-                .disabled(!passphrasesMatch || isWorking)
+                .disabled(!passphrasesMatch || !BackupPassphrasePolicy.isAcceptable(passphrase) || isWorking)
             }
         }
     }
@@ -163,7 +168,7 @@ struct BackupFlowSheet: View {
         // Return can submit the field while a check is already running; a
         // second Argon2 derivation over the same file would race the first
         // result into the sheet.
-        guard !isWorking else { return }
+        guard !isWorking, !passphrase.isEmpty else { return }
         isWorking = true
         failure = nil
         manifest = nil

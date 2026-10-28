@@ -379,6 +379,10 @@ actor BackupService {
         defer { try? opened.reader.handle.close() }
         let manifest = try await ArchiveExtraction.extract(
             opened: opened, snapshotURL: snapshotURL, store: stagingStore).manifest
+        // A newer build may have written a schema this one does not know.
+        guard manifest.schemaVersion <= Schema.currentVersion else {
+            throw BackupError.unexpectedSchema(String(localized: "The backup was made by a newer MedNotes."))
+        }
 
         try await ArchiveExtraction.ensureEncryptedSnapshot(at: snapshotURL, key: opened.archiveKey)
 

@@ -1305,10 +1305,11 @@ final class AppSession: ObservableObject {
         let lockRequestsAtStart = lockRequests
         isMigrating = true
         defer { isMigrating = false }
-        let rootKey = try coordinator.createMigrationKey()
         let migrator = StoreMigrator(dataRoot: dataRoot, keyManager: coordinator.keyManager)
         var swapped = false
         do {
+            // Inside the do block: a failure here reaches the wizard instead of leaving the spinner up.
+            let rootKey = try coordinator.createMigrationKey()
             let report = try await migrator.migrate(
                 backupDestination: backupURL, passphrase: passphrase)
             swapped = true
