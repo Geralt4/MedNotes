@@ -13,6 +13,8 @@ struct BackupFlowSheet: View {
     @State private var manifest: BackupManifest?
     @State private var isWorking = false
     @State private var failure: String?
+    /// The safety copy of the current data failed: offer to go on without it.
+    @State private var offerRestoreWithoutCopy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Chrome.Space.lg) {
@@ -145,22 +147,34 @@ struct BackupFlowSheet: View {
                         .prominentActionButtonStyle()
                         .disabled(passphrase.isEmpty || isWorking)
                 } else {
-                    Button("Restore", role: .destructive) {
-                        isWorking = true
-                        failure = nil
-                        Task {
-                            do {
-                                try await session.performRestore(from: fileURL, passphrase: passphrase)
-                            } catch {
-                                failure = error.localizedDescription
-                            }
-                            isWorking = false
+                    if offerRestoreWithoutCopy {
+                        Button("Restore Without a Copy", role: .destructive) {
+                            restore(fileURL, withoutSafetyCopy: true)
                         }
+                        .disabled(isWorking)
+                    }
+                    Button("Restore", role: .destructive) {
+                        restore(fileURL, withoutSafetyCopy: false)
                     }
                     .prominentActionButtonStyle()
                     .disabled(isWorking)
                 }
             }
+        }
+    }
+
+    private func restore(_ fileURL: URL, withoutSafetyCopy: Bool) {
+        isWorking = true
+        failure = nil
+        Task {
+            do {
+                try await session.performRestore(
+                    from: fileURL, passphrase: passphrase, withoutSafetyCopy: withoutSafetyCopy)
+            } catch {
+                failure = error.localizedDescription
+                if case .safetyCopyIncomplete = error as? BackupError { offerRestoreWithoutCopy = true }
+            }
+            isWorking = false
         }
     }
 

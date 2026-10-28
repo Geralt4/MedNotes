@@ -88,6 +88,9 @@ struct JSONImporter {
     private func scanAndDecode() throws -> Batch {
         var batch = Batch()
         var patientIds = Set<UUID>()
+        // `patient_files.id` is one key across all patients: a repeated id
+        // would move the earlier patient's file to the later one.
+        var fileIds = Set<UUID>()
 
         var noteIds = Set<UUID>()
         var todoIds = Set<UUID>()
@@ -95,12 +98,20 @@ struct JSONImporter {
 
         for url in try jsonFiles(in: .patients) {
             do {
-                let patient = try decode(Patient.self, at: url)
+                var patient = try decode(Patient.self, at: url)
                 if patientIds.contains(patient.id) {
                     batch.report.filesSkipped += 1
                     batch.report.warnings.append(
                         String(localized: "\(url.lastPathComponent): duplicate patient \(patient.id.uuidString.prefix(8)), skipped"))
                     continue
+                }
+                patient.files = patient.files.filter { file in
+                    guard fileIds.insert(file.id).inserted else {
+                        batch.report.warnings.append(
+                            String(localized: "\(url.lastPathComponent): the file \(file.name) repeats another file's id, skipped"))
+                        return false
+                    }
+                    return true
                 }
                 batch.patients.append(patient)
                 patientIds.insert(patient.id)
@@ -186,6 +197,13 @@ struct JSONImporter {
                     uniquingKeysWith: { first, _ in first })
                 var stored: [PatientFile] = []
                 for var file in patient.files {
+                    // The same id under another patient already in the store:
+                    // saving it would move that patient's file here.
+                    if let owner = try await db.patientOwningFile(file.id), owner != patient.id {
+                        report.warnings.append(
+                            String(localized: "\(file.name): its id already belongs to another patient's file, skipped"))
+                        continue
+                    }
                     let previous = existing[file.id]
                     if let data = file.data {
                         let storageID = try await fileStore.store(data, storageID: nil)
@@ -206,6 +224,20 @@ struct JSONImporter {
                             file.plaintextLength = previous.plaintextLength
                             file.contentDigest = previous.contentDigest
                         } else {
+                            report.warnings.append(
+                                String(localized: "\(file.name): the file has no content to import"))
+                        }
+                    } else if let carried = file.storageID, previous?.storageID != carried {
+                        // A storage id written in the JSON names an object this
+                        // store never made. Trusting it detaches the file.
+                        if let previous, let old = previous.storageID {
+                            file.storageID = old
+                            file.plaintextLength = previous.plaintextLength
+                            file.contentDigest = previous.contentDigest
+                        } else {
+                            file.storageID = nil
+                            file.plaintextLength = nil
+                            file.contentDigest = nil
                             report.warnings.append(
                                 String(localized: "\(file.name): the file has no content to import"))
                         }

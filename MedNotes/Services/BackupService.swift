@@ -131,6 +131,10 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     case rollbackFailed(String, String)
     /// No restore key is available to seal a restore point.
     case restorePointKeyUnavailable
+    /// The restore point of the current data could not be made (an attachment
+    /// that cannot be read, say), so nothing was replaced. The user may choose
+    /// to restore without it.
+    case safetyCopyIncomplete(String)
 
     var description: String {
         switch self {
@@ -148,6 +152,7 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
         case .destinationNotConfirmed:
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
+        case let .safetyCopyIncomplete(detail): return "the restore point of the current data could not be made: \(detail)"
         case let .rollbackFailed(folder, detail):
             return "restore failed and the original data could not be put back (kept in \(folder)): \(detail)"
         }
@@ -181,6 +186,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "The sync destination has not been reconfirmed since the last restore.")
         case .restorePointKeyUnavailable:
             return String(localized: "A restore point could not be made because this store has no restore key.")
+        case let .safetyCopyIncomplete(detail):
+            return String(localized: "A copy of your current data could not be made first, so nothing was changed: \(detail)")
         case let .rollbackFailed(folder, detail):
             return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”. \(detail)")
         }
@@ -392,7 +399,7 @@ actor BackupService {
             at: snapshotURL, key: opened.archiveKey, attachments: stagingStore)
 
         if createRestorePoint {
-            _ = try await createEncryptedRestorePoint(name: "Pre-restore snapshot")
+            try await takePreRestorePoint()
         }
         try await installStaged(
             databaseAt: snapshotURL, sourceKey: opened.archiveKey,
@@ -471,7 +478,7 @@ actor BackupService {
             throw BackupError.missingDatabase(fileURL)
         }
         if createRestorePoint {
-            _ = try await createEncryptedRestorePoint(name: "Pre-restore snapshot")
+            try await takePreRestorePoint()
         }
         let built = staging.appendingPathComponent("encrypted", isDirectory: true)
         let stagingStore = try await buildEncryptedStaging(
@@ -488,6 +495,23 @@ actor BackupService {
     }
 
     // MARK: - Encrypted restore points
+
+    /// The copy of the current data a restore keeps first. One attachment that
+    /// cannot be read must not make a damaged store impossible to replace from
+    /// a good backup, so that failure is its own error and the caller may
+    /// restore without the copy, by choice. A lock (cancellation) and the
+    /// restore-key error pass through unchanged.
+    private func takePreRestorePoint() async throws {
+        do {
+            _ = try await createEncryptedRestorePoint(name: "Pre-restore snapshot")
+        } catch let error as BackupError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+        }
+    }
 
     /// Internal restore points are v2 archives sealed by the device restore
     /// key. They are listed and deleted by name and never leave the container.

@@ -148,6 +148,26 @@
         }
       }
     },
+    "%@: its id already belongs to another patient's file, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: το αναγνωριστικό του ανήκει ήδη σε αρχείο άλλου ασθενούς, παραλείφθηκε"
+          }
+        }
+      }
+    },
+    "%@: the file %@ repeats another file's id, skipped" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: το αρχείο «%@» επαναλαμβάνει το αναγνωριστικό άλλου αρχείου, παραλείφθηκε"
+          }
+        }
+      }
+    },
     "%@: the file has no content to import" : {
       "localizations" : {
         "el" : {
@@ -524,6 +544,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ένας έλεγχος απέτυχε μετά την ανακατασκευή."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first, so nothing was changed: %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας, γι' αυτό δεν άλλαξε τίποτα: %@"
           }
         }
       }
@@ -5614,6 +5644,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Επαναφορά στη λίστα ενεργών"
+          }
+        }
+      }
+    },
+    "Restore Without a Copy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά χωρίς αντίγραφο"
           }
         }
       }

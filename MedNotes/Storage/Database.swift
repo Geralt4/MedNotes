@@ -899,6 +899,26 @@ actor Database {
         _ = try s.step()
     }
 
+    /// The patient a stored attachment row belongs to, if any. `patient_files.id`
+    /// is unique across all patients.
+    func patientOwningFile(_ fileId: UUID) throws -> UUID? {
+        let s = try conn.prepare("SELECT patient_id FROM patient_files WHERE id = ?")
+        s.bind(1, fileId.uuidString)
+        guard try s.step(), let text = s.columnText(0) else { return nil }
+        return UUID(uuidString: text)
+    }
+
+    /// Archives or restores one patient: the flag and the modified stamp, and
+    /// nothing else. A whole-record save from a copy read earlier would also
+    /// rewrite the patient's attachment list and could undo a file added since.
+    func setPatientArchived(id: UUID, archived: Bool, lastModified: Date) throws {
+        let s = try conn.prepare("UPDATE patients SET is_archived = ?, last_modified = ? WHERE id = ?")
+        s.bind(1, archived)
+        s.bind(2, LenientDate.encodeSQL(lastModified))
+        s.bind(3, id.uuidString)
+        _ = try s.step()
+    }
+
     /// Removes a row whose file the migration could not find. Only for the
     /// encrypted copy being built: the plaintext original is not touched.
     func dropAttachmentRecord(patientId: UUID, fileId: UUID) throws {

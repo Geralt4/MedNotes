@@ -278,10 +278,11 @@ actor PatientService {
     }
 
     private func setArchived(_ archived: Bool, id: UUID, action: String, details: String) async throws {
-        guard var patient = try await db.loadPatient(id: id), patient.isArchived != archived else { return }
-        patient.isArchived = archived
-        patient.lastModified = Date()
-        try await db.savePatient(patient)
+        guard let patient = try await db.loadPatient(id: id), patient.isArchived != archived else { return }
+        // Only the flag and the stamp are written. Rewriting the whole record
+        // from the copy loaded above would also rewrite its attachment list,
+        // and a save that landed in between would lose its file.
+        try await db.setPatientArchived(id: id, archived: archived, lastModified: Date())
         try await audit.log(action: action, entityType: "patient", entityId: id.uuidString, details: details)
     }
 }

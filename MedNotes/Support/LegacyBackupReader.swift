@@ -121,16 +121,36 @@ enum LegacyBackupReader {
         let ciphertext = body.prefix(body.count - tagLength)
         let tag = body.suffix(tagLength)
 
-        let key = try deriveKey(passphrase: passphrase, salt: header.salt, iterations: header.iterations)
-        let payload: Data
-        do {
-            let nonce = try AES.GCM.Nonce(data: header.nonce)
-            let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-            payload = try AES.GCM.open(box, using: key, authenticating: headerBytes)
-        } catch {
+        // The writer derived its key from the passphrase exactly as typed, and
+        // the same letter can be typed or pasted precomposed (`é`) or
+        // decomposed (`e` + U+0301). So the forms are tried: as given, then
+        // the canonical composed and decomposed forms. The authentication tag
+        // decides which was right.
+        guard let nonce = try? AES.GCM.Nonce(data: header.nonce),
+              let box = try? AES.GCM.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag) else {
             throw LegacyError.wrongPassphraseOrCorrupt
         }
-        return try parseTree(payload)
+        for form in passphraseForms(passphrase) {
+            let key = try deriveKey(exactPassphrase: form, salt: header.salt, iterations: header.iterations)
+            if let payload = try? AES.GCM.open(box, using: key, authenticating: headerBytes) {
+                return try parseTree(payload)
+            }
+        }
+        throw LegacyError.wrongPassphraseOrCorrupt
+    }
+
+    /// The passphrase as given, then its precomposed (NFC) and decomposed
+    /// (NFD) forms, each only if it is a different byte sequence. Compared as
+    /// UTF-8: `String ==` treats the forms as equal, which would drop them.
+    static func passphraseForms(_ passphrase: String) -> [String] {
+        var forms = [passphrase]
+        var seen: Set<[UInt8]> = [Array(passphrase.utf8)]
+        for candidate in [passphrase.precomposedStringWithCanonicalMapping,
+                          passphrase.decomposedStringWithCanonicalMapping]
+        where seen.insert(Array(candidate.utf8)).inserted {
+            forms.append(candidate)
+        }
+        return forms
     }
 
     /// Extracts entries into `directory` one file at a time. Every name is
@@ -166,12 +186,15 @@ enum LegacyBackupReader {
     private static func parseTree(_ payload: Data) throws -> Contents {
         guard let plist = try? PropertyListSerialization.propertyList(
             from: payload, options: [], format: nil) as? [String: Any] else {
+            // `FileWrapper.serializedRepresentation` of a directory is the flat
+            // RTFD form, not a property list. It is read in memory only, then
+            // held to the same rules as the plist walk below.
+            if let wrapper = FileWrapper(serializedRepresentation: payload) {
+                return try parseWrapper(wrapper)
+            }
             throw LegacyError.wrongPassphraseOrCorrupt
         }
-        var entries: [Entry] = []
-        var manifestData: Data?
-        var count = 0
-        var names = Set<String>()
+        var collector = TreeCollector()
 
         func walk(_ node: [String: Any], prefix: String, depth: Int) throws {
             guard depth <= maxPathDepth else { throw LegacyError.pathTooDeep(prefix) }
@@ -196,18 +219,7 @@ enum LegacyBackupReader {
                 return
             }
             if let contents = node["NSFileWrapperContents"] as? Data {
-                count += 1
-                guard count <= maxEntries else { throw LegacyError.tooManyEntries }
-                guard contents.count <= maxEntryBytes else {
-                    throw LegacyError.extractionFailed(String(localized: "\(relative) is too large"))
-                }
-                guard names.insert(relative).inserted else {
-                    throw LegacyError.duplicateEntry(relative)
-                }
-                if relative == "manifest.json" || relative.hasSuffix("/manifest.json") {
-                    manifestData = contents
-                }
-                entries.append(Entry(relativePath: relative, data: contents))
+                try collector.add(relative: relative, contents: contents)
             }
         }
 
@@ -219,7 +231,66 @@ enum LegacyBackupReader {
         } else {
             try walk(plist, prefix: "", depth: 0)
         }
-        return Contents(entries: entries, manifestData: manifestData)
+        return Contents(entries: collector.entries, manifestData: collector.manifestData)
+    }
+
+    /// Entry accounting shared by both ways of reading the tree: the count,
+    /// size and duplicate limits.
+    private struct TreeCollector {
+        var entries: [Entry] = []
+        var manifestData: Data?
+        private var count = 0
+        private var names = Set<String>()
+
+        mutating func add(relative: String, contents: Data) throws {
+            count += 1
+            guard count <= LegacyBackupReader.maxEntries else { throw LegacyError.tooManyEntries }
+            guard contents.count <= LegacyBackupReader.maxEntryBytes else {
+                throw LegacyError.extractionFailed(String(localized: "\(relative) is too large"))
+            }
+            guard names.insert(relative).inserted else { throw LegacyError.duplicateEntry(relative) }
+            if relative == "manifest.json" || relative.hasSuffix("/manifest.json") {
+                manifestData = contents
+            }
+            entries.append(Entry(relativePath: relative, data: contents))
+        }
+    }
+
+    /// The same walk as `parseTree`, over a tree read back with
+    /// `FileWrapper(serializedRepresentation:)`. Nothing is written to disk,
+    /// and links, unsafe names, depth, size and count are refused alike.
+    private static func parseWrapper(_ root: FileWrapper) throws -> Contents {
+        var collector = TreeCollector()
+
+        func walk(_ node: FileWrapper, key: String, prefix: String, depth: Int) throws {
+            guard depth <= maxPathDepth else { throw LegacyError.pathTooDeep(prefix) }
+            if node.isSymbolicLink {
+                throw LegacyError.nonRegularEntry(prefix.isEmpty ? String(localized: "link") : prefix)
+            }
+            let name = node.preferredFilename ?? node.filename ?? key
+            let relative = prefix.isEmpty ? name : (prefix + "/" + name)
+            if !name.isEmpty {
+                try validateName(name, relative: relative)
+            }
+            if node.isDirectory {
+                for (childKey, child) in (node.fileWrappers ?? [:]).sorted(by: { $0.key < $1.key }) {
+                    try walk(child, key: childKey, prefix: relative, depth: depth + 1)
+                }
+                return
+            }
+            if node.isRegularFile, let contents = node.regularFileContents {
+                try collector.add(relative: relative, contents: contents)
+            }
+        }
+
+        if root.isDirectory {
+            for (childKey, child) in (root.fileWrappers ?? [:]).sorted(by: { $0.key < $1.key }) {
+                try walk(child, key: childKey, prefix: "", depth: 0)
+            }
+        } else {
+            try walk(root, key: "", prefix: "", depth: 0)
+        }
+        return Contents(entries: collector.entries, manifestData: collector.manifestData)
     }
 
     private static func validateName(_ name: String, relative: String) throws {
@@ -233,13 +304,19 @@ enum LegacyBackupReader {
         guard !relative.contains("..") else { throw LegacyError.unsafeEntryName(relative) }
     }
 
+    /// The key for a passphrase in its canonical (NFC) form.
     static func deriveKey(passphrase: String, salt: Data, iterations: UInt32) throws -> SymmetricKey {
+        try deriveKey(exactPassphrase: BackupPassphrasePolicy.normalized(passphrase), salt: salt, iterations: iterations)
+    }
+
+    /// PBKDF2 over the passphrase's UTF-8 bytes exactly as given, with no
+    /// normalization: what the v1 writer did.
+    static func deriveKey(exactPassphrase: String, salt: Data, iterations: UInt32) throws -> SymmetricKey {
         var derived = [UInt8](repeating: 0, count: 32)
-        let normalized = BackupPassphrasePolicy.normalized(passphrase)
         let status = salt.withUnsafeBytes { saltBytes -> Int32 in
             CCKeyDerivationPBKDF(
                 CCPBKDFAlgorithm(kCCPBKDF2),
-                normalized, normalized.utf8.count,
+                exactPassphrase, exactPassphrase.utf8.count,
                 saltBytes.baseAddress?.assumingMemoryBound(to: UInt8.self), salt.count,
                 CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
                 iterations,

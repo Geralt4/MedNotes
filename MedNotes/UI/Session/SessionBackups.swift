@@ -323,7 +323,10 @@ extension AppSession {
         }
     }
 
-    func performRestore(from fileURL: URL, passphrase: String) async throws {
+    /// `withoutSafetyCopy` skips the copy of the current data that a restore
+    /// keeps first. Only the sheet's second button passes it, after the copy
+    /// failed.
+    func performRestore(from fileURL: URL, passphrase: String, withoutSafetyCopy: Bool = false) async throws {
         guard let store, let coordinator else { return }
         let databaseKey = try coordinator.requireDatabaseKey()
         let attachmentKey = try coordinator.requireAttachmentKey()
@@ -332,14 +335,16 @@ extension AppSession {
             do {
                 manifest = try await store.backups.restore(
                     fromEncryptedBackupAt: fileURL, passphrase: passphrase,
-                    databaseKey: databaseKey, attachmentKey: attachmentKey)
+                    databaseKey: databaseKey, attachmentKey: attachmentKey,
+                    createRestorePoint: !withoutSafetyCopy)
             } catch BackupArchiveV2.ArchiveError.notAnArchive {
                 // Only a container that is not v2 at all is tried as v1. Any
                 // other failure is about a v2 archive and must not be retried
                 // against a store that a failed install may have touched.
                 manifest = try await store.backups.restore(
                     fromLegacyBackupAt: fileURL, passphrase: passphrase,
-                    databaseKey: databaseKey, attachmentKey: attachmentKey)
+                    databaseKey: databaseKey, attachmentKey: attachmentKey,
+                    createRestorePoint: !withoutSafetyCopy)
             }
         } catch let error as BackupError {
             if case .rollbackFailed = error {
