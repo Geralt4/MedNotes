@@ -55,8 +55,4 @@ enum SecurityLog {
         }
         return String(format: "%016llx", hash)
     }
-
-    static func opaqueID(for uuid: UUID) -> String {
-        uuid.uuidString.prefix(8).lowercased()
-    }
 }
