@@ -919,6 +919,24 @@ actor Database {
         _ = try s.step()
     }
 
+    /// Points a calendar event at the Apple object made from it: the
+    /// identifier and nothing else. The row stays as dirty or clean as it was,
+    /// so the next push reconciles its fields.
+    func setEventRemoteIdentifier(id: UUID, identifier: String) throws {
+        let s = try conn.prepare("UPDATE calendar_events SET ek_event_identifier = ? WHERE id = ?")
+        s.bind(1, identifier)
+        s.bind(2, id.uuidString)
+        _ = try s.step()
+    }
+
+    /// As `setEventRemoteIdentifier`, for a todo and its reminder.
+    func setTodoRemoteIdentifier(id: UUID, identifier: String) throws {
+        let s = try conn.prepare("UPDATE todo_items SET reminder_identifier = ? WHERE id = ?")
+        s.bind(1, identifier)
+        s.bind(2, id.uuidString)
+        _ = try s.step()
+    }
+
     /// Removes a row whose file the migration could not find. Only for the
     /// encrypted copy being built: the plaintext original is not touched.
     func dropAttachmentRecord(patientId: UUID, fileId: UUID) throws {

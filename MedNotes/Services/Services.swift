@@ -422,6 +422,12 @@ actor TodoService {
         return t
     }
 
+    /// A todo learns the identifier of the reminder made from it; see
+    /// `AppleRemindersService.PullResult.rebinds`.
+    func setRemoteIdentifier(id: UUID, identifier: String) async throws {
+        try await db.setTodoRemoteIdentifier(id: id, identifier: identifier)
+    }
+
     /// Persists sync-driven changes without stamping `updatedAt`, so the last
     /// local-edit time stays truthful for last-writer-wins comparisons.
     func saveSyncResult(_ todo: TodoItem) async throws {
@@ -503,6 +509,12 @@ actor CalendarEventService {
 
     /// Persists sync-driven changes without stamping `updatedAt`, so the last
     /// local-edit time stays truthful for last-writer-wins comparisons.
+    /// A row learns the identifier of the Apple object made from it; see
+    /// `AppleCalendarService.PullResult.rebinds`.
+    func setRemoteIdentifier(id: UUID, identifier: String) async throws {
+        try await db.setEventRemoteIdentifier(id: id, identifier: identifier)
+    }
+
     func saveSyncResult(_ event: CalendarEvent) async throws {
         var stored = event
         stored.ensureEndNotBeforeStart()

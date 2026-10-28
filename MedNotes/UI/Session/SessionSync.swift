@@ -205,6 +205,24 @@ extension AppSession {
     /// every store in the process about every change, so a Reminders edit
     /// would otherwise prompt for Calendar access out of nowhere.
     func syncCalendarNow(automatic: Bool = false) async {
+        // One pass at a time. A request that arrives during one (EventKit
+        // reports the pass's own writes, and a save can ask for a push) is
+        // not dropped: the pass goes round once more when it ends.
+        guard calendarPassGate.enter(automatic: automatic) else { return }
+        await runCalendarPasses(startingWith: automatic)
+    }
+
+    /// Runs passes until none is wanted any more. The caller holds the gate.
+    private func runCalendarPasses(startingWith automatic: Bool) async {
+        var nextIsAutomatic = automatic
+        while true {
+            await runCalendarPass(automatic: nextIsAutomatic)
+            guard let rerunIsAutomatic = calendarPassGate.finish() else { return }
+            nextIsAutomatic = rerunIsAutomatic
+        }
+    }
+
+    private func runCalendarPass(automatic: Bool) async {
         guard let store else { return }
         // Sample data never reaches Apple Calendar. `needsPush` is true for
         // every seeded event, since none has an `ekEventIdentifier`.
@@ -232,19 +250,33 @@ extension AppSession {
             }
             var locals = try await store.events.loadAll()
             var report = SyncPassReport()
-            for local in locals where needsPush(local) {
-                let synced = try await appleCalendar.push(local, to: destination)
-                // A save during the push has already written a newer row.
-                // Storing this snapshot over it would undo that edit; leave
-                // the row dirty so the next pass pushes the newer version.
-                if let latest = try? await store.events.load(id: synced.id),
-                   latest.updatedAt <= synced.updatedAt {
-                    try await store.events.saveSyncResult(synced)
-                    report.pushed += 1
+            for snapshot in locals where needsPush(snapshot) {
+                // The snapshot is from the start of the pass: read the row
+                // again, so an edit since is what goes, and a delete skips it.
+                guard let local = try await store.events.load(id: snapshot.id), needsPush(local) else { continue }
+                switch try await appleCalendar.push(local, to: destination) {
+                case .remoteNewer:
+                    // Edited in Calendar since the last sync: the pull below
+                    // takes that version and reports the conflict.
+                    continue
+                case .pushed(let synced):
+                    // A save during the push has already written a newer row.
+                    // Storing this snapshot over it would undo that edit; leave
+                    // the row dirty so the next pass pushes the newer version.
+                    if let latest = try? await store.events.load(id: synced.id),
+                       latest.updatedAt <= synced.updatedAt {
+                        try await store.events.saveSyncResult(synced)
+                        report.pushed += 1
+                    }
                 }
             }
             locals = try await store.events.loadAll()
             let result = try await appleCalendar.pull(localEvents: locals, from: destination)
+            // Rows that lost the identifier of the object they made are
+            // pointed at it again before anything else is stored.
+            for (id, identifier) in result.rebinds {
+                try await store.events.setRemoteIdentifier(id: id, identifier: identifier)
+            }
             var pulled = 0
             for updated in result.updates {
                 if let latest = try? await store.events.load(id: updated.id),
@@ -288,11 +320,19 @@ extension AppSession {
         guard let store, appleCalendar.state == .granted, needsPush(event),
               let destination = try? await store.destinations.destination(for: .calendar),
               SyncDestinationCore.mayWrite(destination) else { return }
-        if let synced = try? await appleCalendar.push(event, to: destination),
+        // During a pass the row is left dirty and the pass goes round again:
+        // a push of its own would race the pass's pushes and pull.
+        guard calendarPassGate.enter(automatic: true) else { return }
+        if case .pushed(let synced)? = try? await appleCalendar.push(event, to: destination),
            let latest = try? await store.events.load(id: synced.id),
            latest.updatedAt <= synced.updatedAt {
             try? await store.events.saveSyncResult(synced)
             eventEpoch += 1
+        }
+        // A pass asked for while this push held the gate runs now, apart from
+        // the save that called here.
+        if let rerunIsAutomatic = calendarPassGate.finish() {
+            Task { @MainActor in await self.runCalendarPasses(startingWith: rerunIsAutomatic) }
         }
     }
 
@@ -319,6 +359,22 @@ extension AppSession {
     /// "Sync now"; automatic pull also fires when EventKit reports changes and,
     /// as for the calendar, never raises the permission dialog.
     func syncRemindersNow(automatic: Bool = false) async {
+        // One pass at a time; see `syncCalendarNow`.
+        guard remindersPassGate.enter(automatic: automatic) else { return }
+        await runRemindersPasses(startingWith: automatic)
+    }
+
+    /// Runs passes until none is wanted any more. The caller holds the gate.
+    private func runRemindersPasses(startingWith automatic: Bool) async {
+        var nextIsAutomatic = automatic
+        while true {
+            await runRemindersPass(automatic: nextIsAutomatic)
+            guard let rerunIsAutomatic = remindersPassGate.finish() else { return }
+            nextIsAutomatic = rerunIsAutomatic
+        }
+    }
+
+    private func runRemindersPass(automatic: Bool) async {
         guard let store else { return }
         // Sample data never reaches Apple Reminders. `needsPush` is true for
         // every seeded todo, since none has a `reminderIdentifier`.
@@ -342,18 +398,29 @@ extension AppSession {
             }
             var locals = try await store.todos.loadAll()
             var report = SyncPassReport()
-            for local in locals where needsPush(local) {
-                let synced = try await appleReminders.push(local, to: destination)
-                // As for Calendar: a newer local edit must not be overwritten
-                // by the snapshot this push started from.
-                if let latest = try? await store.todos.load(id: synced.id),
-                   latest.updatedAt <= synced.updatedAt {
-                    try await store.todos.saveSyncResult(synced)
-                    report.pushed += 1
+            for snapshot in locals where needsPush(snapshot) {
+                // As for Calendar: the row as it is now, not as the pass found it.
+                guard let local = try await store.todos.load(id: snapshot.id), needsPush(local) else { continue }
+                switch try await appleReminders.push(local, to: destination) {
+                case .remoteNewer:
+                    // Edited in Reminders since the last sync: the pull below
+                    // takes that version and reports the conflict.
+                    continue
+                case .pushed(let synced):
+                    // A newer local edit must not be overwritten by the
+                    // snapshot this push started from.
+                    if let latest = try? await store.todos.load(id: synced.id),
+                       latest.updatedAt <= synced.updatedAt {
+                        try await store.todos.saveSyncResult(synced)
+                        report.pushed += 1
+                    }
                 }
             }
             locals = try await store.todos.loadAll()
             let result = try await appleReminders.pull(localTodos: locals, from: destination)
+            for (id, identifier) in result.rebinds {
+                try await store.todos.setRemoteIdentifier(id: id, identifier: identifier)
+            }
             var pulled = 0
             for updated in result.updates {
                 if let latest = try? await store.todos.load(id: updated.id),
@@ -398,11 +465,15 @@ extension AppSession {
         guard let store, appleReminders.state == .granted, needsPush(todo),
               let destination = try? await store.destinations.destination(for: .reminders),
               SyncDestinationCore.mayWrite(destination) else { return }
-        if let synced = try? await appleReminders.push(todo, to: destination),
+        guard remindersPassGate.enter(automatic: true) else { return }
+        if case .pushed(let synced)? = try? await appleReminders.push(todo, to: destination),
            let latest = try? await store.todos.load(id: synced.id),
            latest.updatedAt <= synced.updatedAt {
             try? await store.todos.saveSyncResult(synced)
             todoEpoch += 1
+        }
+        if let rerunIsAutomatic = remindersPassGate.finish() {
+            Task { @MainActor in await self.runRemindersPasses(startingWith: rerunIsAutomatic) }
         }
     }
 }

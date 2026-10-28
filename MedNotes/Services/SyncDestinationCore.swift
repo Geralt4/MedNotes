@@ -48,15 +48,44 @@ enum SyncDestinationCore {
     /// An opaque marker for an EventKit object. Stored in the object's `url`
     /// field, which both `EKEvent` and `EKReminder` expose and which never
     /// reaches the user's notes text.
-    static func markerURL(for destination: SyncDestination) -> URL {
-        URL(string: "x-mednotes://object/\(destination.id.uuidString)")!
+    ///
+    /// `record` is the MedNotes row the object was made from. EventKit can
+    /// change an object's own identifier (a full sync does), and the row then
+    /// holds one that finds nothing; the record id lets the next pass find
+    /// the object again instead of importing it as a new row. Markers made
+    /// before this had the destination alone, and still read as owned.
+    static func markerURL(for destination: SyncDestination, record: UUID? = nil) -> URL {
+        var text = "x-mednotes://object/\(destination.id.uuidString)"
+        if let record { text += "/\(record.uuidString)" }
+        return URL(string: text)!
     }
 
-    /// Reads the marker back from an EventKit object's URL.
+    /// The destination part of the marker on an EventKit object's URL.
     static func marker(from url: URL?) -> String? {
         guard let url, url.scheme == "x-mednotes" else { return nil }
+        return url.pathComponents.filter { $0 != "/" }.first
+    }
+
+    /// The MedNotes row an object was made from, when its marker says.
+    static func recordID(from url: URL?) -> UUID? {
+        guard let url, url.scheme == "x-mednotes" else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
-        return parts.last
+        guard parts.count >= 2 else { return nil }
+        return UUID(uuidString: parts[1])
+    }
+
+    /// How far after the last sync an Apple object's modified time may be and
+    /// still count as our own push. Calendar servers stamp a change when it
+    /// reaches them, which is after the moment the push was saved here; reading
+    /// that stamp as someone else's edit would put the old Apple copy over the
+    /// user's newer edit.
+    static let remoteChangeTolerance: TimeInterval = 60
+
+    /// Whether an Apple object was changed by someone else after the row last
+    /// synced with it.
+    static func remoteChangedSinceSync(lastSync: Date?, remoteModified: Date?) -> Bool {
+        guard let lastSync, let remoteModified else { return false }
+        return remoteModified > lastSync.addingTimeInterval(remoteChangeTolerance)
     }
 
     /// What Apple Calendar and Reminders show for a record with no title: they

@@ -185,6 +185,9 @@ final class AppSession: ObservableObject {
 
     let appleCalendar = AppleCalendarService()
     @Published var lastCalendarSyncSummary: String?
+    /// One calendar pass at a time; see `SyncPassGate`.
+    var calendarPassGate = SyncPassGate()
+    var remindersPassGate = SyncPassGate()
 
     // MARK: Apple Reminders bridge
 

@@ -17,11 +17,35 @@ enum CalendarSyncCore {
         case update(conflict: Bool)
     }
 
-    /// EventKit exposes no public per-event "modified at", so the direction
-    /// rule is content-based: a differing remote copy wins when the local row
-    /// is clean (never synced, or last synced after its last local edit). If
-    /// the local row has unsynced edits AND remote drifted too, that is a
-    /// conflict — the plan mandates remote-wins with a surfaced warning.
+    enum PushDecision: Equatable {
+        /// Write the row's fields to the Apple object.
+        case push
+        /// The Apple object already holds them: nothing to write.
+        case unchanged
+        /// The Apple object was edited after the last sync and differs from
+        /// the row. Writing would erase that edit, so the pull takes it.
+        case remoteNewer
+    }
+
+    /// Run before a push, so a row with unsynced edits cannot silently
+    /// overwrite an edit made in Calendar since. `remoteModified` is the
+    /// object's `lastModifiedDate`; without it, or for a row never synced,
+    /// there is no evidence the Apple copy changed and the row is pushed.
+    static func pushDecision(local: CalendarEvent, remote: EventFields, remoteModified: Date?) -> PushDecision {
+        guard remote != fields(of: local) else { return .unchanged }
+        guard local.syncStatus != .localOnly,
+              SyncDestinationCore.remoteChangedSinceSync(lastSync: local.lastSyncDate, remoteModified: remoteModified)
+        else { return .push }
+        return .remoteNewer
+    }
+
+    /// The direction rule is content-based: a differing remote copy wins when
+    /// the local row is clean (never synced, or last synced after its last
+    /// local edit). If the local row has unsynced edits AND remote drifted
+    /// too, that is a conflict — remote wins and the caller surfaces a
+    /// warning. A push checks the Apple object's `lastModifiedDate` first
+    /// (`pushDecision`), so a row with unsynced edits reaches this rule
+    /// instead of overwriting the remote edit.
     static func decide(local: CalendarEvent, remote: EventFields) -> PullDecision {
         guard remote != CalendarSyncCore.fields(of: local) else { return .same }
         let dirty = local.updatedAt > (local.lastSyncDate ?? .distantPast)
@@ -71,6 +95,19 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         /// Local rows whose own unsynced edit lost the conflict to a newer
         /// remote version. Surfaced so the session can warn the user.
         var conflictingIDs: Set<UUID> = []
+        /// Local rows whose own `ekEventIdentifier` finds nothing, or was never
+        /// stored, though an Apple object made from them is in the destination
+        /// (its marker names the row). Row id → the object's identifier. Not
+        /// new events, and not missing ones: the row is pointed at its object.
+        var rebinds: [UUID: String] = [:]
+    }
+
+    enum PushOutcome: Sendable {
+        /// The row, as it now stands after the push.
+        case pushed(CalendarEvent)
+        /// The Apple event was edited after the last sync; nothing was
+        /// written, and the pull that follows takes the Apple version.
+        case remoteNewer
     }
 
     @Published private(set) var state: AccessState
@@ -264,7 +301,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 
     /// Creates or updates the remote counterpart of a MedNotes event inside
     /// the confirmed destination. Refuses to write without consent.
-    func push(_ event: CalendarEvent, to destination: SyncDestination) async throws -> CalendarEvent {
+    func push(_ event: CalendarEvent, to destination: SyncDestination) async throws -> PushOutcome {
         try Self.refusePreviewSeedWrites()
         guard state == .granted else { throw CalendarSyncError.accessDenied }
         guard SyncDestinationCore.mayWrite(destination) else {
@@ -274,30 +311,62 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             throw CalendarSyncError.destinationMissing
         }
         var ek: EKEvent
+        var isExisting = true
         if let identifier = event.ekEventIdentifier,
            let found = store.calendarItem(withIdentifier: identifier) as? EKEvent,
            found.calendar?.calendarIdentifier == destination.calendarIdentifier {
             ek = found
+        } else if let made = objectMade(from: event.id, in: targetCalendar, destination: destination) {
+            // The row lost the identifier of an object it already made (a full
+            // sync changes them, or a save was skipped): reuse it, never make
+            // a second one.
+            ek = made
         } else {
             ek = EKEvent(eventStore: store)
             ek.title = SyncDestinationCore.titleForRemote(event.title)
+            isExisting = false
+        }
+        if isExisting {
+            let decision = CalendarSyncCore.pushDecision(
+                local: event, remote: ek.fields(), remoteModified: ek.lastModifiedDate)
+            if decision == .remoteNewer { return .remoteNewer }
+            if decision == .unchanged, SyncDestinationCore.recordID(from: ek.url) == event.id {
+                return .pushed(syncedCopy(of: event, from: ek))
+            }
         }
         apply(event.fields(), to: ek)
         ek.calendar = targetCalendar
         // The marker is what makes the object provably MedNotes-owned without
-        // reading its title.
-        ek.url = SyncDestinationCore.markerURL(for: destination)
+        // reading its title, and names the row it was made from.
+        ek.url = SyncDestinationCore.markerURL(for: destination, record: event.id)
         do {
             try store.save(ek, span: .thisEvent, commit: true)
         } catch {
             throw CalendarSyncError.saveFailed(error.localizedDescription)
         }
+        return .pushed(syncedCopy(of: event, from: ek))
+    }
+
+    private func syncedCopy(of event: CalendarEvent, from ek: EKEvent) -> CalendarEvent {
         var synced = event
         synced.ekEventIdentifier = ek.calendarItemIdentifier
         synced.syncStatus = .synced
         synced.lastSyncDate = Date()
         synced.ensureEndNotBeforeStart()
         return synced
+    }
+
+    /// An event in the destination that MedNotes made from row `id`, if any.
+    private func objectMade(from id: UUID, in calendar: EKCalendar, destination: SyncDestination) -> EKEvent? {
+        let start = Date().addingTimeInterval(-Self.pullWindow)
+        let end = Date().addingTimeInterval(Self.pullWindow)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [calendar])
+        return store.events(matching: predicate).first { ek in
+            SyncDestinationCore.recordID(from: ek.url) == id
+                && SyncDestinationCore.ownsRemoteObject(
+                    marker: SyncDestinationCore.marker(from: ek.url),
+                    destination: destination, inDestination: true)
+        }
     }
 
     func deleteRemote(_ event: CalendarEvent, from destination: SyncDestination) async throws {
@@ -346,6 +415,28 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             guard let id = event.ekEventIdentifier else { return nil }
             return (id, event)
         }, uniquingKeysWith: { first, _ in first })
+        let localIDs = Set(localEvents.map(\.id))
+
+        // The destination's objects, read once: re-binding a lost identifier
+        // and importing both need them.
+        let start = Date().addingTimeInterval(-Self.pullWindow)
+        let end = Date().addingTimeInterval(Self.pullWindow)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [targetCalendar])
+        let windowEvents = store.events(matching: predicate)
+        var madeFrom: [UUID: EKEvent] = [:]
+        for ek in windowEvents {
+            guard let record = SyncDestinationCore.recordID(from: ek.url), madeFrom[record] == nil,
+                  SyncDestinationCore.ownsRemoteObject(
+                    marker: SyncDestinationCore.marker(from: ek.url),
+                    destination: destination, inDestination: true) else { continue }
+            madeFrom[record] = ek
+        }
+        // A row that never stored its object's identifier (its save was
+        // skipped because the row had been edited again) has the object but
+        // does not know it.
+        for local in localEvents where local.ekEventIdentifier == nil {
+            if let made = madeFrom[local.id] { result.rebinds[local.id] = made.calendarItemIdentifier }
+        }
 
         for (identifier, local) in byEKID {
             let item = store.calendarItem(withIdentifier: identifier) as? EKEvent
@@ -355,6 +446,12 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
                     marker: SyncDestinationCore.marker(from: ek.url),
                     destination: destination,
                     inDestination: true) else {
+                // Its identifier finds nothing, but the object it made is
+                // there under another one: point the row at it.
+                if let made = madeFrom[local.id] {
+                    result.rebinds[local.id] = made.calendarItemIdentifier
+                    continue
+                }
                 // Missing, moved or untagged remotely: a conflict the user
                 // resolves, never a deletion.
                 result.remoteMissing.append(local.id)
@@ -374,13 +471,13 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             }
         }
 
-        let start = Date().addingTimeInterval(-Self.pullWindow)
-        let end = Date().addingTimeInterval(Self.pullWindow)
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [targetCalendar])
         var imported = Set<String>()
-        for ek in store.events(matching: predicate) {
+        for ek in windowEvents {
             let identifier = ek.calendarItemIdentifier
             guard byEKID[identifier] == nil else { continue }
+            // Made from a row we have: not a new event, whatever identifier
+            // EventKit gives it now.
+            if let record = SyncDestinationCore.recordID(from: ek.url), localIDs.contains(record) { continue }
             // Only MedNotes-created objects may be imported.
             guard SyncDestinationCore.ownsRemoteObject(
                 marker: SyncDestinationCore.marker(from: ek.url),
