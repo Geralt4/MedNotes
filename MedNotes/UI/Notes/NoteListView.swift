@@ -39,7 +39,33 @@ struct NoteListView: View {
         // alone, so typing in the detail pane does not ripple the list.
         .animation(.default, value: session.notes.map(\.id))
         .navigationTitle("Notes")
+        // Tags are read again after anything that saved or removed a note.
+        .task(id: session.noteEpoch) { await session.reloadNoteTags() }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                // Icon-only, like the other lists' filters: width here pushes
+                // the leading item across the split divider.
+                Menu {
+                    Picker("Tag", selection: Binding(
+                        get: { session.noteTagFilter },
+                        set: { session.noteTagFilter = $0 }
+                    )) {
+                        Text("All notes").tag(String?.none)
+                        ForEach(session.noteTags) { tag in
+                            Text(verbatim: "\(tag.display) (\(tag.count))").tag(Optional(tag.key))
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Image(systemName: session.noteTagFilter == nil ? "tag" : "tag.fill")
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .disabled(session.noteTags.isEmpty && session.noteTagFilter == nil)
+                .help("Filter by tag")
+                .accessibilityLabel("Filter by tag")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task { await session.newNote() }
@@ -66,7 +92,9 @@ struct NoteListView: View {
                     set: { session.searchText = $0 }
                 ),
                 focusToken: session.searchFocusToken
-            )
+            ) {
+                SearchSyntaxHelpButton()
+            }
             .padding(.horizontal, Chrome.Space.sm)
             .padding(.bottom, Chrome.Space.sm - 2)
         }
@@ -87,7 +115,7 @@ struct NoteListView: View {
     }
 
     private func noteRow(_ note: Note) -> some View {
-        NoteRowView(note: note)
+        NoteRowView(note: note, snippet: session.noteSnippets[note.id])
             .swipeToDelete(id: note.id, label: "Delete note")
             .tag(note.id)
             .contextMenu {

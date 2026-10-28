@@ -288,6 +288,16 @@
         }
       }
     },
+    "%lld links (%lld unresolved); %lld earlier links no longer resolve" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld σύνδεσμοι (%lld ανεπίλυτοι)· %lld παλαιότεροι σύνδεσμοι δεν επιλύονται πλέον"
+          }
+        }
+      }
+    },
     "%lld missing remotely" : {
       "localizations" : {
         "el" : {
@@ -304,6 +314,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld ακόμη ετικέτες"
+          }
+        }
+      }
+    },
+    "%lld notes could not be read into the indexes; they are tried again when the store opens." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld σημειώσεις δεν μπόρεσαν να διαβαστούν στα ευρετήρια· θα δοκιμαστούν ξανά όταν ανοίξει η βάση δεδομένων."
           }
         }
       }
@@ -408,6 +428,16 @@
         }
       }
     },
+    "+%lld more" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld ακόμη"
+          }
+        }
+      }
+    },
     "11 digits" : {
       "localizations" : {
         "el" : {
@@ -438,12 +468,32 @@
         }
       }
     },
+    "A check failed after the rebuild." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ένας έλεγχος απέτυχε μετά την ανακατασκευή."
+          }
+        }
+      }
+    },
     "A database operation failed: %@" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Απέτυχε μια λειτουργία της βάσης δεδομένων: %@"
+          }
+        }
+      }
+    },
+    "A group colours the notes a search finds." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μια ομάδα χρωματίζει τις σημειώσεις που βρίσκει μια αναζήτηση."
           }
         }
       }
@@ -528,6 +578,16 @@
         }
       }
     },
+    "Add property" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθήκη ιδιότητας"
+          }
+        }
+      }
+    },
     "Add tag" : {
       "localizations" : {
         "el" : {
@@ -544,6 +604,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ΑΦΜ"
+          }
+        }
+      }
+    },
+    "All checks passed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όλοι οι έλεγχοι πέρασαν."
+          }
+        }
+      }
+    },
+    "All notes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όλες οι σημειώσεις"
           }
         }
       }
@@ -774,6 +854,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ένα συνημμένο στο αντίγραφο ασφαλείας έχει λάθος μήκος."
+          }
+        }
+      }
+    },
+    "An exact phrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ακριβής φράση"
           }
         }
       }
@@ -1038,6 +1128,16 @@
         }
       }
     },
+    "Arrows" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Βέλη"
+          }
+        }
+      }
+    },
     "At launch, open" : {
       "localizations" : {
         "el" : {
@@ -1238,6 +1338,16 @@
         }
       }
     },
+    "Center force" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δύναμη κέντρου"
+          }
+        }
+      }
+    },
     "Change" : {
       "localizations" : {
         "el" : {
@@ -1268,6 +1378,16 @@
         }
       }
     },
+    "Change the filters to show more of the graph." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αλλάξτε τα φίλτρα για να δείτε περισσότερο από το γράφημα."
+          }
+        }
+      }
+    },
     "Check Backup" : {
       "localizations" : {
         "el" : {
@@ -1294,6 +1414,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Έλεγχος τώρα"
+          }
+        }
+      }
+    },
+    "Checkbox" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πλαίσιο επιλογής"
           }
         }
       }
@@ -1538,6 +1668,16 @@
         }
       }
     },
+    "Colour %lld" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρώμα %lld"
+          }
+        }
+      }
+    },
     "Completed" : {
       "localizations" : {
         "el" : {
@@ -1554,6 +1694,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ολοκληρώθηκε %@"
+          }
+        }
+      }
+    },
+    "Complex value; edit it in the text." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύνθετη τιμή· επεξεργαστείτε την στο κείμενο."
           }
         }
       }
@@ -1778,6 +1928,16 @@
         }
       }
     },
+    "Create note from this link" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημιουργία σημείωσης από αυτόν τον σύνδεσμο"
+          }
+        }
+      }
+    },
     "Created %@" : {
       "localizations" : {
         "el" : {
@@ -1834,6 +1994,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Υπάρχουν ωστόσο τρεις τρόποι με τους οποίους φεύγουν δεδομένα από την εφαρμογή, κατόπιν δικής σας ενέργειας: εγγραφές που στέλνετε στο Ημερολόγιο ή στις Υπενθυμίσεις, μια εξαγωγή Markdown που εκτελείτε εσείς και ένα συνημμένο που ανοίγετε σε άλλη εφαρμογή. Κάθε τέτοια ενέργεια επιβεβαιώνεται πριν γίνει."
+          }
+        }
+      }
+    },
+    "Date" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερομηνία"
+          }
+        }
+      }
+    },
+    "Date and time" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ημερομηνία και ώρα"
           }
         }
       }
@@ -2098,6 +2278,16 @@
         }
       }
     },
+    "Depth" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Βάθος"
+          }
+        }
+      }
+    },
     "Description" : {
       "localizations" : {
         "el" : {
@@ -2228,6 +2418,16 @@
         }
       }
     },
+    "Display" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "el" : {
@@ -2354,6 +2554,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Τροποποιημένο"
+          }
+        }
+      }
+    },
+    "Either word. OR needs capitals; quote it to search for the word" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οποιαδήποτε από τις λέξεις. Το OR θέλει κεφαλαία· βάλτε το σε εισαγωγικά για να το αναζητήσετε ως λέξη"
           }
         }
       }
@@ -2648,12 +2858,32 @@
         }
       }
     },
+    "Filter by tag" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φίλτρο ανά ετικέτα"
+          }
+        }
+      }
+    },
     "Filter: %@" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Φίλτρο: %@"
+          }
+        }
+      }
+    },
+    "Filters" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Φίλτρα"
           }
         }
       }
@@ -2694,6 +2924,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Προσαρμογή γράφου (⌘0)"
+          }
+        }
+      }
+    },
+    "Forces" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δυνάμεις"
           }
         }
       }
@@ -2748,12 +2988,52 @@
         }
       }
     },
+    "Graph settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ρυθμίσεις γραφήματος"
+          }
+        }
+      }
+    },
     "Group number" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αριθμός ομάδας"
+          }
+        }
+      }
+    },
+    "Group search" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση ομάδας"
+          }
+        }
+      }
+    },
+    "Group terms with brackets" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ομαδοποίηση όρων με παρενθέσεις"
+          }
+        }
+      }
+    },
+    "Groups" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ομάδες"
           }
         }
       }
@@ -2778,6 +3058,26 @@
         }
       }
     },
+    "Hide Graph Settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόκρυψη ρυθμίσεων γραφήματος"
+          }
+        }
+      }
+    },
+    "Hide Inspector" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόκρυψη πλαισίου λεπτομερειών"
+          }
+        }
+      }
+    },
     "High" : {
       "localizations" : {
         "el" : {
@@ -2794,6 +3094,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Υψηλή προτεραιότητα"
+          }
+        }
+      }
+    },
+    "How many links away from this note to look" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πόσους συνδέσμους μακριά από αυτή τη σημείωση θα εξεταστούν"
           }
         }
       }
@@ -2894,6 +3204,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ανενεργή"
+          }
+        }
+      }
+    },
+    "Indexes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ευρετήρια"
           }
         }
       }
@@ -3028,12 +3348,42 @@
         }
       }
     },
+    "Leave out notes with a word" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εξαίρεση σημειώσεων που έχουν μια λέξη"
+          }
+        }
+      }
+    },
     "Life-threatening" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Απειλητική για τη ζωή"
+          }
+        }
+      }
+    },
+    "Link distance" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Απόσταση συνδέσμου"
+          }
+        }
+      }
+    },
+    "Link force" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δύναμη συνδέσμου"
           }
         }
       }
@@ -3078,12 +3428,32 @@
         }
       }
     },
+    "List" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Λίστα"
+          }
+        }
+      }
+    },
     "Loading…" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Φόρτωση…"
+          }
+        }
+      }
+    },
+    "Local graph" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τοπικό γράφημα"
           }
         }
       }
@@ -3558,6 +3928,16 @@
         }
       }
     },
+    "New group" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα ομάδα"
+          }
+        }
+      }
+    },
     "New Note" : {
       "localizations" : {
         "el" : {
@@ -3574,6 +3954,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Νέος ασθενής"
+          }
+        }
+      }
+    },
+    "New property…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Νέα ιδιότητα…"
           }
         }
       }
@@ -3678,6 +4068,16 @@
         }
       }
     },
+    "No headings yet." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν επικεφαλίδες ακόμη."
+          }
+        }
+      }
+    },
     "No Matching Events" : {
       "localizations" : {
         "el" : {
@@ -3698,6 +4098,16 @@
         }
       }
     },
+    "No note has this title yet" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Καμία σημείωση με αυτόν τον τίτλο ακόμη"
+          }
+        }
+      }
+    },
     "No Notes" : {
       "localizations" : {
         "el" : {
@@ -3714,6 +4124,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Δεν υπάρχουν ασθενείς"
+          }
+        }
+      }
+    },
+    "No properties yet." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχουν ιδιότητες ακόμη."
           }
         }
       }
@@ -3898,6 +4318,16 @@
         }
       }
     },
+    "Not a note" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν είναι σημείωση"
+          }
+        }
+      }
+    },
     "Not chosen" : {
       "localizations" : {
         "el" : {
@@ -3958,6 +4388,16 @@
         }
       }
     },
+    "Not the note's title" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν είναι ο τίτλος της σημείωσης"
+          }
+        }
+      }
+    },
     "Note" : {
       "localizations" : {
         "el" : {
@@ -3998,6 +4438,56 @@
         }
       }
     },
+    "Notes about a patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις για έναν ασθενή"
+          }
+        }
+      }
+    },
+    "Notes that have a property" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις που έχουν ιδιότητα"
+          }
+        }
+      }
+    },
+    "Notes that link to a note or patient" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις που συνδέονται με σημείωση ή ασθενή"
+          }
+        }
+      }
+    },
+    "Notes where a property has a value" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις όπου μια ιδιότητα έχει τιμή"
+          }
+        }
+      }
+    },
+    "Notes with a tag, nested tags included" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις με ετικέτα, μαζί με τις εμφωλευμένες"
+          }
+        }
+      }
+    },
     "Notes, todos and appointments stay linked, and the record can be restored from the Archived list." : {
       "localizations" : {
         "el" : {
@@ -4024,6 +4514,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Τίποτα δεν γράφεται στο Ημερολόγιο ή στις Υπενθυμίσεις Apple μέχρι να γίνει σύνδεση. Με ενεργή τη «Διατήρηση αυτόματου συγχρονισμού», οι αλλαγές εδώ στέλνονται μόλις αποθηκευτούν και οι αλλαγές στις εφαρμογές της Apple έρχονται μόλις γίνουν· με ανενεργή, τίποτα δεν μετακινείται μέχρι να πατήσετε Συγχρονισμός τώρα. Η διαγραφή μιας συγχρονισμένης εγγραφής αφαιρεί το αντίγραφό της σε κάθε περίπτωση."
+          }
+        }
+      }
+    },
+    "Nothing matches" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τίποτα δεν ταιριάζει"
           }
         }
       }
@@ -4064,6 +4564,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Τώρα"
+          }
+        }
+      }
+    },
+    "Number" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αριθμός"
           }
         }
       }
@@ -4168,12 +4678,32 @@
         }
       }
     },
+    "Orphans" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ορφανές"
+          }
+        }
+      }
+    },
     "Other" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Άλλο"
+          }
+        }
+      }
+    },
+    "Outline" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Περίγραμμα"
           }
         }
       }
@@ -4428,6 +4958,16 @@
         }
       }
     },
+    "Properties" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ιδιότητες"
+          }
+        }
+      }
+    },
     "Provider" : {
       "localizations" : {
         "el" : {
@@ -4474,6 +5014,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Λόγος διακοπής"
+          }
+        }
+      }
+    },
+    "Rebuild Indexes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευή ευρετηρίων"
+          }
+        }
+      }
+    },
+    "Rebuilding…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευή…"
+          }
+        }
+      }
+    },
+    "Rebuilds search, links, tags and properties from your notes, then checks them. Your notes and patients are not changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευάζει την αναζήτηση, τους συνδέσμους, τις ετικέτες και τις ιδιότητες από τις σημειώσεις σας και τα ελέγχει. Οι σημειώσεις και οι ασθενείς σας δεν αλλάζουν."
+          }
+        }
+      }
+    },
+    "Rebuilt %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευάστηκε %@"
+          }
+        }
+      }
+    },
+    "Rebuilt %lld notes: %lld links (%lld unresolved), %lld headings, %lld tags." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευάστηκαν %lld σημειώσεις: %lld σύνδεσμοι (%lld ανεπίλυτοι), %lld επικεφαλίδες, %lld ετικέτες."
+          }
+        }
+      }
+    },
+    "Rebuilt indexes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανακατασκευή ευρετηρίων"
+          }
+        }
+      }
+    },
+    "Rebuilt note links" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ανανεώθηκαν οι σύνδεσμοι σημειώσεων"
           }
         }
       }
@@ -4698,6 +5308,16 @@
         }
       }
     },
+    "Remove group" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση ομάδας"
+          }
+        }
+      }
+    },
     "Remove medication" : {
       "localizations" : {
         "el" : {
@@ -4708,12 +5328,42 @@
         }
       }
     },
+    "Remove property" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση ιδιότητας"
+          }
+        }
+      }
+    },
     "Removed %lld older restore point(s)" : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αφαιρέθηκαν παλαιότερα σημεία επαναφοράς: %lld"
+          }
+        }
+      }
+    },
+    "Repel force" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δύναμη απώθησης"
+          }
+        }
+      }
+    },
+    "Reset forces" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά δυνάμεων"
           }
         }
       }
@@ -4915,6 +5565,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ΔΟΚΙΜΑΣΤΙΚΑ ΔΕΔΟΜΕΝΑ — προσωρινό αποθετήριο προεπισκόπησης, όχι τα αρχεία σας"
+          }
+        }
+      }
+    },
+    "Search syntax" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύνταξη αναζήτησης"
+          }
+        }
+      }
+    },
+    "Several notes have this title" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Περισσότερες σημειώσεις έχουν αυτόν τον τίτλο"
+          }
+        }
+      }
+    },
+    "Show Graph Settings" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση ρυθμίσεων γραφήματος"
+          }
+        }
+      }
+    },
+    "Show Inspector" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση πλαισίου λεπτομερειών"
+          }
+        }
+      }
+    },
+    "Show notes that link to nothing and are linked from nothing" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση σημειώσεων που δεν συνδέονται με τίποτα"
+          }
+        }
+      }
+    },
+    "Size by links" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μέγεθος ανά συνδέσεις"
           }
         }
       }
@@ -5480,6 +6190,16 @@
         }
       }
     },
+    "Tag" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ετικέτα"
+          }
+        }
+      }
+    },
     "Tags" : {
       "localizations" : {
         "el" : {
@@ -5520,6 +6240,26 @@
         }
       }
     },
+    "Text" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κείμενο"
+          }
+        }
+      }
+    },
+    "That name can't be used." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το όνομα δεν μπορεί να χρησιμοποιηθεί."
+          }
+        }
+      }
+    },
     "The AMKA check digit does not match; one digit is probably mistyped." : {
       "localizations" : {
         "el" : {
@@ -5536,6 +6276,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ο ΑΜΚΑ αντιστοιχεί σε ημερομηνία γέννησης %@."
+          }
+        }
+      }
+    },
+    "The block this link names is not in that note." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το μπλοκ που ονομάζει ο σύνδεσμος δεν υπάρχει σε εκείνη τη σημείωση."
+          }
+        }
+      }
+    },
+    "The heading this link names is not in that note." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επικεφαλίδα που ονομάζει ο σύνδεσμος δεν υπάρχει σε εκείνη τη σημείωση."
+          }
+        }
+      }
+    },
+    "The indexes could not be rebuilt and were left as they were." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα ευρετήρια δεν μπόρεσαν να ανακατασκευαστούν και έμειναν όπως ήταν."
           }
         }
       }
@@ -6260,6 +7030,16 @@
         }
       }
     },
+    "This note is not linked to anything yet." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτή η σημείωση δεν συνδέεται ακόμη με τίποτα."
+          }
+        }
+      }
+    },
     "This patient's attachments changed after you opened the record. Use Revert to load the current files, then repeat your edit." : {
       "localizations" : {
         "el" : {
@@ -6390,6 +7170,16 @@
         }
       }
     },
+    "Too many properties to edit here." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πάρα πολλές ιδιότητες για επεξεργασία εδώ."
+          }
+        }
+      }
+    },
     "Touch ID or the password was not accepted. Try again." : {
       "localizations" : {
         "el" : {
@@ -6476,6 +7266,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Άγνωστος ασθενής"
+          }
+        }
+      }
+    },
+    "Unlinked mentions" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μη συνδεδεμένες αναφορές"
           }
         }
       }

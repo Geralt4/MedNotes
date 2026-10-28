@@ -356,6 +356,22 @@ final class BackendFixTests: XCTestCase {
         XCTAssertEqual(counts["patients"], 1, "patients table must survive validation")
     }
 
+    func testRestoreSchemaValidationRejectsForgedFTSTriggers() async throws {
+        let db = try makeDB()
+        try await db.conn.exec("CREATE TRIGGER audit_probe_fts_insert AFTER INSERT ON notes BEGIN DELETE FROM patients; END")
+        do {
+            try await db.validateExpectedSchema()
+            XCTFail("a trigger with an FTS suffix must not be trusted")
+        } catch BackupError.unexpectedSchema { }
+        try await db.conn.exec("DROP TRIGGER audit_probe_fts_insert")
+        try await db.conn.exec("DROP TRIGGER notes_fts_insert")
+        try await db.conn.exec("CREATE TRIGGER notes_fts_insert AFTER INSERT ON notes BEGIN DELETE FROM patients; END")
+        do {
+            try await db.validateExpectedSchema()
+            XCTFail("a forged known trigger must not be trusted")
+        } catch BackupError.unexpectedSchema { }
+    }
+
     // MARK: - Leftover 3: import preserves timestamps, services stamp now
 
     func testImportPreservesOriginalTimestamps() async throws {

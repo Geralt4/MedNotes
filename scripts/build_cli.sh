@@ -21,11 +21,23 @@ SOURCES=(
   MedNotes/Support/LenientCodable.swift
   MedNotes/Support/EncryptedBackupFormat.swift
   MedNotes/Support/DataRoot.swift
+  MedNotes/Support/SecurityLog.swift
+  MedNotes/Support/FrontMatter.swift
+  MedNotes/Support/FrontMatterYAML.swift
+  MedNotes/Support/NoteMetadata.swift
+  MedNotes/Support/WikiLinkParser.swift
+  MedNotes/Support/SearchQuery.swift
+  MedNotes/Support/GreekFold.swift
   MedNotes/Models/Patient.swift
   MedNotes/Models/Core.swift
   MedNotes/Storage/SQLConnection.swift
   MedNotes/Storage/AttachmentStore.swift
   MedNotes/Storage/Schema.swift
+  MedNotes/Storage/SchemaFTS.swift
+  MedNotes/Storage/MetadataIndex.swift
+  MedNotes/Storage/MetadataQueries.swift
+  MedNotes/Storage/SearchEngine.swift
+  MedNotes/Storage/LinkIndex.swift
   MedNotes/Storage/Database.swift
   MedNotes/Import/JSONImporter.swift
   MedNotes/Services/Services.swift

@@ -101,13 +101,51 @@ actor StoreMigrator {
 
     func readJournal() throws -> Journal? {
         let url = Self.journalURL(in: dataRoot)
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let journal = try? decoder.decode(Journal.self, from: data) else {
             throw MigrationError.journalCorrupt
         }
         return journal
+    }
+
+    /// Recover before inspecting or opening either half of the live store.
+    /// A completed swap is retained; an interrupted swap is rolled back.
+    func recoverInterruptedMigration() throws {
+        guard let journal = try readJournal() else { return }
+        let fm = FileManager.default
+        switch journal.phase {
+        case .complete, .cleanup:
+            try finishCleanup()
+        case .swapping:
+            let oldDB = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
+            let oldAttachments = dataRoot.rootURL.appendingPathComponent("Plaintext.old.Attachments", isDirectory: true)
+            if fm.fileExists(atPath: oldDB.path) {
+                if fm.fileExists(atPath: dataRoot.databaseURL.path) {
+                    try fm.removeItem(at: dataRoot.databaseURL)
+                }
+                try fm.moveItem(at: oldDB, to: dataRoot.databaseURL)
+            }
+            if fm.fileExists(atPath: oldAttachments.path) {
+                if fm.fileExists(atPath: dataRoot.attachmentsURL.path) {
+                    try fm.removeItem(at: dataRoot.attachmentsURL)
+                }
+                try fm.moveItem(at: oldAttachments, to: dataRoot.attachmentsURL)
+            }
+            guard fm.fileExists(atPath: dataRoot.databaseURL.path),
+                  SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
+                throw MigrationError.swapFailed("The original database could not be recovered.")
+            }
+            rollbackStaging()
+        default:
+            guard fm.fileExists(atPath: dataRoot.databaseURL.path),
+                  SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
+                throw MigrationError.swapFailed("The original database could not be recovered.")
+            }
+            rollbackStaging()
+        }
     }
 
     private func writeJournal(_ journal: Journal) throws {
@@ -166,7 +204,8 @@ actor StoreMigrator {
         let encrypted = try Database(path: stagingDBURL.path, key: databaseKey)
 
         let plaintextPath = dataRoot.databaseURL.path
-        let plainReader = try Database(path: plaintextPath)
+        // Read only: the owner's original store gets no derived link rows.
+        let plainReader = try Database(path: plaintextPath, deriveLinks: false)
         defer {
             Task { await plainReader.close() }
         }
@@ -354,16 +393,15 @@ actor StoreMigrator {
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.Attachments", isDirectory: true),
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.db-wal"),
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.db-shm"),
-            dataRoot.rootURL.appendingPathComponent("mednotes.db-wal"),
-            dataRoot.rootURL.appendingPathComponent("mednotes.db-shm"),
             Self.stagingDirectory(in: dataRoot),
             dataRoot.filesURL,
             dataRoot.vaultURL
         ]
         for url in artifacts {
-            try? fm.removeItem(at: url)
+            if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
         }
-        try? fm.removeItem(at: Self.journalURL(in: dataRoot))
+        let journal = Self.journalURL(in: dataRoot)
+        if fm.fileExists(atPath: journal.path) { try fm.removeItem(at: journal) }
     }
 
     /// Rollback on a failure before the swap: the staging tree and the journal

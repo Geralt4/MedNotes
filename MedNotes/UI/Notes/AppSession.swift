@@ -150,6 +150,16 @@ enum PatientFilter: String, CaseIterable, Identifiable {
 
 @MainActor
 final class AppSession: ObservableObject {
+    private enum LinkedDeletionError: LocalizedError {
+        case reminders, calendar
+
+        var errorDescription: String? {
+            switch self {
+            case .reminders: return String(localized: "Reconnect Apple Reminders before deleting this linked todo.")
+            case .calendar: return String(localized: "Reconnect Apple Calendar before deleting this linked event.")
+            }
+        }
+    }
     @Published private(set) var isReady = false
     @Published private(set) var initError: String?
     /// Remembered on every change, so “Where I left off” has something to
@@ -169,6 +179,18 @@ final class AppSession: ObservableObject {
     @Published var notes: [Note] = []
     @Published var selectedNoteId: UUID?
     @Published private(set) var noteEpoch = 0
+    /// The matched line of each listed note while a search is active.
+    @Published private(set) var noteSnippets: [UUID: SearchSnippet] = [:]
+    /// Every tag with the notes it covers, for the Tags menu.
+    @Published private(set) var noteTags: [TagCount] = []
+    /// The tag (its key) the notes list is narrowed to, together with the
+    /// search text; nil lists every note.
+    @Published var noteTagFilter: String? {
+        didSet {
+            guard noteTagFilter != oldValue else { return }
+            Task { await reload() }
+        }
+    }
     @Published var searchText = "" {
         didSet { scheduleSearch() }
     }
@@ -270,9 +292,39 @@ final class AppSession: ObservableObject {
 
     // MARK: Wiki-links & graph
 
-    @Published private(set) var linksOut: [(label: String, kind: String)] = []
+    @Published private(set) var linksOut: [LinkingService.OutgoingLink] = []
+    @Published private(set) var unlinkedMentions: [(noteId: UUID, title: String)] = []
     @Published private(set) var backlinks: [(noteId: UUID, title: String)] = []
     @Published private(set) var graphData = LinkingService.GraphData()
+    /// The graph's settings panel. They live in the encrypted store, since a
+    /// filter or group is often a patient's name; they are read when the store
+    /// opens and dropped when it locks.
+    @Published var graphSettings = GraphSettings() {
+        didSet {
+            guard graphSettings != oldValue else { return }
+            scheduleGraphSettingsSave(Self.globalGraphKey)
+            graphSettingsChanged(from: oldValue)
+        }
+    }
+    /// The graph the settings leave: what the canvas draws and the list in
+    /// the middle column names, worked out once here for both.
+    @Published private(set) var filteredGraph = FilteredGraph()
+    /// Whether the graph's settings panel is open (no patient data in it).
+    @Published var graphPanelShown: Bool {
+        didSet { defaults.set(graphPanelShown, forKey: Self.graphPanelDefaultsKey) }
+    }
+    static let graphPanelDefaultsKey = "graphPanelShown"
+    private var graphMatching: Set<String>?
+    private var graphGroupMatches: [UUID: Set<String>] = [:]
+    private var graphQueryTask: Task<Void, Never>?
+    /// The same, for the open note's local graph.
+    @Published var localGraphSettings = GraphSettings() {
+        didSet { if localGraphSettings != oldValue { scheduleGraphSettingsSave(Self.localGraphKey) } }
+    }
+    private static let globalGraphKey = "graph.global"
+    private static let localGraphKey = "graph.local"
+    private var graphSettingsLoaded = false
+    private var graphSaveTasks: [String: Task<Void, Never>] = [:]
 
     // MARK: Apple Calendar bridge
 
@@ -328,6 +380,13 @@ final class AppSession: ObservableObject {
     static let calendarAutoSyncDefaultsKey = "calendarAutoSync"
     static let remindersAutoSyncDefaultsKey = "remindersAutoSync"
     static let defaultNoteTemplateDefaultsKey = "defaultNoteTemplate"
+    static let noteInspectorDefaultsKey = "noteInspectorShown"
+
+    /// Whether the note's right-hand inspector (links, outline, properties) is
+    /// open. Kept in the preferences the session was given; open by default.
+    @Published var noteInspectorShown: Bool {
+        didSet { defaults.set(noteInspectorShown, forKey: Self.noteInspectorDefaultsKey) }
+    }
 
     /// Which module the window opens on; the Settings picker binds to it.
     @Published var launchModule: LaunchModule {
@@ -838,7 +897,7 @@ final class AppSession: ObservableObject {
     /// prove it can be used, before the wizard is allowed to stage anything.
     func migrationBackup(to url: URL, passphrase: String) async throws {
         guard let dataRoot else { return }
-        let plaintext = try Database(path: dataRoot.databaseURL.path)
+        let plaintext = try Database(path: dataRoot.databaseURL.path, deriveLinks: false)
         let backup = BackupService(
             db: plaintext,
             fileStore: nil,
@@ -949,7 +1008,19 @@ final class AppSession: ObservableObject {
         events = []
         backlinks = []
         linksOut = []
+        unlinkedMentions = []
         graphData = LinkingService.GraphData()
+        // The settings may name a patient; the saved copy stays in the store.
+        // A change made in the last moments before the lock is not saved.
+        graphSettingsLoaded = false
+        graphSaveTasks.values.forEach { $0.cancel() }
+        graphSaveTasks = [:]
+        graphQueryTask?.cancel()
+        graphMatching = nil
+        graphGroupMatches = [:]
+        graphSettings = GraphSettings()
+        localGraphSettings = GraphSettings()
+        filteredGraph = FilteredGraph()
     }
 
     /// The records that were open when the store locked, as ids only, so
@@ -992,6 +1063,9 @@ final class AppSession: ObservableObject {
         if !switcherText.isEmpty { switcherText = "" }
         switcherResults = []
         if !searchText.isEmpty { searchText = "" }
+        if noteTagFilter != nil { noteTagFilter = nil }
+        noteTags = []
+        noteSnippets = [:]
         if !patientSearchText.isEmpty { patientSearchText = "" }
         if !todoSearchText.isEmpty { todoSearchText = "" }
         if !eventSearchText.isEmpty { eventSearchText = "" }
@@ -1055,9 +1129,9 @@ final class AppSession: ObservableObject {
                         try await store.notes.discard(id: note.id)
                         seededNoteContent[note.id] = nil
                     }
-                case .patient(let patient, let edited):
+                case .patient(let patient, let edited, let knownFileIDs):
                     if edited {
-                        try await store.patients.save(patient)
+                        try await store.patients.save(patient, knownFileIDs: knownFileIDs)
                     } else if patient.isUntouchedNewRecord {
                         try await store.patients.discard(id: patient.id)
                     }
@@ -1104,6 +1178,7 @@ final class AppSession: ObservableObject {
         await reloadTodos()
         await reloadEvents()
         await refreshSyncDestinations()
+        await loadGraphSettings()
     }
 
     /// The session is open: the curtain lifts (unless the app is inactive)
@@ -1236,6 +1311,40 @@ final class AppSession: ObservableObject {
             details: report.passed ? "ok" : report.detail)
         integrityWarning = report.passed ? nil : report.detail
         return report
+    }
+
+    /// Rebuilds everything derived from the notes and patients (links,
+    /// metadata, both search indexes) and checks it. The audit row carries
+    /// counts only.
+    func rebuildIndexes() async -> IndexRebuildOutcome {
+        guard let store else {
+            return IndexRebuildOutcome(passed: false, rebuiltAt: Date(),
+                                       detail: String(localized: "The store is not open."))
+        }
+        do {
+            let report = try await store.db.rebuildIndexes()
+            try? await store.audit.log(
+                action: "indexes_rebuilt", entityType: "store", entityId: "settings",
+                details: report.auditDetails)
+            await reload()
+            var detail = String(localized: "Rebuilt \(report.notes) notes: \(report.links) links (\(report.unresolvedLinks) unresolved), \(report.headings) headings, \(report.tags) tags.")
+            if report.failedNotes > 0 {
+                detail += " " + String(localized: "\(report.failedNotes) notes could not be read into the indexes; they are tried again when the store opens.")
+            } else if report.passed {
+                detail += " " + String(localized: "All checks passed.")
+            } else {
+                detail += " " + String(localized: "A check failed after the rebuild.")
+            }
+            return IndexRebuildOutcome(passed: report.passed, rebuiltAt: Date(), detail: detail)
+        } catch {
+            if let failure = error as? IndexRebuildError {
+                try? await store.audit.log(
+                    action: "indexes_rebuilt", entityType: "store", entityId: "settings",
+                    details: "passed=0 problems=\(failure.problems.count)")
+            }
+            return IndexRebuildOutcome(passed: false, rebuiltAt: Date(),
+                                       detail: String(localized: "The indexes could not be rebuilt and were left as they were."))
+        }
     }
 
     /// The same checks after launch, off the critical path: nothing on a
@@ -1852,6 +1961,8 @@ final class AppSession: ObservableObject {
         self.calendarAutoSyncEnabled = Self.autoSyncSetting(defaults, key: Self.calendarAutoSyncDefaultsKey)
         self.remindersAutoSyncEnabled = Self.autoSyncSetting(defaults, key: Self.remindersAutoSyncDefaultsKey)
         self.defaultNoteTemplateID = defaults.string(forKey: Self.defaultNoteTemplateDefaultsKey)
+        self.noteInspectorShown = defaults.object(forKey: Self.noteInspectorDefaultsKey) as? Bool ?? true
+        self.graphPanelShown = defaults.object(forKey: Self.graphPanelDefaultsKey) as? Bool ?? false
         let launch = LaunchModule(storageValue: defaults.string(forKey: Self.launchModuleDefaultsKey))
         self.launchModule = launch
         self.selectedModule = launch.startModule(
@@ -1922,6 +2033,7 @@ final class AppSession: ObservableObject {
             let dataRoot = try injectedDataRoot ?? Self.resolveDataRoot()
             self.dataRoot = dataRoot
             let keyManager = resolvedKeyManager()
+            try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager).recoverInterruptedMigration()
             let coordinator = SecureStoreCoordinator(keyManager: keyManager, dataRoot: dataRoot)
             self.coordinator = coordinator
 
@@ -2016,10 +2128,11 @@ final class AppSession: ObservableObject {
         defer { isMigrating = false }
         let rootKey = try coordinator.createMigrationKey()
         let migrator = StoreMigrator(dataRoot: dataRoot, keyManager: coordinator.keyManager)
+        var swapped = false
         do {
             let report = try await migrator.migrate(
                 backupDestination: backupURL, passphrase: passphrase)
-            try await migrator.finishCleanup()
+            swapped = true
             migrationReport = report
             try coordinator.finishMigration(rootKey: rootKey)
             let store = try AppStore(
@@ -2027,6 +2140,7 @@ final class AppSession: ObservableObject {
                 databaseKey: coordinator.requireDatabaseKey(),
                 attachmentKey: coordinator.requireAttachmentKey(),
                 restorePointKey: coordinator.requireRestoreKey())
+            try await migrator.finishCleanup()
             // The conversion is complete either way; only what is shown differs.
             guard lockRequests == lockRequestsAtStart else {
                 await abandon(store, published: false)
@@ -2039,7 +2153,7 @@ final class AppSession: ObservableObject {
             }
             await finishOpening()
         } catch {
-            await migrator.rollbackStaging()
+            if !swapped { try? await migrator.recoverInterruptedMigration() }
             // The wizard is part of the curtain, which goes away with
             // `isMigrating`; without this the window would sit on the startup
             // spinner with no explanation and no way to retry but relaunch.
@@ -2136,28 +2250,57 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// Refreshes the Tags menu: every tag in the store with its count.
+    func reloadNoteTags() async {
+        guard let store else { return }
+        let counts = (try? await store.notes.tagCounts()) ?? []
+        guard store === self.store else { return }
+        noteTags = counts
+        // A tag that no longer exists cannot filter anything.
+        if let filter = noteTagFilter, !counts.contains(where: { $0.key == filter }) { noteTagFilter = nil }
+    }
+
     func reload() async {
         guard let store else { return }
         notesReloadGeneration += 1
         let generation = notesReloadGeneration
         do {
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let tag = noteTagFilter
             let result: [Note]
             let totalCount: Int?
-            if query.isEmpty {
+            if query.isEmpty && tag == nil {
                 result = try await store.notes.loadAll()
                 totalCount = result.count
             } else {
-                result = try await store.notes.search(query)
+                // The search text (with its operators) and the tag are read
+                // together, so they agree. Quick open and `[[` completion use
+                // the plain `search` instead.
+                result = try await store.notes.list(search: query, tagKey: tag)
                 totalCount = nil
             }
+            // Snippets are made before the list changes, off the main actor,
+            // so a row never shows a snippet of an older search.
+            let terms = query.isEmpty ? [] : SearchQuery.parse(query).highlightTerms
+            let snippets = terms.isEmpty ? [:] : await Self.snippets(for: result, terms: terms)
             guard generation == notesReloadGeneration else { return }
             if let totalCount { sidebarNoteCount = totalCount }
+            noteSnippets = snippets
             notes = result
         } catch {
             guard generation == notesReloadGeneration else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    nonisolated private static func snippets(for notes: [Note], terms: [String]) async -> [UUID: SearchSnippet] {
+        await Task.detached(priority: .userInitiated) {
+            var out: [UUID: SearchSnippet] = [:]
+            for note in notes {
+                if let snippet = SearchSnippet.make(content: note.content, terms: terms) { out[note.id] = snippet }
+            }
+            return out
+        }.value
     }
 
     private func scheduleSearch() {
@@ -2661,8 +2804,15 @@ final class AppSession: ObservableObject {
     private func removeTodo(id: UUID, discarding: Bool) async {
         guard let store else { return }
         // Snapshot before deletion so a linked Apple Reminders copy can go too.
-        let snapshot = try? await store.todos.load(id: id)
         do {
+            if let snapshot = try await store.todos.load(id: id), snapshot.reminderIdentifier != nil {
+                guard appleReminders.state == .granted,
+                      let destination = try await store.destinations.destination(for: .reminders),
+                      SyncDestinationCore.mayWrite(destination) else {
+                    throw LinkedDeletionError.reminders
+                }
+                try await appleReminders.deleteRemote(snapshot, from: destination)
+            }
             if discarding {
                 try await store.todos.discard(id: id)
             } else {
@@ -2671,12 +2821,6 @@ final class AppSession: ObservableObject {
             if selectedTodoId == id { selectedTodoId = nil }
             todoEpoch += 1
             await reloadTodos()
-            if let snapshot, snapshot.reminderIdentifier != nil,
-               appleReminders.state == .granted,
-               let destination = try? await store.destinations.destination(for: .reminders),
-               SyncDestinationCore.mayWrite(destination) {
-                _ = try? await appleReminders.deleteRemote(snapshot, from: destination)
-            }
         } catch {
             errorMessage = error.localizedDescription
             if selectedTodoId == id,
@@ -2846,8 +2990,15 @@ final class AppSession: ObservableObject {
     private func removeEvent(id: UUID, discarding: Bool) async {
         guard let store else { return }
         // Snapshot before deletion so a linked Apple Calendar copy can go too.
-        let snapshot = try? await store.events.load(id: id)
         do {
+            if let snapshot = try await store.events.load(id: id), snapshot.ekEventIdentifier != nil {
+                guard appleCalendar.state == .granted,
+                      let destination = try await store.destinations.destination(for: .calendar),
+                      SyncDestinationCore.mayWrite(destination) else {
+                    throw LinkedDeletionError.calendar
+                }
+                try await appleCalendar.deleteRemote(snapshot, from: destination)
+            }
             if discarding {
                 try await store.events.discard(id: id)
             } else {
@@ -2856,12 +3007,6 @@ final class AppSession: ObservableObject {
             if selectedEventId == id { selectedEventId = nil }
             eventEpoch += 1
             await reloadEvents()
-            if let snapshot, snapshot.ekEventIdentifier != nil,
-               appleCalendar.state == .granted,
-               let destination = try? await store.destinations.destination(for: .calendar),
-               SyncDestinationCore.mayWrite(destination) {
-                _ = try? await appleCalendar.deleteRemote(snapshot, from: destination)
-            }
         } catch {
             errorMessage = error.localizedDescription
             if selectedEventId == id,
@@ -3158,18 +3303,20 @@ final class AppSession: ObservableObject {
                 SwitcherHit(id: $0.id, kind: .patient, title: DisplayCopy.patient($0), subtitle: String(localized: "Patient"))
             })
             if !query.isEmpty {
-                let lowered = query.lowercased()
+                // Compared folded (case, accents, final sigma), as the notes and
+                // patients above are by the full-text index.
+                let lowered = WikiLinkParser.normalizedKey(query)
                 // The whole store, not `self.todos`/`self.events`: those hold
                 // what the module's current filter shows, so a past event or a
                 // completed todo would never be found from here.
                 let todos = try await store.todos.loadAll(includeCompleted: true).filter {
-                    $0.title.lowercased().contains(lowered)
+                    WikiLinkParser.normalizedKey($0.title).contains(lowered)
                 }.prefix(3)
                 hits.append(contentsOf: todos.map {
                     SwitcherHit(id: $0.id, kind: .todo, title: DisplayCopy.title($0.title), subtitle: String(localized: "Todo"))
                 })
                 let events = try await store.events.loadAll().filter {
-                    $0.title.lowercased().contains(lowered)
+                    WikiLinkParser.normalizedKey($0.title).contains(lowered)
                 }.prefix(3)
                 hits.append(contentsOf: events.map {
                     SwitcherHit(id: $0.id, kind: .event, title: DisplayCopy.title($0.title), subtitle: String(localized: "Event"))
@@ -3263,8 +3410,19 @@ final class AppSession: ObservableObject {
             case patient
         }
         let id: UUID
+        /// What the popover shows.
         let title: String
         let kind: Kind
+        /// What completing writes between the brackets: the title, or
+        /// `Title|alias` for a note found by one of its aliases.
+        let insert: String
+
+        init(id: UUID, title: String, kind: Kind, insert: String? = nil) {
+            self.id = id
+            self.title = title
+            self.kind = kind
+            self.insert = insert ?? title
+        }
     }
 
     /// Completions for an open `[[` anchor, over the whole store rather than
@@ -3278,13 +3436,14 @@ final class AppSession: ObservableObject {
         do {
             if query.isEmpty {
                 return try await store.notes.loadAll()
-                    .filter { $0.id != noteId }
+                    .filter { $0.id != noteId && !Self.isUntitled($0) }
                     .prefix(6)
                     .map { LinkCandidate(id: $0.id, title: DisplayCopy.title($0.title), kind: .note) }
             }
             guard query.count >= 2 else { return [] }
-            let lowered = query.lowercased()
-            let notes = try await store.notes.search(query, limit: 12).filter { $0.id != noteId }
+            let lowered = WikiLinkParser.normalizedKey(query)
+            let notes = try await store.notes.search(query, limit: 12)
+                .filter { $0.id != noteId && !Self.isUntitled($0) }
             let ranked = notes.enumerated()
                 .sorted { lhs, rhs in
                     let l = Self.linkRank(title: lhs.element.title, query: lowered)
@@ -3295,6 +3454,25 @@ final class AppSession: ObservableObject {
             var out = ranked.prefix(4).map {
                 LinkCandidate(id: $0.id, title: DisplayCopy.title($0.title), kind: .note)
             }
+            // A note found by an alias is shown as "alias — Title" and written
+            // `Title|alias`, so the link names the note and reads as the alias.
+            // When the alias is why the note matches (its title does not
+            // contain the text), that form replaces the plain title.
+            let queryKey = WikiLinkParser.normalizedKey(query)
+            let aliasHits = (try? await store.notes.aliasMatches(query, limit: 4)) ?? []
+            var aliasCandidates: [LinkCandidate] = []
+            for hit in aliasHits where hit.noteId != noteId
+                && !hit.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let candidate = LinkCandidate(
+                    id: hit.noteId, title: "\(hit.alias) — \(DisplayCopy.title(hit.title))", kind: .note,
+                    insert: "\(hit.title)|\(hit.alias)")
+                if let index = out.firstIndex(where: { $0.id == hit.noteId }) {
+                    if !WikiLinkParser.normalizedKey(hit.title).contains(queryKey) { out[index] = candidate }
+                } else if aliasCandidates.count < 2 {
+                    aliasCandidates.append(candidate)
+                }
+            }
+            out += aliasCandidates
             let patients = try await store.patients.search(query, limit: 5)
             out += patients.prefix(3).map {
                 LinkCandidate(id: $0.id, title: DisplayCopy.patient($0), kind: .patient)
@@ -3305,11 +3483,18 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// A note with a blank title is nothing a link can name, so it is never
+    /// offered as a completion (the list would show it as "Untitled").
+    private static func isUntitled(_ note: Note) -> Bool {
+        note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// 0 = the title starts with the text, 1 = contains it, 2 = body only.
     private static func linkRank(title: String, query: String) -> Int {
-        let lowered = title.lowercased()
-        if lowered.hasPrefix(query) { return 0 }
-        if lowered.contains(query) { return 1 }
+        // `query` is already folded (`WikiLinkParser.normalizedKey`).
+        let folded = WikiLinkParser.normalizedKey(title)
+        if folded.hasPrefix(query) { return 0 }
+        if folded.contains(query) { return 1 }
         return 2
     }
 
@@ -3317,10 +3502,37 @@ final class AppSession: ObservableObject {
         guard let store else { return }
         do {
             backlinks = try await store.linking.backlinks(noteId: noteId)
-            linksOut = try await store.linking.linksFrom(noteId: noteId)
+            linksOut = try await store.linking.outgoingLinks(noteId: noteId)
         } catch {
             backlinks = []
             linksOut = []
+        }
+    }
+
+    /// Notes that name this note's title without linking to it. Read apart
+    /// from `refreshLinks`: it scans every note's text, so the panel asks for
+    /// it only while it is open.
+    func refreshUnlinkedMentions(noteId: UUID) async {
+        guard let store else { return }
+        let found = (try? await store.linking.unlinkedMentions(noteId: noteId)) ?? []
+        guard selectedNoteId == noteId else { return }
+        unlinkedMentions = found
+    }
+
+    /// Creates a note titled with an unresolved link's text and opens it. The
+    /// save links the note that asked for it to the new one.
+    func createNoteFromLink(_ target: String) async {
+        guard let store, canUseStore else { return }
+        let title = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        var note = Note.newRecord()
+        note.title = title
+        do {
+            try await store.notes.save(note)
+            await revealNote(note.id)
+            pendingFocusRecordId = note.id
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -3334,6 +3546,96 @@ final class AppSession: ObservableObject {
         await revealPatient(patientId)
     }
 
+    private func loadGraphSettings() async {
+        guard let store else { return }
+        func read(_ key: String) async -> GraphSettings {
+            guard let json = try? await store.db.appState(key: key),
+                  let data = json.data(using: .utf8),
+                  let settings = try? JSONDecoder().decode(GraphSettings.self, from: data) else { return GraphSettings() }
+            return settings.clamped
+        }
+        let global = await read(Self.globalGraphKey)
+        let local = await read(Self.localGraphKey)
+        guard store === self.store else { return }
+        graphSettingsLoaded = false
+        graphSettings = global
+        localGraphSettings = local
+        graphSettingsLoaded = true
+        scheduleGraphQuerySets(immediately: true)
+    }
+
+    // MARK: Filtering the graph
+
+    /// What a change to the settings needs: new query results when a query or
+    /// group changed (looked up in the store, so debounced like the notes
+    /// search), otherwise only the cheap filter pass. Forces and display
+    /// options need neither; the canvas reads them directly.
+    private func graphSettingsChanged(from old: GraphSettings) {
+        let new = graphSettings
+        func queries(_ settings: GraphSettings) -> [String] { [settings.query] + settings.groups.map(\.query) }
+        if queries(old) != queries(new) || old.groups.map(\.id) != new.groups.map(\.id) {
+            scheduleGraphQuerySets()
+        } else if old.showPatients != new.showPatients || old.showEvents != new.showEvents
+                    || old.showOrphans != new.showOrphans || old.groups != new.groups {
+            applyGraphFilter()
+        }
+    }
+
+    private func scheduleGraphQuerySets(immediately: Bool = false) {
+        graphQueryTask?.cancel()
+        graphQueryTask = Task { [weak self] in
+            if !immediately { try? await Task.sleep(nanoseconds: 300_000_000) }
+            guard !Task.isCancelled, let self else { return }
+            await self.refreshGraphQuerySets()
+        }
+    }
+
+    private func refreshGraphQuerySets() async {
+        let settings = graphSettings
+        let sets = await graphQuerySets(for: settings)
+        func queries(_ settings: GraphSettings) -> [String] { [settings.query] + settings.groups.map(\.query) }
+        // Settings edited while the store was asked: that edit has its own pass.
+        guard !Task.isCancelled, queries(settings) == queries(graphSettings) else { return }
+        graphMatching = sets.matching
+        graphGroupMatches = sets.groups
+        applyGraphFilter()
+    }
+
+    private func applyGraphFilter() {
+        filteredGraph = GraphFilter.apply(
+            graphData, settings: graphSettings, matching: graphMatching, groupMatches: graphGroupMatches)
+    }
+
+    /// Saves shortly after the last change, so a slider drag is one write.
+    private func scheduleGraphSettingsSave(_ key: String) {
+        guard graphSettingsLoaded, let store else { return }
+        graphSaveTasks[key]?.cancel()
+        graphSaveTasks[key] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled, let self, store === self.store, self.graphSettingsLoaded else { return }
+            let settings = key == Self.globalGraphKey ? self.graphSettings : self.localGraphSettings
+            guard let data = try? JSONEncoder().encode(settings),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            try? await store.db.setAppState(key: key, json: json)
+        }
+    }
+
+    /// The notes a graph's filter and colour groups pick out, as graph node
+    /// ids; nil `matching` when the filter is empty.
+    func graphQuerySets(for settings: GraphSettings) async -> (matching: Set<String>?, groups: [UUID: Set<String>]) {
+        guard let store else { return (nil, [:]) }
+        func nodeIDs(_ text: String) async -> Set<String> {
+            let ids = (try? await store.notes.matchingIDs(text)) ?? []
+            return Set(ids.map { "n:\($0)" })
+        }
+        let matching: Set<String>? = settings.hasQuery ? await nodeIDs(settings.query) : nil
+        var groups: [UUID: Set<String>] = [:]
+        for group in settings.groups where !group.query.trimmingCharacters(in: .whitespaces).isEmpty {
+            groups[group.id] = await nodeIDs(group.query)
+        }
+        return (matching, groups)
+    }
+
     func loadGraph() async {
         guard let store else { return }
         do {
@@ -3341,6 +3643,11 @@ final class AppSession: ObservableObject {
         } catch {
             graphData = LinkingService.GraphData()
         }
+        // Notes may have changed since the last pass: ask again, then filter.
+        graphQueryTask?.cancel()
+        await refreshGraphQuerySets()
+        if store !== self.store { return }
+        applyGraphFilter()
     }
 
     func jumpToGraphNode(_ node: LinkingService.GraphNode) async {
@@ -3421,12 +3728,12 @@ final class AppSession: ObservableObject {
     }
 
     private static func matchesSearchTokens(_ query: String, fields: [String]) -> Bool {
-        let tokens = Schema.splitTokens(query)
+        // Folded on both sides: case, accents and the final sigma do not matter.
+        let tokens = Schema.splitTokens(query).map(WikiLinkParser.normalizedKey)
         guard !tokens.isEmpty else { return false }
-        let lowered = fields.map { $0.lowercased() }
+        let folded = fields.map(WikiLinkParser.normalizedKey)
         return tokens.allSatisfy { token in
-            let t = token.lowercased()
-            return lowered.contains { $0.contains(t) }
+            folded.contains { $0.contains(token) }
         }
     }
 

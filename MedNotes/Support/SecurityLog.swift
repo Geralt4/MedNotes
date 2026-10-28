@@ -24,6 +24,7 @@ enum SecurityLog {
         case syncDestinationStale = "sync.destination_stale"
         case integrityFailed = "store.integrity_failed"
         case restorePointUpgradeFailed = "restore_point.upgrade_failed"
+        case linkDerivationFailed = "links.derivation_failed"
     }
 
     /// Records a generic security event with counts and opaque IDs only.

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct NoteRowView: View {
     let note: Note
+    /// The matched line while a search is active; nil shows the ordinary preview.
+    var snippet: SearchSnippet?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Chrome.Row.contentSpacing) {
@@ -20,12 +22,19 @@ struct NoteRowView: View {
                 }
             }
 
-            let preview = DisplayCopy.preview(note.content)
-            if !preview.isEmpty {
-                Text(preview)
+            if let snippet {
+                Text(Self.highlighted(snippet))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+            } else {
+                let preview = DisplayCopy.preview(note.content)
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             HStack(spacing: Chrome.Row.inlineSpacing) {
@@ -39,5 +48,16 @@ struct NoteRowView: View {
         }
         .padding(.vertical, Chrome.Row.verticalPadding)
         .contentShape(Rectangle())
+    }
+
+    /// The snippet with its matched words in the accent colour and semibold.
+    static func highlighted(_ snippet: SearchSnippet) -> AttributedString {
+        var text = AttributedString(snippet.text)
+        for range in snippet.highlights {
+            guard let swiftRange = Range(range, in: text) else { continue }
+            text[swiftRange].foregroundColor = .accentColor
+            text[swiftRange].font = .caption.weight(.semibold)
+        }
+        return text
     }
 }

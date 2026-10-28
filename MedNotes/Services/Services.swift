@@ -94,6 +94,8 @@ actor PatientService {
         if let fileStore {
             await removeSupersededObjects(previousStorageIDs, fileStore: fileStore)
         }
+        // A new or renamed patient can be what a note's [[link]] names.
+        try? await db.resolveAllLinks()
         try await audit.log(
             action: "patient_save", entityType: "patient", entityId: patient.id.uuidString,
             details: "patient saved")
@@ -343,8 +345,8 @@ actor NoteService {
 
     private func remove(id: UUID, action: String) async throws {
         try await db.deleteNote(id: id)
-        // note_links rows cascade via FK; nothing else references the note now
-        // that the continuous Markdown mirror is retired.
+        // The note's own link rows cascade via FK, and links in other notes
+        // that named it are resolved again inside `deleteNote`.
         try await audit.log(action: action, entityType: "note", entityId: id.uuidString)
     }
 
@@ -354,6 +356,29 @@ actor NoteService {
         }
         return try await db.searchNotes(query, limit: limit)
     }
+
+    /// The notes for a search text and a tag filter (a tag key), read together.
+    func list(search query: String, tagKey: String?) async throws -> [Note] {
+        try await db.notesFiltered(query: query, tagKey: tagKey)
+    }
+
+    /// The ids of the notes a search text matches (empty for blank or
+    /// unsearchable text), without loading them.
+    func matchingIDs(_ text: String) async throws -> Set<String> {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return try await db.noteIDs(matching: SearchQuery.parse(trimmed))
+    }
+
+    func tagCounts() async throws -> [TagCount] { try await db.tagCounts() }
+
+    func propertyKeys() async throws -> [PropertyKeyUsage] { try await db.propertyKeys() }
+
+    func aliasMatches(_ text: String, limit: Int = 3) async throws -> [AliasMatch] {
+        try await db.aliasMatches(key: WikiLinkParser.normalizedKey(text), limit: limit)
+    }
+
+    func headings(noteId: UUID) async throws -> [HeadingRow] { try await db.headings(noteId: noteId) }
 
     func togglePin(id: UUID) async throws {
         try await db.toggleNotePinned(id: id)

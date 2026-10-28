@@ -14,7 +14,7 @@ packages and reproduced in the app's About panel and the release DMG.
 
 ## Scanning
 
-`scripts/scan_dependencies.sh` (run in CI and before a release) fails the build
+`python3 scripts/scan_dependencies.py` (run before a release) fails the build
 when:
 
 - `Package.resolved` contains any package other than the two above;

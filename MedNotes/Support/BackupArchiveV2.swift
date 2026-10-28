@@ -558,7 +558,7 @@ enum BackupArchiveV2 {
                 guard let decoded = try? decoder.decode(AttachmentRecord.self, from: record.payload) else {
                     throw ArchiveError.wrongPassphraseOrCorrupt
                 }
-                guard decoded.plaintextLength <= maxAttachmentBytes else {
+                guard decoded.plaintextLength >= 0, decoded.plaintextLength <= maxAttachmentBytes else {
                     throw ArchiveError.oversizedField
                 }
                 metadata.append(decoded)

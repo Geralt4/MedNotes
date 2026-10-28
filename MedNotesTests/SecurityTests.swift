@@ -397,6 +397,42 @@ final class SecurityTests: XCTestCase {
         XCTAssertTrue(noJournal == nil, "no journal before a migration starts")
     }
 
+    func testInterruptedMigrationRestoresBothOriginals() async throws {
+        for attachmentsSwapped in [false, true] {
+            let root = try makeRoot("interrupted-\(attachmentsSwapped)")
+            let db = try Database(path: root.databaseURL.path)
+            let patient = Patient.newRecord()
+            try await db.savePatient(patient)
+            await db.close()
+            let fm = FileManager.default
+            let oldDB = root.rootURL.appendingPathComponent("Plaintext.old.db")
+            let oldAttachments = root.rootURL.appendingPathComponent("Plaintext.old.Attachments")
+            let original = root.attachmentsURL.appendingPathComponent("original")
+            try Data("original".utf8).write(to: original)
+            try fm.moveItem(at: root.databaseURL, to: oldDB)
+            try Data("encrypted substitute".utf8).write(to: root.databaseURL)
+            if attachmentsSwapped {
+                try fm.moveItem(at: root.attachmentsURL, to: oldAttachments)
+                try fm.createDirectory(at: root.attachmentsURL, withIntermediateDirectories: true)
+            }
+            let journal = StoreMigrator.Journal(phase: .swapping, schemaVersion: Schema.currentVersion,
+                recordCounts: [:], attachmentCount: 0, startedAt: Date(), updatedAt: Date())
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(journal).write(to: StoreMigrator.journalURL(in: root))
+
+            let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+            try await migrator.recoverInterruptedMigration()
+            XCTAssertTrue(SQLiteHeaderInspection.isPlaintextSQLite(at: root.databaseURL))
+            XCTAssertEqual(try Data(contentsOf: original), Data("original".utf8))
+            XCTAssertFalse(fm.fileExists(atPath: StoreMigrator.journalURL(in: root).path))
+            let reopened = try Database(path: root.databaseURL.path)
+            let restored = try await reopened.loadPatient(id: patient.id)
+            XCTAssertNotNil(restored)
+            await reopened.close()
+        }
+    }
+
     func testMigrationCrashAtEachPhaseLeavesTheOriginalIntact() async throws {
         for phase in StoreMigrator.Phase.allCases {
             let root = try makeRoot("crash-\(phase.rawValue)")
@@ -2291,7 +2327,7 @@ final class SecurityTests: XCTestCase {
         let note = try XCTUnwrap(newNote)
 
         let editors = [UUID(), UUID(), UUID(), UUID()]
-        session.registerOpenEditor(editors[0]) { .patient(patient, edited: true) }
+        session.registerOpenEditor(editors[0]) { .patient(patient, edited: true, knownFileIDs: Set(patient.files.map(\.id))) }
         session.registerOpenEditor(editors[1]) { .todo(todo, edited: true) }
         session.registerOpenEditor(editors[2]) { .event(event, edited: false) }
         session.registerOpenEditor(editors[3]) { .note(note, edited: false) }
@@ -2312,6 +2348,31 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(session.selectedTodoId, todo.id)
         XCTAssertNil(session.selectedEventId, "a discarded record is not reopened")
         XCTAssertNil(session.selectedNoteId)
+    }
+
+    @MainActor
+    func testLockingStalePatientDraftPreservesNewAttachment() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newPatient()
+        let loaded = await session.loadSelectedPatient()
+        var stale = try XCTUnwrap(loaded)
+        let known = Set(stale.files.map(\.id))
+        var current = stale
+        let attachment = PatientFile(name: "new.txt", type: .other, data: Data("NEW".utf8))
+        current.files.append(attachment)
+        let store = try XCTUnwrap(session.store)
+        try await store.patients.save(current, knownFileIDs: known)
+        stale.profile.firstName = "Edited"
+        let token = UUID()
+        session.registerOpenEditor(token) { .patient(stale, edited: true, knownFileIDs: known) }
+        await session.lockNow(reason: "test")
+        session.unregisterOpenEditor(token)
+        await session.unlock()
+        let reopened = try XCTUnwrap(session.store)
+        let saved = try await reopened.patients.load(id: stale.id)
+        XCTAssertTrue(saved?.files.contains { $0.id == attachment.id } == true)
+        let data = try await reopened.patients.loadFileData(patientId: stale.id, fileId: attachment.id)
+        XCTAssertEqual(data, Data("NEW".utf8))
     }
 
     /// `open -g`, a hidden login item or a click elsewhere during startup

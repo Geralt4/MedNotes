@@ -13,7 +13,7 @@ import Foundation
 /// loaded.
 enum OpenEditorDraft {
     case note(Note, edited: Bool)
-    case patient(Patient, edited: Bool)
+    case patient(Patient, edited: Bool, knownFileIDs: Set<UUID>?)
     case todo(TodoItem, edited: Bool)
     case event(CalendarEvent, edited: Bool)
 }

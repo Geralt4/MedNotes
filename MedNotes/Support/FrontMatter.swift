@@ -1,0 +1,140 @@
+import Foundation
+
+/// The YAML block at the top of a note: a first line of `---`, a later line of
+/// `---`, and properties between them.
+///
+/// One definition for everything that reads it: the editor's styling, the
+/// Markdown preview, the list preview, the metadata scanner and the property
+/// editor. Pure and Foundation-only.
+///
+/// Rules, chosen so that a note is never hidden by mistake:
+/// - A leading byte-order mark is ignored.
+/// - Both fences are `---` alone on a line, trailing spaces and tabs allowed.
+///   `...` is **not** a closer: a note that opens with a rule, has prose, and
+///   later has another rule is a note, not front matter.
+/// - A closing fence is required. An empty pair is valid.
+/// - Lines break at LF, CRLF, CR, U+0085, U+2028 and U+2029, exactly as
+///   `NSString.getLineStart` counts them.
+/// - Only a block that reads as properties (every non-blank line is a comment,
+///   a `key:` line, a list item or an indented continuation) is front matter
+///   to its readers. Anything else between two rules is ordinary text.
+enum FrontMatter {
+    /// Beyond this many UTF-16 units the block is treated as text.
+    static let maxLength = 64 * 1024
+
+    struct Block: Equatable, Sendable {
+        /// From the opening fence through the closing fence's line break.
+        let range: NSRange
+        /// Between the opening line's break and the start of the closing line.
+        let innerRange: NSRange
+        /// The opening fence's line, break included.
+        let openLine: NSRange
+        /// The closing fence's line, break included (none at the end of text).
+        let closeLine: NSRange
+        /// The break the opening fence ends with; new lines use the same.
+        let lineEnding: String
+        /// Whether the lines read as properties.
+        let isProperties: Bool
+    }
+
+    /// The block between two `---` lines at the top of `text`, whatever it
+    /// holds. Most callers want `properties(in:)`.
+    static func block(in text: String) -> Block? {
+        block(in: text as NSString)
+    }
+
+    static func block(in ns: NSString) -> Block? {
+        let length = ns.length
+        var start = 0
+        if length > 0, ns.character(at: 0) == 0xFEFF { start = 1 }
+        guard start < length else { return nil }
+
+        var openEnd = 0, openContents = 0
+        ns.getLineStart(nil, end: &openEnd, contentsEnd: &openContents,
+                        for: NSRange(location: start, length: 0))
+        // A lone `---` with nothing after it has no closer.
+        guard openEnd > openContents,
+              isFence(ns, from: start, to: openContents) else { return nil }
+        let ending = ns.substring(with: NSRange(location: openContents, length: openEnd - openContents))
+
+        var location = openEnd
+        while location < length {
+            var lineEnd = 0, contentsEnd = 0
+            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
+                            for: NSRange(location: location, length: 0))
+            if isFence(ns, from: location, to: contentsEnd) {
+                let inner = NSRange(location: openEnd, length: location - openEnd)
+                return Block(
+                    range: NSRange(location: start, length: lineEnd - start),
+                    innerRange: inner,
+                    openLine: NSRange(location: start, length: openEnd - start),
+                    closeLine: NSRange(location: location, length: lineEnd - location),
+                    lineEnding: ending,
+                    isProperties: inner.length <= maxLength && readsAsProperties(ns, inner))
+            }
+            location = lineEnd
+        }
+        return nil
+    }
+
+    /// The block, only when it reads as properties.
+    static func properties(in text: String) -> Block? {
+        properties(in: text as NSString)
+    }
+
+    static func properties(in ns: NSString) -> Block? {
+        guard let block = block(in: ns), block.isProperties else { return nil }
+        return block
+    }
+
+    // MARK: - Private
+
+    private static func isFence(_ ns: NSString, from start: Int, to end: Int) -> Bool {
+        guard end - start >= 3 else { return false }
+        var p = end
+        while p > start, isBlank(ns.character(at: p - 1)) { p -= 1 }
+        return p - start == 3
+            && ns.character(at: start) == 0x2D && ns.character(at: start + 1) == 0x2D
+            && ns.character(at: start + 2) == 0x2D
+    }
+
+    private static func isBlank(_ unit: unichar) -> Bool {
+        unit == 0x20 || unit == 0x09
+    }
+
+    /// Whether every line is blank, a comment, a list item, indented, or a
+    /// `key:` line. `Patient stable: no complaints` is one too, as in Obsidian.
+    private static func readsAsProperties(_ ns: NSString, _ inner: NSRange) -> Bool {
+        var location = inner.location
+        let end = NSMaxRange(inner)
+        while location < end {
+            var lineEnd = 0, contentsEnd = 0
+            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
+                            for: NSRange(location: location, length: 0))
+            if !isPropertyLine(ns, from: location, to: min(contentsEnd, end)) { return false }
+            location = lineEnd
+        }
+        return true
+    }
+
+    private static func isPropertyLine(_ ns: NSString, from start: Int, to end: Int) -> Bool {
+        var p = start
+        while p < end, isBlank(ns.character(at: p)) { p += 1 }
+        if p == end { return true }                       // blank
+        if p > start { return true }                      // indented continuation
+        let first = ns.character(at: p)
+        if first == 0x23 { return true }                  // # comment
+        if first == 0x2D {                                // - list item
+            return p + 1 == end || isBlank(ns.character(at: p + 1))
+        }
+        // key: value  (a colon followed by a space or the end of the line)
+        var q = p
+        while q < end {
+            if ns.character(at: q) == 0x3A, q + 1 == end || isBlank(ns.character(at: q + 1)) {
+                return q > p
+            }
+            q += 1
+        }
+        return false
+    }
+}

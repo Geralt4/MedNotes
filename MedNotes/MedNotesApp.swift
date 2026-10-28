@@ -95,6 +95,12 @@ private struct MedNotesCommands: Commands {
             .keyboardShortcut("o", modifiers: .command)
             .disabled(!session.canUseStore)
 
+            Button(session.noteInspectorShown ? "Hide Inspector" : "Show Inspector") {
+                session.noteInspectorShown.toggle()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .disabled(!session.canUseStore || session.selectedModule != .notes)
+
             Button("Sync Calendar Now") {
                 Task { await session.syncCalendarNow() }
             }

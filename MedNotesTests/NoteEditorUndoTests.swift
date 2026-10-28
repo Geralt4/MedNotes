@@ -352,6 +352,8 @@ final class NoteEditorUndoTests: XCTestCase {
         }
         XCTAssertNil(session.initError)
         XCTAssertTrue(session.isReady, "session did not become ready")
+        // These tests are about the editor's own layout; the inspector has its own.
+        session.noteInspectorShown = false
         return session
     }
 

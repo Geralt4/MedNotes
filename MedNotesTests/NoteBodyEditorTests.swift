@@ -334,6 +334,131 @@ final class NoteBodyEditorTests: XCTestCase {
         XCTAssertNil(editor.textAfterUndo(Notification(name: .NSUndoManagerDidUndoChange, object: undoManager), of: other))
     }
 
+    // MARK: - Properties and jumping
+
+    private let withProperties = "---\nstatus: draft\nowner: Dr. Ana\n---\nBody text here"
+
+    func testAPropertyEditIsOneUndoStepAndKeepsTheCaret() throws {
+        let (window, body, box) = try host(Note(title: "P", content: withProperties))
+        let undoManager = try perEventUndo(in: window)
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        XCTAssertTrue(window.makeFirstResponder(body))
+        body.setSelectedRange(NSRange(location: (withProperties as NSString).length - 4, length: 0))   // in "here"
+        editor.track(body, showing: box.note)
+
+        var drafted: String?
+        var outcome = NoteBodyEditor.PropertyEditOutcome.refused
+        asOneEvent(undoManager) {
+            outcome = editor.editProperty(
+                .set(key: "status", value: .text("final review")), expecting: "status: draft\n", in: box.note,
+                updateDraft: { drafted = $0; box.note.content = $0 })
+        }
+        settle(window)
+        XCTAssertEqual(outcome, .applied)
+        XCTAssertEqual(body.string, "---\nstatus: final review\nowner: Dr. Ana\n---\nBody text here")
+        XCTAssertEqual(drafted, body.string)
+        let shift = ("status: final review\n" as NSString).length - ("status: draft\n" as NSString).length
+        XCTAssertEqual(body.selectedRange().location, (withProperties as NSString).length - 4 + shift,
+                       "a caret after the edit moves with the text")
+
+        undoManager.undo()
+        XCTAssertEqual(body.string, withProperties, "one undo step undoes the whole edit")
+        XCTAssertEqual(
+            editor.textAfterUndo(Notification(name: .NSUndoManagerDidUndoChange, object: undoManager), of: box.note),
+            withProperties)
+    }
+
+    func testAPropertyEditUsesTheTextAsTypedNotTheStaleDraft() throws {
+        let (window, body, box) = try host(Note(title: "P", content: withProperties))
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        XCTAssertTrue(window.makeFirstResponder(body))
+        editor.track(body, showing: box.note)
+        // Typing the body is ahead of the draft the panel was built from.
+        body.setSelectedRange(NSRange(location: (withProperties as NSString).length, length: 0))
+        body.insertText(" and more", replacementRange: NSRange(location: NSNotFound, length: 0))
+
+        var drafted: String?
+        let outcome = editor.editProperty(
+            .set(key: "owner", value: .text("Dr. Eleni")), expecting: nil, in: box.note,
+            updateDraft: { drafted = $0 })
+        XCTAssertEqual(outcome, .applied)
+        XCTAssertEqual(body.string, "---\nstatus: draft\nowner: Dr. Eleni\n---\nBody text here and more")
+        XCTAssertEqual(drafted, body.string, "what was typed is not lost")
+    }
+
+    func testAPropertyEditIsRefusedWhenItsLinesChanged() throws {
+        let (window, body, box) = try host(Note(title: "P", content: withProperties))
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        editor.track(body, showing: box.note)
+        let outcome = editor.editProperty(
+            .set(key: "status", value: .text("x")), expecting: "status: something else\n", in: box.note,
+            updateDraft: { _ in XCTFail("the draft must not change") })
+        XCTAssertEqual(outcome, .refused)
+        XCTAssertEqual(body.string, withProperties)
+    }
+
+    func testAPropertyEditFindsTheBodyOfAFreshNoteAndLeavesUndoAlone() throws {
+        let (window, body, box) = try host(Note(title: "P", content: withProperties))
+        let undoManager = try perEventUndo(in: window)
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)   // never tracked: the user has not touched the body
+        var outcome = NoteBodyEditor.PropertyEditOutcome.refused
+        asOneEvent(undoManager) {
+            outcome = editor.editProperty(
+                .set(key: "status", value: .text("final")), expecting: nil, in: box.note,
+                updateDraft: { box.note.content = $0 })
+        }
+        XCTAssertEqual(outcome, .applied)
+        XCTAssertTrue(undoManager.canUndo, "it went through the text view, so it can be undone")
+        XCTAssertTrue(body.string.contains("status: final"))
+    }
+
+    func testAPropertyEditDoesNotStealFocusOrScroll() throws {
+        let box = NoteBox(Note(title: "P", content: withProperties))
+        let window = host(VStack {
+            TextField("Value", text: .constant(""))
+            TextEditor(text: Binding(get: { box.note.content }, set: { box.note.content = $0 }))
+        })
+        let body = try XCTUnwrap(Self.first(NSTextView.self, in: window.contentView))
+        let field = try XCTUnwrap(Self.first(NSTextField.self, in: window.contentView))
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        XCTAssertTrue(window.makeFirstResponder(field))
+        let responder = window.firstResponder
+        let outcome = editor.editProperty(
+            .set(key: "status", value: .text("final")), expecting: nil, in: box.note,
+            updateDraft: { box.note.content = $0 })
+        XCTAssertEqual(outcome, .applied)
+        XCTAssertTrue(window.firstResponder === responder, "the field the edit came from keeps focus")
+        XCTAssertTrue(body.string.contains("status: final"))
+    }
+
+    func testAPropertyEditWithoutATextViewIsLeftToTheCaller() {
+        let editor = NoteBodyEditor()
+        let note = Note(title: "P", content: withProperties)
+        let outcome = editor.editProperty(
+            .set(key: "status", value: .text("x")), expecting: nil, in: note,
+            updateDraft: { _ in XCTFail("nothing to edit through") })
+        XCTAssertEqual(outcome, .noTextView)
+    }
+
+    func testRevealPutsTheCaretAtAnOffsetAndClampsAStaleOne() throws {
+        let (window, body, box) = try host(Note(title: "P", content: "# One\nbody\n## Two\nmore"))
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        XCTAssertTrue(editor.reveal(utf16Offset: 11, in: box.note))
+        XCTAssertEqual(body.selectedRange(), NSRange(location: 11, length: 0))
+        XCTAssertIdentical(window.firstResponder, body)
+        XCTAssertTrue(editor.reveal(utf16Offset: 10_000, in: box.note))
+        XCTAssertEqual(body.selectedRange().location, (body.string as NSString).length)
+        XCTAssertTrue(editor.reveal(utf16Offset: -5, in: box.note))
+        XCTAssertEqual(body.selectedRange().location, 0)
+        XCTAssertFalse(NoteBodyEditor().reveal(utf16Offset: 3, in: box.note), "no text view, no jump")
+    }
+
     // MARK: - Helpers
 
     private final class NoteBox {

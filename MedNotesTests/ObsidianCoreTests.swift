@@ -71,10 +71,17 @@ final class ObsidianCoreTests: XCTestCase {
         check.finalize()
         side.close()
 
-        // Reopening runs migrateV2, which must sweep it.
+        // Reopening runs migrateV2, which must sweep it. (`note_links` is the
+        // superseded v2 table: nothing reads it any more, but the sweep stays.)
         let reopened = try Database.testDatabase(path: dbPath)
         let links = try await reopened.linksFromNote(noteId: note.id)
         XCTAssertTrue(links.isEmpty, "orphaned edge survived migration: \(links)")
+        let verify = try SQLConnection.testConnection(path: dbPath)
+        let remaining = try verify.prepare("SELECT COUNT(*) FROM note_links")
+        XCTAssertTrue(try remaining.step())
+        XCTAssertEqual(remaining.columnInt(0), 0, "the legacy sweep no longer ran")
+        remaining.finalize()
+        verify.close()
     }
 
     /// note_links.dst_patient_id is ON DELETE SET NULL (unlike dst_note_id,
@@ -109,10 +116,12 @@ final class ObsidianCoreTests: XCTestCase {
         XCTAssertEqual(violations, 0)
     }
 
-    /// linksFrom resolves labels at query time, so renaming a linked patient to
-    /// match another yields two rows with identical labels. The links panel used
-    /// the label as its ForEach id, which drops or misrenders rows on collision.
-    func testLinksFromCanReturnDuplicateLabels() async throws {
+    /// A link names a patient by the patient's name. Renaming Bob to "Alice
+    /// Smith" leaves the link that already pointed at Alice on Alice (it keeps
+    /// its destination while the name still matches) and leaves the link that
+    /// named "Bob Jones" without a patient: unresolved, kept in the note, and
+    /// no longer listed among the note's resolved links.
+    func testRenamingAPatientAwayFromALinkedNameUnresolvesThatLink() async throws {
         let root = try makeDataRoot()
         let store = try AppStore.testStore(dataRoot: root)
 
@@ -132,17 +141,14 @@ final class ObsidianCoreTests: XCTestCase {
         let before = try await store.linking.linksFrom(noteId: note.id)
         XCTAssertEqual(Set(before.map(\.label)), ["Alice Smith", "Bob Jones"])
 
-        // Rename Bob to collide with Alice. relink does not re-run, but the
-        // label is recomputed from the patients table on read.
         var renamed = bob
         renamed.profile.firstName = "Alice"
         renamed.profile.lastName = "Smith"
         try await store.patients.save(renamed)
 
         let after = try await store.linking.linksFrom(noteId: note.id)
-        XCTAssertEqual(after.count, 2)
-        XCTAssertEqual(after.map(\.label), ["Alice Smith", "Alice Smith"],
-                       "duplicate labels are reachable, so label is not a valid view identity")
+        XCTAssertEqual(after.map(\.label), ["Alice Smith"],
+                       "only the link that still names its patient stays resolved")
     }
 
     /// `NoteService.save` calls relink on every save, so repeated saves must
@@ -682,22 +688,32 @@ final class ObsidianCoreTests: XCTestCase {
         return (text as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
     }
 
-    func testResolvePrefersExactTitlesThenUniqueContainsThenPatients() {
-        let nA = UUID(), nB = UUID(), pX = UUID()
-        let notes = [(nA, "Ward Rounds" as String), (nB, "Wound Care" as String)]
-        let patients = [(pX, "Maria Papadopoulou" as String)]
+    func testResolveIsStrict_ExactKeyNotesBeforePatients_NeverGuesses() {
+        let nA = UUID().uuidString, nB = UUID().uuidString, pX = UUID().uuidString
+        var index = LinkIndex.Index()
+        index.noteIDsByKey = [
+            WikiLinkParser.normalizedKey("Ward Rounds"): [nA],
+            WikiLinkParser.normalizedKey("Wound Care"): [nB],
+        ]
+        index.noteKeyByID = [
+            nA: WikiLinkParser.normalizedKey("Ward Rounds"),
+            nB: WikiLinkParser.normalizedKey("Wound Care"),
+        ]
+        let maria = WikiLinkParser.normalizedKey("Maria Papadopoulou")
+        index.patientIDsByKey = [maria: [pX]]
+        index.patientKeysByID = [pX: [maria]]
 
-        XCTAssertEqual(
-            LinkingService.resolve(anchor: "ward rounds", notes: notes, patients: patients),
-            .note(nA))
-        XCTAssertEqual(
-            LinkingService.resolve(anchor: "woun", notes: notes, patients: patients),
-            .note(nB))
-        XCTAssertEqual(
-            LinkingService.resolve(anchor: "maria papadopoulou", notes: notes, patients: patients),
-            .patient(pX))
-        // Two partial hits -> unresolved
-        XCTAssertNil(LinkingService.resolve(anchor: "w", notes: notes, patients: patients))
+        func resolve(_ text: String) -> LinkIndex.Resolution {
+            let key = WikiLinkParser.normalizedKey(text)
+            return LinkIndex.resolve(
+                innerKey: key, targetKey: key, sourceID: UUID().uuidString, current: nil, index: index)
+        }
+        XCTAssertEqual(resolve("ward rounds"), .init(state: "resolved", kind: "note", id: nA))
+        XCTAssertEqual(resolve("maria papadopoulou"), .init(state: "resolved", kind: "patient", id: pX))
+        // The old rule resolved these by "unique contains"; they no longer do.
+        XCTAssertEqual(resolve("woun").state, "unresolved")
+        XCTAssertEqual(resolve("Papadopoulou").state, "unresolved")
+        XCTAssertEqual(resolve("w").state, "unresolved")
     }
 
     func testRelinkWritesRowsAndBacklinksFlowThroughGraph() async throws {

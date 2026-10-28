@@ -42,6 +42,15 @@ enum ArchiveExtraction {
                     throw BackupError.integrityCheckFailed(
                         String(localized: "attachment \(record.fileID)"))
                 }
+                // Even empty attachments occupy a full padding block on disk.
+                // Check the staging volume immediately before every write so
+                // a small archive cannot silently bypass the space estimate.
+                let payload = Int64(record.plaintextLength) + 24
+                let block = Int64(EncryptedFileStore.paddingBlock)
+                let padded = ((payload + block - 1) / block) * block
+                let overhead = ((padded + Int64(EncryptedFileStore.chunkSize) - 1)
+                    / Int64(EncryptedFileStore.chunkSize)) * 17 + 128
+                try BackupService.requireFreeSpace(bytes: padded + overhead, at: snapshotURL.deletingLastPathComponent())
                 _ = try await store.store(pending, storageID: record.storageID)
                 pending.removeAll(keepingCapacity: true)
                 next += 1

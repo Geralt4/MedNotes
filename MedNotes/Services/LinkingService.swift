@@ -1,18 +1,10 @@
 import Foundation
 
-/// Wiki-style `[[links]]`: extraction, resolution against notes/patients, and
-/// the persisted edge set in `note_links`. Pure helpers are static so the
-/// rules are unit-testable without a database.
+/// Wiki-style `[[links]]`: the editor's autocomplete helpers, and the stored
+/// edge set (`wikilinks`) that backlinks and the graph read. Parsing is
+/// `WikiLinkParser`; deriving and resolving the rows is `LinkIndex`. Pure
+/// helpers are static so the rules are unit-testable without a database.
 actor LinkingService {
-    struct ResolvedLink: Hashable, Sendable {
-        enum Target: Hashable, Sendable {
-            case note(UUID)
-            case patient(UUID)
-        }
-        let target: Target
-        let anchor: String
-    }
-
     /// A flattened graph node. `kind` drives icon/tint in the graph UI.
     struct GraphNode: Identifiable, Hashable, Sendable {
         enum Kind: String, Sendable {
@@ -35,6 +27,68 @@ actor LinkingService {
         var edges: [GraphEdge] = []
     }
 
+    /// One distinct link out of a note, as its panel lists it: where it
+    /// leads, or why it leads nowhere.
+    struct OutgoingLink: Identifiable, Hashable, Sendable {
+        enum Kind: String, Sendable {
+            case note
+            case patient
+            /// No note or patient has this name.
+            case unresolved
+            /// Several notes or patients have this name.
+            case ambiguous
+        }
+        let id: String
+        let kind: Kind
+        /// The title or name it resolves to; the link text when it does not.
+        let label: String
+        let targetID: UUID?
+        /// The name as written between the brackets.
+        let target: String
+        let heading: String?
+        let blockID: String?
+        let isEmbed: Bool
+        /// A resolved link whose `#heading` or `#^block` is not in the note it
+        /// points at.
+        var warning: Warning?
+
+        enum Warning: String, Sendable {
+            case missingHeading
+            case missingBlock
+        }
+
+        /// Whether "create a note with this title" makes sense. A link such
+        /// as `![[scan.png]]` names a file, not a note.
+        var canCreateNote: Bool {
+            kind == .unresolved && !LinkingService.namesAFile(target)
+        }
+    }
+
+    /// How the notes are linked together: counts only resolved links between
+    /// notes and to patients, and never a note's link to itself.
+    struct LinkStats: Sendable, Equatable {
+        /// Notes with no resolved link in or out.
+        var orphans: [UUID] = []
+        /// Notes that link to nothing.
+        var deadEnds: [UUID] = []
+        /// Distinct notes and patients linked from the note, plus distinct
+        /// notes linking to it.
+        var degree: [UUID: Int] = [:]
+    }
+
+    private static let fileExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "heic", "tif", "tiff", "bmp", "webp", "svg",
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf",
+        "mp3", "m4a", "wav", "aac", "mp4", "mov", "m4v", "dcm",
+    ]
+
+    /// Whether a link target reads as a file name (`scan.png`), so it is
+    /// never offered as a note to create.
+    static func namesAFile(_ target: String) -> Bool {
+        guard let dot = target.lastIndex(of: "."), dot != target.startIndex else { return false }
+        return fileExtensions.contains(target[target.index(after: dot)...].lowercased())
+    }
+
     static let openMarker = "[["
     static let closeMarker = "]]"
 
@@ -46,17 +100,16 @@ actor LinkingService {
 
     // MARK: - Extraction (pure)
 
-    /// Anchors inside [[...]] in order of appearance, deduplicated.
+    /// The names linked in a note, in order of appearance, each once: the
+    /// target of every `[[...]]` that names something (a link to a heading of
+    /// the note itself does not). Read through `WikiLinkParser`, so links in
+    /// code and comments do not count.
     static func extractAnchors(from content: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: #"\[\[([^\[\]]+)\]\]"#) else { return [] }
-        let range = NSRange(content.startIndex..., in: content)
         var seen = Set<String>()
         var out: [String] = []
-        for match in regex.matches(in: content, range: range) {
-            guard let full = Range(match.range(at: 1), in: content) else { continue }
-            let anchor = content[full].trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !anchor.isEmpty, seen.insert(anchor.lowercased()).inserted else { continue }
-            out.append(anchor)
+        for link in WikiLinkParser.scan(content).links where !link.isSameNote {
+            guard seen.insert(WikiLinkParser.normalizedKey(link.target)).inserted else { continue }
+            out.append(link.target)
         }
         return out
     }
@@ -185,64 +238,107 @@ actor LinkingService {
         typed.range(of: closeMarker, options: .literal) == nil && typed.count <= maxOpenAnchorLength
     }
 
-    // MARK: - Resolution (pure)
-
-    /// Exact case-insensitive title match first; unique contains-match second.
-    static func resolve(
-        anchor: String,
-        notes: [(id: UUID, title: String)],
-        patients: [(id: UUID, displayName: String)]) -> ResolvedLink.Target? {
-        let needle = anchor.lowercased()
-        if let hit = notes.first(where: { $0.title.lowercased() == needle }) {
-            return .note(hit.id)
-        }
-        if let hit = patients.first(where: { $0.displayName.lowercased() == needle }) {
-            return .patient(hit.id)
-        }
-        let noteHits = notes.filter { $0.title.lowercased().contains(needle) && !needle.isEmpty }
-        if noteHits.count == 1, let only = noteHits.first {
-            return .note(only.id)
-        }
-        let patientHits = patients.filter { $0.displayName.lowercased().contains(needle) && !needle.isEmpty }
-        if patientHits.count == 1, let only = patientHits.first {
-            return .patient(only.id)
-        }
-        return nil
-    }
-
-    static func linkRowID(srcNoteID: UUID, target: ResolvedLink.Target) -> String {
-        switch target {
-        case .note(let id): return "\(srcNoteID.uuidString)->n:\(id.uuidString)"
-        case .patient(let id): return "\(srcNoteID.uuidString)->p:\(id.uuidString)"
-        }
-    }
-
     // MARK: - Persistence
 
-    /// Re-derives the outgoing link rows for a saved note. Safe to call after
-    /// every save; diffs instead of blindly rewriting.
+    /// Derives the note's link rows from its saved text and resolves every
+    /// link against the current notes and patients. All of it happens inside
+    /// the database in one step (`LinkIndex`); see there for the rules.
     func relink(note: Note) async throws {
-        let anchors = Self.extractAnchors(from: note.content)
-        let notes = try await db.noteDirectory()
-        let patients = try await db.patientNameDirectory()
-        var wanted: Set<String> = []
-        var rowsToInsert: [(id: String, target: ResolvedLink.Target, anchor: String)] = []
-        for anchor in anchors {
-            guard let target = Self.resolve(anchor: anchor, notes: notes, patients: patients) else { continue }
-            if case .note(let id) = target, id == note.id { continue }
-            let rowID = Self.linkRowID(srcNoteID: note.id, target: target)
-            guard wanted.insert(rowID).inserted else { continue }
-            rowsToInsert.append((rowID, target, anchor))
-        }
-        try await db.replaceLinks(srcNoteId: note.id, keepIDs: wanted, rows: rowsToInsert)
+        try await db.relinkNote(id: note.id)
+    }
+
+    /// Resolves every stored link again: after anything that can change what
+    /// a link names, such as a patient saved, renamed or archived.
+    func reresolve() async throws {
+        try await db.resolveAllLinks()
     }
 
     func backlinks(noteId: UUID) async throws -> [(noteId: UUID, title: String)] {
         try await db.backlinksForNote(noteId: noteId)
     }
 
+    /// The notes and patients this note links to, resolved links only.
     func linksFrom(noteId: UUID) async throws -> [(label: String, kind: String)] {
         try await db.linksFromNote(noteId: noteId)
+    }
+
+    /// Every distinct link out of the note, resolved or not, in the order
+    /// first written. Links to the note's own headings are left out.
+    func outgoingLinks(noteId: UUID) async throws -> [OutgoingLink] {
+        try await db.outgoingLinksFromNote(noteId: noteId)
+    }
+
+    /// Notes whose text names this note's title without linking to it. Text
+    /// in code and comments, and in existing links, does not count; neither
+    /// does a title shorter than three characters.
+    func unlinkedMentions(noteId: UUID) async throws -> [(noteId: UUID, title: String)] {
+        guard let note = try await db.loadNote(id: noteId) else { return [] }
+        // The title and the aliases, each at least three characters.
+        var keys = [WikiLinkParser.normalizedKey(note.title)]
+        keys += try await db.aliasKeys(noteId: noteId)
+        keys = keys.filter { $0.count >= 3 }
+        guard !keys.isEmpty else { return [] }
+        let linking = try await db.noteIDsLinking(to: noteId)
+        var out: [(noteId: UUID, title: String)] = []
+        for other in try await db.noteTexts() where other.id != noteId && !linking.contains(other.id) {
+            if keys.contains(where: { Self.mentions($0, in: other.content) }) { out.append((other.id, other.title)) }
+        }
+        return out
+    }
+
+    func linkStats() async throws -> LinkStats {
+        let ids = try await db.allNoteIDs()
+        let edges = try await db.resolvedLinkEdges()
+        var outgoing: [UUID: Set<String>] = [:]
+        var incoming: [UUID: Set<UUID>] = [:]
+        for edge in edges {
+            outgoing[edge.source, default: []].insert(edge.destination)
+            if let note = UUID(uuidString: edge.destination), edge.kind == LinkIndex.noteKind {
+                incoming[note, default: []].insert(edge.source)
+            }
+        }
+        var stats = LinkStats()
+        for id in ids {
+            let out = outgoing[id]?.count ?? 0
+            let into = incoming[id]?.count ?? 0
+            if out == 0 { stats.deadEnds.append(id) }
+            if out == 0 && into == 0 { stats.orphans.append(id) }
+            stats.degree[id] = out + into
+        }
+        return stats
+    }
+
+    /// Whether `key` (a normalized title) appears in `text` as a word or
+    /// phrase of its own, outside code, comments and wiki-links.
+    static func mentions(_ key: String, in text: String) -> Bool {
+        let scan = WikiLinkParser.scan(text)
+        let ns = text as NSString
+        var skipped = scan.protectedRanges + scan.links.map(\.range)
+        // Another note's `aliases:` line is not a mention of anything.
+        if let properties = FrontMatter.properties(in: ns) { skipped.append(properties.range) }
+        skipped.sort { $0.location < $1.location }
+        var kept: [String] = []
+        var cursor = 0
+        for range in skipped {
+            if range.location > cursor {
+                kept.append(ns.substring(with: NSRange(location: cursor, length: range.location - cursor)))
+            }
+            cursor = max(cursor, NSMaxRange(range))
+        }
+        if cursor < ns.length { kept.append(ns.substring(from: cursor)) }
+        // Separated by a character that is neither a letter nor whitespace, so
+        // a phrase cannot match across a skipped range.
+        let folded = WikiLinkParser.normalizedKey(kept.joined(separator: "\u{1F}"))
+        var from = folded.startIndex
+        while from < folded.endIndex, let found = folded.range(of: key, range: from..<folded.endIndex) {
+            let before = found.lowerBound == folded.startIndex ? nil : folded[folded.index(before: found.lowerBound)]
+            let after = found.upperBound == folded.endIndex ? nil : folded[found.upperBound]
+            let wordBefore = before.map { $0.isLetter || $0.isNumber } ?? false
+            let wordAfter = after.map { $0.isLetter || $0.isNumber } ?? false
+            if !wordBefore && !wordAfter { return true }
+            from = folded.index(after: found.lowerBound)
+        }
+        return false
     }
 
     func graph() async throws -> GraphData {
@@ -253,88 +349,13 @@ actor LinkingService {
 // MARK: - Database support
 
 extension Database {
-    struct NoteDirectoryEntry {
-        let id: UUID
-        let title: String
-    }
-
-    struct PatientDirectoryEntry {
-        let id: UUID
-        let displayName: String
-    }
-
-    func noteDirectory() throws -> [(id: UUID, title: String)] {
-        let s = try conn.prepare("SELECT id, title FROM notes ORDER BY updated_at DESC")
-        var out: [(UUID, String)] = []
-        while try s.step() {
-            guard let idStr = s.columnText(0), let id = UUID(uuidString: idStr) else { continue }
-            out.append((id, s.columnText(1) ?? ""))
-        }
-        return out.map { ($0.0, $0.1) }
-    }
-
-    func patientNameDirectory() throws -> [(id: UUID, displayName: String)] {
-        let s = try conn.prepare("SELECT id, first_name, last_name FROM patients")
-        var out: [(id: UUID, displayName: String)] = []
-        while try s.step() {
-            guard let idStr = s.columnText(0), let id = UUID(uuidString: idStr) else { continue }
-            let name = [s.columnText(1) ?? "", s.columnText(2) ?? ""]
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
-            if !name.isEmpty { out.append((id, name)) }
-        }
-        return out
-    }
-
-    func replaceLinks(
-        srcNoteId: UUID,
-        keepIDs: Set<String>,
-        rows: [(id: String, target: LinkingService.ResolvedLink.Target, anchor: String)]) throws {
-        try transaction {
-            let existing = try conn.prepare("SELECT id FROM note_links WHERE src_note_id = ?")
-            existing.bind(1, srcNoteId.uuidString)
-            var have = Set<String>()
-            while try existing.step() {
-                if let rowID = existing.columnText(0) { have.insert(rowID) }
-            }
-            existing.finalize()
-
-            let delete = try conn.prepare("DELETE FROM note_links WHERE id = ?")
-            for rowID in have where !keepIDs.contains(rowID) {
-                delete.reset()
-                delete.bind(1, rowID)
-                _ = try delete.step()
-            }
-            delete.finalize()
-
-            let insert = try conn.prepare("""
-                INSERT OR REPLACE INTO note_links (id, src_note_id, dst_note_id, dst_patient_id, anchor_text)
-                VALUES (?, ?, ?, ?, ?)
-                """)
-            for row in rows {
-                insert.reset()
-                insert.bind(1, row.id)
-                insert.bind(2, srcNoteId.uuidString)
-                switch row.target {
-                case .note(let id):
-                    insert.bind(3, id.uuidString)
-                    insert.bind(4, nil as String?)
-                case .patient(let id):
-                    insert.bind(3, nil as String?)
-                    insert.bind(4, id.uuidString)
-                }
-                insert.bind(5, row.anchor)
-                _ = try insert.step()
-            }
-            insert.finalize()
-        }
-    }
-
     func backlinksForNote(noteId: UUID) throws -> [(noteId: UUID, title: String)] {
         let s = try conn.prepare("""
-            SELECT n.id, n.title FROM note_links l
-            JOIN notes n ON n.id = l.src_note_id
-            WHERE l.dst_note_id = ?
+            SELECT n.id, n.title FROM wikilinks w
+            JOIN notes n ON n.id = w.src_note_id
+            WHERE w.state = 'resolved' AND w.dst_kind = 'note' AND w.dst_id = ?
+              AND w.src_note_id != w.dst_id
+            GROUP BY n.id
             ORDER BY n.updated_at DESC
             """)
         s.bind(1, noteId.uuidString)
@@ -347,23 +368,138 @@ extension Database {
         return out.map { ($0.0, $0.1) }
     }
 
+    /// Where a note's resolved links lead, one entry per target in the order
+    /// first linked. A link to the note itself is not listed.
     func linksFromNote(noteId: UUID) throws -> [(label: String, kind: String)] {
         let s = try conn.prepare("""
-            SELECT l.dst_note_id, l.dst_patient_id, COALESCE(n.title, p.first_name || ' ' || p.last_name)
-            FROM note_links l
-            LEFT JOIN notes n ON n.id = l.dst_note_id
-            LEFT JOIN patients p ON p.id = l.dst_patient_id
-            WHERE l.src_note_id = ?
+            SELECT w.dst_kind, COALESCE(n.title, TRIM(p.first_name || ' ' || p.last_name))
+            FROM wikilinks w
+            LEFT JOIN notes n ON w.dst_kind = 'note' AND n.id = w.dst_id
+            LEFT JOIN patients p ON w.dst_kind = 'patient' AND p.id = w.dst_id
+            WHERE w.src_note_id = ? AND w.state = 'resolved' AND w.dst_id != w.src_note_id
+              AND (n.id IS NOT NULL OR p.id IS NOT NULL)
+            GROUP BY w.dst_kind, w.dst_id
+            ORDER BY MIN(w.ordinal)
             """)
         s.bind(1, noteId.uuidString)
         var out: [(String, String)] = []
         while try s.step() {
-            let label = s.columnText(2) ?? "(missing)"
-            let kind = s.columnText(0) != nil ? "note" : "patient"
-            out.append((label, kind))
+            out.append((s.columnText(1) ?? "", s.columnText(0) ?? "note"))
         }
         s.finalize()
         return out.map { ($0.0, $0.1) }
+    }
+
+    func outgoingLinksFromNote(noteId: UUID) throws -> [LinkingService.OutgoingLink] {
+        let s = try conn.prepare("""
+            SELECT w.state, w.dst_kind, w.dst_id, w.raw_target, w.target_key, w.heading, w.block_id,
+                   w.is_embed, COALESCE(n.title, TRIM(p.first_name || ' ' || p.last_name))
+            FROM wikilinks w
+            LEFT JOIN notes n ON w.dst_kind = 'note' AND n.id = w.dst_id
+            LEFT JOIN patients p ON w.dst_kind = 'patient' AND p.id = w.dst_id
+            WHERE w.src_note_id = ? AND w.target_key != ''
+            ORDER BY w.ordinal
+            """)
+        s.bind(1, noteId.uuidString)
+        var position: [String: Int] = [:]
+        var out: [LinkingService.OutgoingLink] = []
+        while try s.step() {
+            let state = s.columnText(0) ?? LinkIndex.unresolved
+            let target = s.columnText(3) ?? ""
+            let heading = s.columnText(5)
+            let block = s.columnText(6)
+            let kind: LinkingService.OutgoingLink.Kind
+            var label = target
+            var targetID: UUID?
+            var warning: LinkingService.OutgoingLink.Warning?
+            let identity: String
+            if state == LinkIndex.resolved, let dst = s.columnText(2), dst != noteId.uuidString,
+               let resolvedLabel = s.columnText(8) {
+                kind = s.columnText(1) == LinkIndex.patientKind ? .patient : .note
+                label = resolvedLabel
+                targetID = UUID(uuidString: dst)
+                identity = "r|\(dst)"
+                // Checked per link, before the links to one destination are
+                // merged: `[[A#H1]]` and `[[A#H2]]` are two questions.
+                if kind == .note, let destination = targetID {
+                    if let heading, !(try hasHeading(noteId: destination, reference: heading)) {
+                        warning = .missingHeading
+                    } else if let block, !(try hasBlock(noteId: destination, id: block)) {
+                        warning = .missingBlock
+                    }
+                }
+            } else if state == LinkIndex.resolved {
+                continue   // to itself, or to something that is gone
+            } else {
+                kind = state == LinkIndex.ambiguous ? .ambiguous : .unresolved
+                identity = "u|\(kind.rawValue)|\(s.columnText(4) ?? target)"
+            }
+            if let existing = position[identity] {
+                if out[existing].warning == nil { out[existing].warning = warning }
+                continue
+            }
+            position[identity] = out.count
+            out.append(.init(
+                id: identity, kind: kind, label: label, targetID: targetID, target: target,
+                heading: heading, blockID: block, isEmbed: s.columnBool(7) ?? false, warning: warning))
+        }
+        s.finalize()
+        return out
+    }
+
+    /// Notes with a resolved link to the note.
+    func noteIDsLinking(to noteId: UUID) throws -> Set<UUID> {
+        let s = try conn.prepare("""
+            SELECT DISTINCT src_note_id FROM wikilinks
+            WHERE state = 'resolved' AND dst_kind = 'note' AND dst_id = ?
+            """)
+        s.bind(1, noteId.uuidString)
+        var out = Set<UUID>()
+        while try s.step() {
+            if let id = s.columnText(0).flatMap(UUID.init(uuidString:)) { out.insert(id) }
+        }
+        s.finalize()
+        return out
+    }
+
+    /// Every note's id, title and text, newest first, for scans that read
+    /// the text itself.
+    func noteTexts() throws -> [(id: UUID, title: String, content: String)] {
+        let s = try conn.prepare("SELECT id, title, content FROM notes ORDER BY updated_at DESC")
+        var out: [(UUID, String, String)] = []
+        while try s.step() {
+            guard let id = s.columnText(0).flatMap(UUID.init(uuidString:)) else { continue }
+            out.append((id, s.columnText(1) ?? "", s.columnText(2) ?? ""))
+        }
+        s.finalize()
+        return out.map { ($0.0, $0.1, $0.2) }
+    }
+
+    func allNoteIDs() throws -> [UUID] {
+        let s = try conn.prepare("SELECT id FROM notes")
+        var out: [UUID] = []
+        while try s.step() {
+            if let id = s.columnText(0).flatMap(UUID.init(uuidString:)) { out.append(id) }
+        }
+        s.finalize()
+        return out
+    }
+
+    /// Distinct resolved links between notes, and from notes to patients,
+    /// never a note to itself.
+    func resolvedLinkEdges() throws -> [(source: UUID, kind: String, destination: String)] {
+        let s = try conn.prepare("""
+            SELECT DISTINCT src_note_id, dst_kind, dst_id FROM wikilinks
+            WHERE state = 'resolved' AND dst_id IS NOT NULL AND dst_id != src_note_id
+            """)
+        var out: [(UUID, String, String)] = []
+        while try s.step() {
+            guard let src = s.columnText(0).flatMap(UUID.init(uuidString:)),
+                  let kind = s.columnText(1), let dst = s.columnText(2) else { continue }
+            out.append((src, kind, dst))
+        }
+        s.finalize()
+        return out.map { (source: $0.0, kind: $0.1, destination: $0.2) }
     }
 
     func buildGraph() throws -> LinkingService.GraphData {
@@ -392,14 +528,14 @@ extension Database {
         }
         eventStmt.finalize()
 
-        let linkStmt = try conn.prepare("SELECT src_note_id, dst_note_id, dst_patient_id FROM note_links")
+        let linkStmt = try conn.prepare("""
+            SELECT DISTINCT src_note_id, dst_kind, dst_id FROM wikilinks
+            WHERE state = 'resolved' AND dst_id IS NOT NULL AND dst_id != src_note_id
+            """)
         while try linkStmt.step() {
-            guard let src = linkStmt.columnText(0) else { continue }
-            if let dst = linkStmt.columnText(1) {
-                data.edges.append(.init(sourceID: "n:\(src)", targetID: "n:\(dst)"))
-            } else if let dstPatient = linkStmt.columnText(2) {
-                data.edges.append(.init(sourceID: "n:\(src)", targetID: "p:\(dstPatient)"))
-            }
+            guard let src = linkStmt.columnText(0), let kind = linkStmt.columnText(1),
+                  let dst = linkStmt.columnText(2) else { continue }
+            data.edges.append(.init(sourceID: "n:\(src)", targetID: (kind == "patient" ? "p:" : "n:") + dst))
         }
         linkStmt.finalize()
 

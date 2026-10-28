@@ -8,7 +8,6 @@ struct NoteDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var isPreviewing = false
     @State private var templates: [NoteTemplate] = []
-    @State private var linksExpanded = false
     /// The note whose title takes focus once it is loaded: only ever the note
     /// the user just created, never one they arrowed to.
     @State private var autofocusNoteId: UUID?
@@ -42,16 +41,28 @@ struct NoteDetailView: View {
     var body: some View {
         // Once per redraw: it compares the whole body with the text view.
         let anchor = openAnchorText
-        Group {
-            if isLoading {
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let draft {
-                noteEditor(draft, anchor: anchor)
-            } else {
-                Text("Note not found")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The editor and, beside it, the inspector. A plain column rather than
+        // `.inspector`: the system inspector re-lays out its content at moments
+        // that wipe a half-typed accent (`NoteEditorUndoTests`), and the editor
+        // must keep one place in the hierarchy while a note loads and switches.
+        HStack(spacing: 0) {
+            Group {
+                if isLoading {
+                    ProgressView("Loading…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let draft {
+                    noteEditor(draft, anchor: anchor)
+                } else {
+                    Text("Note not found")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            if session.noteInspectorShown {
+                Divider()
+                NoteInspector(note: draft, applyProperty: applyProperty, reveal: reveal)
+                    .frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
+                    .background(Color(nsColor: .windowBackgroundColor))
             }
         }
         .task(id: loadId) {
@@ -163,7 +174,7 @@ struct NoteDetailView: View {
                     // and duplicate ForEach ids drop or misrender rows.
                     ForEach(anchorCandidates) { candidate in
                         Button {
-                            completeAnchor(candidate.title)
+                            completeAnchor(candidate.insert)
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: candidate.kind == .patient ? "person" : "doc.text")
@@ -228,80 +239,6 @@ struct NoteDetailView: View {
             d.content += "\n\n---\n\n" + rendered
         }
         replaceDraft(with: d)
-    }
-
-    // MARK: - Linked mentions
-
-    @ViewBuilder
-    private var linkedMentionsPanel: some View {
-        let hasLinks = !session.linksOut.isEmpty || !session.backlinks.isEmpty
-        VStack(alignment: .leading, spacing: Chrome.Space.xs) {
-            Button {
-                linksExpanded.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: linksExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                    Image(systemName: "link")
-                        .font(.caption)
-                    Text("Linked mentions")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if hasLinks {
-                        Text("\(session.linksOut.count + session.backlinks.count)")
-                            .font(.caption2)
-                            .monospacedDigit()
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            if linksExpanded {
-                if !hasLinks {
-                    Text("Type [[ to link this note to another note or a patient.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                // Labels are resolved at query time, so renaming a linked
-                // patient to match another produces two identical labels;
-                // position is the only stable identity available here.
-                ForEach(Array(session.linksOut.enumerated()), id: \.offset) { _, link in
-                    row(icon: link.kind == "patient" ? "arrow.up.right" : "link",
-                        tint: .secondary,
-                        // The store resolves labels from raw names, so an
-                        // unnamed patient reads " " and a titleless note "";
-                        // the list's fallbacks (and trimming) belong here.
-                        label: link.kind == "patient"
-                            ? DisplayCopy.patient(link.label)
-                            : DisplayCopy.title(link.label))
-                }
-                ForEach(session.backlinks, id: \.noteId) { backlink in
-                    Button {
-                        Task { await session.jumpToNote(backlink.noteId) }
-                    } label: {
-                        row(icon: "arrow.down.left",
-                            tint: Color.accentColor,
-                            label: backlink.title.isEmpty ? String(localized: "(untitled)") : backlink.title)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.horizontal, Chrome.Space.lg)
-        .padding(.vertical, Chrome.Space.sm)
-    }
-
-    private func row(icon: String, tint: Color, label: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(tint)
-            Text(label)
-                .font(.caption)
-                .lineLimit(1)
-            Spacer()
-        }
     }
 
     private func loadNote() async {
@@ -422,11 +359,6 @@ struct NoteDetailView: View {
 
             Divider()
 
-            linkedMentionsPanel
-                .readableColumn()
-
-            Divider()
-
             VStack(alignment: .leading, spacing: Chrome.Space.sm) {
                 TagEditor(tags: Binding(
                     get: { draft?.tags ?? [] },
@@ -459,7 +391,42 @@ struct NoteDetailView: View {
                 onTogglePin: togglePin,
                 onRevert: { replaceDraft(with: original) },
                 onSave: save,
-                onDelete: { showDeleteConfirm = true })
+                onDelete: { showDeleteConfirm = true },
+                isInspectorShown: session.noteInspectorShown,
+                onToggleInspector: { session.noteInspectorShown.toggle() })
+        }
+    }
+
+    // MARK: - The inspector's actions
+
+    /// Writes one property change into the note's text. The edit belongs to
+    /// the note the panel was showing when the field was edited: if another
+    /// note is open by the time it arrives (clicking the list ends a field's
+    /// focus after the selection changed), it is dropped.
+    private func applyProperty(noteID: UUID, _ operation: FrontMatterEditor.Operation, expecting: String?) {
+        guard PropertyEditRouting.accepts(noteID: noteID, draft: draft), let current = draft else { return }
+        let outcome = bodyEditor.editProperty(
+            operation, expecting: expecting, in: current, updateDraft: { draft?.content = $0 })
+        guard outcome == .noTextView else { return }
+        // Preview is showing: no text view to edit through, so the draft is
+        // edited directly, which clears the undo stack (see `replaceDraft`).
+        if let updated = PropertyEditRouting.draftAfter(operation, expecting: expecting, noteID: noteID, draft: draft) {
+            replaceDraft(with: updated)
+        }
+    }
+
+    /// Puts the caret at a heading of the open note, leaving Preview first.
+    private func reveal(offset: Int) {
+        if isPreviewing { isPreviewing = false }
+        revealWhenReady(offset: offset, attempts: 12)
+    }
+
+    private func revealWhenReady(offset: Int, attempts: Int) {
+        guard let current = draft else { return }
+        if bodyEditor.reveal(utf16Offset: offset, in: current) || attempts <= 0 { return }
+        // The body's text view is not there yet (Preview was showing).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            revealWhenReady(offset: offset, attempts: attempts - 1)
         }
     }
 
@@ -523,6 +490,8 @@ private struct NoteToolbar: ToolbarContent {
     let onRevert: () -> Void
     let onSave: () -> Void
     let onDelete: () -> Void
+    let isInspectorShown: Bool
+    let onToggleInspector: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -552,6 +521,13 @@ private struct NoteToolbar: ToolbarContent {
             }
             .help(isPreviewing ? "Edit" : "Preview")
             .accessibilityLabel(isPreviewing ? "Edit" : "Preview")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onToggleInspector) {
+                Image(systemName: "sidebar.right")
+            }
+            .help(isInspectorShown ? "Hide Inspector" : "Show Inspector")
+            .accessibilityLabel(isInspectorShown ? "Hide Inspector" : "Show Inspector")
         }
         ToolbarItem(placement: .primaryAction) {
             Button(action: onTogglePin) {

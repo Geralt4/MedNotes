@@ -39,12 +39,12 @@ struct ActivityView: View {
     }
 
     private var filtered: [AuditLogEntry] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let needle = WikiLinkParser.normalizedKey(query)
         return entries.filter { entry in
             scope.matches(entry) && (needle.isEmpty
-                || DisplayCopy.auditDetails(entry).lowercased().contains(needle)
-                || DisplayCopy.auditAction(entry.action).lowercased().contains(needle)
-                || entry.entityId.lowercased().contains(needle))
+                || WikiLinkParser.normalizedKey(DisplayCopy.auditDetails(entry)).contains(needle)
+                || WikiLinkParser.normalizedKey(DisplayCopy.auditAction(entry.action)).contains(needle)
+                || WikiLinkParser.normalizedKey(entry.entityId).contains(needle))
         }
     }
 

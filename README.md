@@ -80,9 +80,63 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
 
 - **Wiki-links**: type `[[` in a note → autocomplete over the whole store
   (titles first, then bodies, then patients; `AppSession.linkCandidates`),
-  not just the filtered list; resolved edges land in `note_links` on every
-  save; backlinks panel + **Graph module** (Canvas constellation; list view
-  for a11y)
+  not just the filtered list. Links are read by one hand-written parser
+  (`WikiLinkParser`: `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`,
+  `[[Note#^block]]`, `[[#Heading]]`, `![[embed]]`; code, comments and escaped
+  brackets are skipped) and stored, resolved or not, in the derived tables
+  `wikilinks` and `link_sources` (`LinkIndex`). A link resolves only to an
+  exact title or patient name (case, accents and final sigma ignored); it
+  never guesses. An unresolved link stays in the note and resolves when a
+  note with that title appears; a working link keeps its target when a
+  duplicate title is created; several candidates make it *ambiguous*. The
+  panel under a note lists outgoing links, links that lead nowhere (click to
+  create the note), backlinks and unlinked mentions. The tables are derived
+  from note text and rebuilt on open for any note whose text changed
+  (`link_sources` holds a hash), so restoring, importing or upgrading needs no
+  special step. `note_links` is the superseded v2 table, kept and ignored.
+  **Graph module** (Canvas constellation; list view for a11y)
+- **Note metadata** (derived from the note text, rebuilt on open, never a
+  second source of truth): the YAML front matter becomes typed **properties**
+  (text, number, checkbox, date, date and time, list; `tags`, `aliases` and
+  `cssclasses` are lists), read by a small hand-written parser
+  (`FrontMatterYAML`) that edits only the lines it changes and leaves anything
+  it does not fully understand (nested maps, block scalars, duplicate or quoted
+  keys) byte-for-byte and read-only. Front matter is a `---` first line and a
+  later `---` line with properties between them; two rules around prose are
+  ordinary text. `#tags` (any script, nested with `/`), headings and `^block`
+  ids are read by `NoteMetadata`. A note's tags are the union of its tag field,
+  its `#tags` and its `tags:` property; nothing is rewritten. `aliases:` feed
+  the `[[` autocomplete (`[[Title|alias]]`) and unlinked mentions but never
+  change what a link resolves to.
+- **Inspector** (right of the note, ⌥⌘I): Properties (typed fields; each edit is
+  one undo step in the note's text), Outline (click a heading to jump there)
+  and Links. The notes list has a Tags menu with counts that narrows the list
+  together with the search text.
+- **Settings › Data › Rebuild Indexes**: rebuilds search, links, tags and
+  properties from the notes in one transaction and checks the result; notes,
+  patients and every other table are untouched (`Database.rebuildIndexes`).
+- **Notes search**: the notes list understands words (each a prefix),
+  `"exact phrases"`, `-exclusion`, `OR` (capitals), `( )` grouping, and
+  `tag:`, `property:key`, `property:key:value` / `[key:value]`, `patient:` and
+  `linked:` (a pasted `[[Title]]` works too). Half-typed text never errors:
+  only letters and digits reach the full-text index (`SearchQuery`,
+  `Database.notesMatching`). Each row shows the line that matched with the
+  words marked (`SearchSnippet`); a note found through a patient, tag or
+  property keeps its ordinary preview. Quick Open and `[[` completion keep the
+  plain word search. Order is pinned first, then newest; there is no relevance
+  ranking. Greek is folded everywhere a search looks: accents, capitals and the
+  final sigma do not matter (`ασθενης`, `ΑΣΘΕΝΉΣ` and `ασθενής` are one word),
+  in the full-text indexes, in `tag:`, `property:` and `linked:`, and in the
+  todo, event and Quick Open filters. Polytonic Greek (`Ἀθῆναι`) is not
+  folded.
+- **Graph**: a settings panel (toolbar, right of the canvas) with Filters (a
+  search in the same syntax, Patients, Events, Orphans), Groups (colour the
+  notes a search finds, up to eight), Display (arrows, size by links) and Forces
+  (centre, repel, link force, link distance). The note inspector has a **Local
+  graph** (closed by default; depth 1 to 3 around the open note, with the same
+  nodes listed under it). The settings are kept in the encrypted store
+  (`app_state`, schema v7), not in user defaults, because a filter or group is
+  often a patient's name; they leave memory when the app locks.
 - **Quick Open ⌘O**: single overlay searching notes/patients/todos/events
 - **Markdown export**: a deliberate one-time "Export Markdown Vault…" action in
   Settings › Data writes plaintext `{noteId}.md` files (YAML front-matter) to a
@@ -118,6 +172,15 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
 - Schema v4 additive migration (`migrations` row `4.0-encrypted-store`):
   `sync_destinations` and `sync_object_map`, plus `patient_files` encryption
   metadata (`storage_id`, `plaintext_length`, `content_digest`)
+- Schema v7 additive migration (`migrations` row `7.0-app-state`): `app_state`
+  (key, JSON value, updated_at) for small named settings; not derived, so Rebuild
+  Indexes leaves it alone, and a backup carries it with the rest of the database
+- Schema v8 additive migration (`migrations` row `8.0-fts-folding`): the six
+  full-text triggers are replaced so the indexes hold a folded copy of the
+  text (`GreekFold`, one table shared by Swift and SQL) and both indexes are
+  refilled once, in one savepoint. A restored older database is upgraded the
+  same way before it serves a search. An older build cannot restore a v8
+  backup, and running one over a v8 store searches accented words less well.
 - Neither bridge writes before a destination is confirmed, and a missing or
   changed destination stops the bridge rather than matching by title
 

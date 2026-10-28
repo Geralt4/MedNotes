@@ -44,6 +44,14 @@ struct IntegrityReport: Equatable {
     let detail: String
 }
 
+/// The outcome of one rebuild of the derived indexes.
+struct IndexRebuildOutcome: Equatable {
+    let passed: Bool
+    let rebuiltAt: Date
+    /// Localised, counts only.
+    let detail: String
+}
+
 /// Settings › Data: the store on disk, its restore points, an on-demand
 /// integrity check, and the one paragraph on what encryption covers.
 ///
@@ -55,6 +63,7 @@ struct DataSettingsPane: View {
     let loadRestorePoints: () async -> [RestorePoint]
     let deleteRestorePoint: (RestorePoint) async throws -> Void
     let checkIntegrity: () async -> IntegrityReport
+    let rebuildIndexes: () async -> IndexRebuildOutcome
     /// Nil when no folder was chosen or a lock stopped the export.
     let exportMarkdown: () async throws -> MarkdownExportService.ExportReport?
     /// Why the last export stopped short (`AppSession.markdownExportInterruption`).
@@ -71,6 +80,8 @@ struct DataSettingsPane: View {
     @State private var failure: String?
     @State private var integrity: IntegrityReport?
     @State private var isChecking = false
+    @State private var rebuild: IndexRebuildOutcome?
+    @State private var isRebuilding = false
     @State private var exportFailure: String?
     @State private var exportedSummary: String?
     @State private var vaultReport: VaultReconciliation.Report?
@@ -85,6 +96,9 @@ struct DataSettingsPane: View {
     var preferredHeight: CGFloat {
         var height: CGFloat = 720 + max(41, 46 * CGFloat(min(restorePoints.count, 6)))
             + (integrity == nil ? 0 : 70) + (backupIsOverdue ? 24 : 0) + (failure == nil ? 0 : 24)
+            // The Indexes section: header, button and a three-line footer, and
+            // a result of two rows.
+            + 130 + (rebuild == nil ? 0 : 70)
         if let vaultReport {
             let listed = vaultReport.vaultOnly.count + vaultReport.divergent.count
             height += 225 + 37 * CGFloat(min(listed, 6)) + (vaultReport.parseFailures.isEmpty ? 0 : 37)
@@ -118,7 +132,11 @@ struct DataSettingsPane: View {
          loadRestorePoints: @escaping () async -> [RestorePoint] = { [] },
          deleteRestorePoint: @escaping (RestorePoint) async throws -> Void = { _ in },
          checkIntegrity: @escaping () async -> IntegrityReport,
+         rebuildIndexes: @escaping () async -> IndexRebuildOutcome = {
+             IndexRebuildOutcome(passed: true, rebuiltAt: Date(), detail: "")
+         },
          initialIntegrity: IntegrityReport? = nil,
+         initialRebuild: IndexRebuildOutcome? = nil,
          exportMarkdown: @escaping () async throws -> MarkdownExportService.ExportReport? = { nil },
          exportInterruption: String? = nil,
          legacyVaultReport: @escaping () async -> VaultReconciliation.Report? = { nil },
@@ -128,12 +146,14 @@ struct DataSettingsPane: View {
         self.loadRestorePoints = loadRestorePoints
         self.deleteRestorePoint = deleteRestorePoint
         self.checkIntegrity = checkIntegrity
+        self.rebuildIndexes = rebuildIndexes
         self.exportMarkdown = exportMarkdown
         self.exportInterruption = exportInterruption
         self.legacyVaultReport = legacyVaultReport
         self.legacyVaultURL = legacyVaultURL
         self.deleteLegacyVault = deleteLegacyVault
         _integrity = State(initialValue: initialIntegrity)
+        _rebuild = State(initialValue: initialRebuild)
     }
 
     var body: some View {
@@ -240,6 +260,40 @@ struct DataSettingsPane: View {
                 DetailSectionHeader(title: "Integrity", systemImage: "checkmark.shield")
             } footer: {
                 SettingsNote("Runs SQLite's own integrity check and confirms every link between records. Backups are checked the same way before they are trusted.")
+            }
+
+            Section {
+                HStack(spacing: Chrome.Space.md) {
+                    Button(isRebuilding ? "Rebuilding…" : "Rebuild Indexes") {
+                        isRebuilding = true
+                        Task {
+                            rebuild = await rebuildIndexes()
+                            isRebuilding = false
+                        }
+                    }
+                    .disabled(isRebuilding || summary == nil)
+                    .accessibilityIdentifier(SettingsIdentifiers.rebuildIndexesButton)
+                    if let rebuild {
+                        Label {
+                            Text(verbatim: rebuild.detail)
+                        } icon: {
+                            Image(systemName: rebuild.passed
+                                  ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(rebuild.passed ? Color.green : Color.orange)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let rebuild {
+                    Text("Rebuilt \(rebuild.rebuiltAt, format: .dateTime.hour().minute())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                DetailSectionHeader(title: "Indexes", systemImage: "arrow.triangle.2.circlepath")
+            } footer: {
+                SettingsNote("Rebuilds search, links, tags and properties from your notes, then checks them. Your notes and patients are not changed.")
             }
 
             // How the store is protected is General › Security's to say; this

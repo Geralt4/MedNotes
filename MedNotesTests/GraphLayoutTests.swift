@@ -36,6 +36,103 @@ final class GraphLayoutTests: XCTestCase {
                        GraphLayout.compute(nodes: nodes, edges: edges))
     }
 
+    /// The layout as it was before the force sliders, computed with that
+    /// version of the algorithm: the default forces must give exactly this.
+    func testDefaultForcesGiveTheLayoutThatWasThereBefore() {
+        let ids = (0..<12).map { "n:\($0)" }
+        let nodes = ids.map { Node(id: $0, label: $0, kind: .note) }
+        var edges = (0..<11).map { Edge(sourceID: ids[$0], targetID: ids[$0 + 1]) }
+        edges.append(Edge(sourceID: ids[0], targetID: ids[5]))
+        edges.append(Edge(sourceID: ids[3], targetID: ids[9]))
+        let expected: [(Double, Double)] = [
+            (0.52598634517795384, 0.67438255321906992), (0.50464272111216957, 0.9530954039937074),
+            (0.75299913677266428, 0.92579963995865455), (0.71250063335642877, 0.63909644546616584),
+            (0.95999999999999996, 0.50647762083562919), (0.73634284553310625, 0.39989518709366312),
+            (0.67982047594647033, 0.13460862139605032), (0.43072315650770709, 0.046904596006292654),
+            (0.27149506678610158, 0.24790304280089634), (0.34655966770569319, 0.51114868140071923),
+            (0.084525680296254985, 0.64926772107916975), (0.03999999999999998, 0.87226908436383321)
+        ]
+        for forces in [GraphLayout.Forces.standard, GraphLayout.Forces()] {
+            let positions = GraphLayout.compute(nodes: nodes, edges: edges, forces: forces)
+            for (i, id) in ids.enumerated() {
+                let p = positions[id]
+                XCTAssertEqual(Double(p?.x ?? .nan), expected[i].0, accuracy: 1e-12, id)
+                XCTAssertEqual(Double(p?.y ?? .nan), expected[i].1, accuracy: 1e-12, id)
+            }
+        }
+    }
+
+    private func meanLinkedDistance(_ positions: [String: CGPoint], _ edges: [Edge]) -> CGFloat {
+        let all = edges.map { distance(positions[$0.sourceID], positions[$0.targetID]) }
+        return all.reduce(0, +) / CGFloat(all.count)
+    }
+
+    private func meanPairDistance(_ positions: [String: CGPoint]) -> CGFloat {
+        let points = Array(positions.values)
+        var total: CGFloat = 0, count: CGFloat = 0
+        for i in points.indices { for j in points.indices where j > i { total += distance(points[i], points[j]); count += 1 } }
+        return total / count
+    }
+
+    func testTheForcesChangeTheShapeInTheWayTheirNamesSay() {
+        let (nodes, edges) = clusters(patients: 4, perPatient: 5, loose: 6)
+        let base = GraphLayout.compute(nodes: nodes, edges: edges)
+
+        var strongCentre = GraphLayout.Forces()
+        strongCentre.center = 0.2
+        let tight = GraphLayout.compute(nodes: nodes, edges: edges, forces: strongCentre)
+        var noCentre = GraphLayout.Forces()
+        noCentre.center = 0
+        let loose = GraphLayout.compute(nodes: nodes, edges: edges, forces: noCentre)
+        // The unit square is rescaled to the span, so compare the loose nodes' spread
+        // relative to the linked ones: a stronger centre pulls the loose ones in.
+        func spread(_ p: [String: CGPoint]) -> CGFloat { meanPairDistance(p) / max(meanLinkedDistance(p, edges), 1e-9) }
+        XCTAssertLessThan(spread(tight), spread(loose))
+
+        var weakLinks = GraphLayout.Forces()
+        weakLinks.linkStrength = 0.2
+        var strongLinks = GraphLayout.Forces()
+        strongLinks.linkStrength = 4
+        func cohesion(_ forces: GraphLayout.Forces) -> CGFloat {
+            let p = GraphLayout.compute(nodes: nodes, edges: edges, forces: forces)
+            return meanLinkedDistance(p, edges) / meanPairDistance(p)
+        }
+        XCTAssertLessThan(cohesion(strongLinks), cohesion(weakLinks),
+                          "stronger links hold linked nodes closer, relative to everything else")
+        XCTAssertNotEqual(base, tight)
+    }
+
+    func testForcesAreClampedAndNonNumbersFallBack() {
+        var wild = GraphLayout.Forces(center: .nan, repel: 1_000, linkStrength: -5, linkDistance: .infinity)
+        wild = wild.clamped
+        XCTAssertEqual(wild.center, GraphLayout.Forces.standard.center)
+        XCTAssertEqual(wild.repel, GraphLayout.Forces.repelRange.upperBound)
+        XCTAssertEqual(wild.linkStrength, GraphLayout.Forces.linkStrengthRange.lowerBound)
+        XCTAssertEqual(wild.linkDistance, GraphLayout.Forces.standard.linkDistance)
+        let (nodes, edges) = clusters(patients: 3, perPatient: 3)
+        let positions = GraphLayout.compute(nodes: nodes, edges: edges, forces: wild)
+        for p in positions.values { XCTAssertTrue(p.x.isFinite && p.y.isFinite) }
+    }
+
+    func testAWarmStartKeepsNodesNearWhereTheyWere() {
+        let (nodes, edges) = clusters(patients: 5, perPatient: 4, loose: 5)
+        let first = GraphLayout.compute(nodes: nodes, edges: edges)
+        var changed = GraphLayout.Forces()
+        changed.repel = 1.5
+        let warm = GraphLayout.compute(nodes: nodes, edges: edges, forces: changed, initial: first)
+        let cold = GraphLayout.compute(nodes: nodes, edges: edges, forces: changed)
+        func drift(_ a: [String: CGPoint]) -> CGFloat {
+            nodes.map { distance(a[$0.id], first[$0.id]) }.reduce(0, +) / CGFloat(nodes.count)
+        }
+        XCTAssertLessThan(drift(warm), drift(cold), "warm \(drift(warm)), cold \(drift(cold))")
+        // Deterministic, and nodes the earlier layout did not know still get a place.
+        XCTAssertEqual(warm, GraphLayout.compute(nodes: nodes, edges: edges, forces: changed, initial: first))
+        let fewer = Array(nodes.dropLast(3))
+        let partial = GraphLayout.compute(nodes: nodes, edges: edges, initial: GraphLayout.compute(nodes: fewer, edges: []))
+        XCTAssertEqual(partial.count, nodes.count)
+        for p in partial.values { XCTAssertTrue(p.x.isFinite && p.y.isFinite) }
+    }
+
     func testPositionsAreFiniteAndInsideTheUnitSquare() {
         let (nodes, edges) = clusters(patients: 8, perPatient: 5, loose: 20)
         let positions = GraphLayout.compute(nodes: nodes, edges: edges)

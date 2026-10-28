@@ -39,7 +39,10 @@ struct PatientDetailView: View {
         .onAppear {
             let draft = $draft, original = $original
             session.registerOpenEditor(lockToken) {
-                draft.wrappedValue.map { .patient($0, edited: $0 != original.wrappedValue) }
+                draft.wrappedValue.map {
+                    .patient($0, edited: $0 != original.wrappedValue,
+                             knownFileIDs: original.wrappedValue.map { Set($0.files.map(\.id)) })
+                }
             }
         }
         .onDisappear {

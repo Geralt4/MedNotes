@@ -50,8 +50,7 @@ step "Verify the pinned dependency inventory"
 python3 scripts/scan_dependencies.py
 
 step "Gate on the security test suite"
-# Only the three documented CLI-only skips are allowed inside the sandboxed
-# test host; any failure or unexpected skip stops the release.
+# Only the named CLI tests may skip in a sandboxed test host.
 xcodebuild \
   -project MedNotes.xcodeproj \
   -scheme MedNotes \
@@ -61,11 +60,23 @@ if ! grep -q '\*\* TEST SUCCEEDED \*\*' "$OUT/tests.log"; then
   echo "tests did not pass; refusing to release" >&2
   exit 1
 fi
-SKIPPED="$(grep -ci '^Test Case .* skipped' "$OUT/tests.log" || true)"
-if [[ "$SKIPPED" -gt 3 ]]; then
-  echo "unexpected skips ($SKIPPED > 3); refusing to release" >&2
-  exit 1
-fi
+python3 - "$OUT/tests.log" <<'PY'
+import re
+import sys
+
+allowed = {
+    "testCLISafetyRefusesBackupsFolder",
+    "testCLISourceRequiresPath",
+    "testCLIDryRunOnEmptySource",
+}
+with open(sys.argv[1], encoding="utf-8", errors="replace") as log:
+    for line in log:
+        if re.match(r"^Test Case .* skipped", line, re.IGNORECASE):
+            match = re.match(r"^Test Case '-\[MedNotesTests\.CLIDryRunTests (\w+)\]' skipped", line, re.IGNORECASE)
+            if not match or match.group(1) not in allowed:
+                print("unexpected skipped test; refusing to release: " + line.strip(), file=sys.stderr)
+                sys.exit(1)
+PY
 
 step "Archive (Release, hardened runtime)"
 # The version the caller names is the version the app must report, not only

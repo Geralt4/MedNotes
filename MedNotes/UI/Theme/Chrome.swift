@@ -237,6 +237,8 @@ enum DisplayCopy {
         case "todo_sync_import": return String(localized: "Imported todo from Reminders")
         case "note_pin": return String(localized: "Toggled note pin")
         case "link_relink_failed": return String(localized: "Link update failed")
+        case "links_rebuilt": return String(localized: "Rebuilt note links")
+        case "indexes_rebuilt": return String(localized: "Rebuilt indexes")
         default: return action.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
@@ -341,6 +343,24 @@ enum DisplayCopy {
                let notes = Int(token.dropFirst("notes=".count)) {
                 return String(localized: "Exported \(notes) notes as plaintext Markdown.")
             }
+        case "links_rebuilt":
+            // "notes=40 links=120 unresolved=8 ambiguous=0 earlier=118 unresolvedNow=5"
+            func count(_ name: String) -> Int? {
+                words.first(where: { $0.hasPrefix(name + "=") }).flatMap { Int($0.dropFirst(name.count + 1)) }
+            }
+            if let links = count("links"), let unresolved = count("unresolved"),
+               let lost = count("unresolvedNow") {
+                return String(localized: "\(links) links (\(unresolved) unresolved); \(lost) earlier links no longer resolve")
+            }
+        case "indexes_rebuilt":
+            // "notes=40 links=120 unresolved=8 ambiguous=0 headings=90 tags=30 properties=12 failed=0 passed=1"
+            func count(_ name: String) -> Int? {
+                words.first(where: { $0.hasPrefix(name + "=") }).flatMap { Int($0.dropFirst(name.count + 1)) }
+            }
+            if let notes = count("notes"), let links = count("links"), let unresolved = count("unresolved"),
+               let headings = count("headings"), let tags = count("tags") {
+                return String(localized: "Rebuilt \(notes) notes: \(links) links (\(unresolved) unresolved), \(headings) headings, \(tags) tags.")
+            }
         case "restore_point_prune":
             // "Removed 3 older restore point(s)"
             if words.count > 1, let count = Int(words[1]) {
@@ -391,15 +411,13 @@ enum DisplayCopy {
     /// lines, where raw markdown syntax costs more room than it conveys —
     /// a row opening on `---` front-matter or a `#` heading reads as noise.
     static func preview(_ content: String) -> String {
-        var lines = content.components(separatedBy: .newlines)
-
-        // Vault mirrors round-trip through YAML front-matter; never preview it.
-        if lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-           let close = lines.dropFirst().firstIndex(where: {
-               $0.trimmingCharacters(in: .whitespaces) == "---"
-           }) {
-            lines = Array(lines[(close + 1)...])
+        // Front matter is never previewed (`FrontMatter`: properties between
+        // two `---` lines); two rules around prose are just text.
+        var text = content
+        if let block = FrontMatter.properties(in: content) {
+            text = (content as NSString).substring(from: NSMaxRange(block.range))
         }
+        let lines = text.components(separatedBy: .newlines)
 
         var kept: [String] = []
         var insideFence = false
@@ -412,13 +430,20 @@ enum DisplayCopy {
             }
             if insideFence || line.isEmpty || isRule(line) { continue }
 
-            let cleaned = stripInline(stripLeadingMarkers(line))
-                .trimmingCharacters(in: .whitespaces)
+            let cleaned = plainLine(line)
             if !cleaned.isEmpty { kept.append(cleaned) }
             if kept.count == 4 { break }   // two rendered lines never need more
         }
 
         return kept.joined(separator: " ")
+    }
+
+    /// One line of Markdown as plain text: quote, heading, bullet and task
+    /// markers and inline syntax removed. Shared by the preview and the search
+    /// snippet.
+    static func plainLine(_ raw: String) -> String {
+        stripInline(stripLeadingMarkers(raw.trimmingCharacters(in: .whitespaces)))
+            .trimmingCharacters(in: .whitespaces)
     }
 
     /// `---`, `***`, `___`: structure carrying no text.

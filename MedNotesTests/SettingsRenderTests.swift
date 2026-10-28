@@ -48,6 +48,18 @@ final class SettingsRenderTests: XCTestCase {
         XCTAssertGreaterThan(interrupted.preferredHeight, plain.preferredHeight)
     }
 
+    /// A rebuild's result adds a row to the Data pane, which makes room for it.
+    func testDataPaneMakesRoomForARebuildResult() {
+        let report = IntegrityReport(passed: true, checkedAt: Date(), detail: "No problems found.")
+        let outcome = IndexRebuildOutcome(passed: true, rebuiltAt: Date(), detail: "Rebuilt 3 notes: 4 links (0 unresolved), 2 headings, 1 tags. All checks passed.")
+        let plain = DataSettingsPane(loadSummary: { nil }, checkIntegrity: { report })
+        let rebuilt = DataSettingsPane(loadSummary: { nil }, checkIntegrity: { report }, initialRebuild: outcome)
+        XCTAssertGreaterThan(rebuilt.preferredHeight, plain.preferredHeight)
+        XCTAssertEqual(SettingsIdentifiers.rebuildIndexesButton, "settings.data.rebuildIndexes")
+        let hosting = offscreen.host(rebuilt, width: 540, height: rebuilt.preferredHeight)
+        XCTAssertTrue(OffscreenHost.hasInk(hosting), "the Data pane rendered blank")
+    }
+
     func testDataPaneFormatsCountsAndSizes() {
         XCTAssertEqual(
             BackupFlowSheet.summary(counts: ["patients": 12, "notes": 40, "todo_items": 8, "calendar_events": 172]),

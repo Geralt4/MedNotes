@@ -39,21 +39,23 @@ struct MarkdownPreview: View {
         var out: [Block] = []
         var paragraph: [String] = []
         var inFence = false
-        var lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-
-        // Front matter, as the note list reads it: a `---` first line through
-        // the next `---` line. Parsed line by line it became a rule and one
+        var body = source
+        // Front matter, as the styler and the list read it (`FrontMatter`): a
+        // `---` first line through the next `---` line, when what is between
+        // reads as properties. Parsed line by line it became a rule and one
         // run-on paragraph of YAML.
-        if lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-           let close = lines.dropFirst().firstIndex(where: {
-               $0.trimmingCharacters(in: .whitespaces) == "---"
-           }) {
-            let properties = lines[1..<close].filter {
-                !$0.trimmingCharacters(in: .whitespaces).isEmpty
-            }
-            if !properties.isEmpty { out.append(.frontMatter(Array(properties))) }
-            lines = Array(lines[(close + 1)...])
+        if let block = FrontMatter.properties(in: source) {
+            let ns = source as NSString
+            let properties = ns.substring(with: block.innerRange)
+                .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+                .map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            if !properties.isEmpty { out.append(.frontMatter(properties)) }
+            body = ns.substring(from: NSMaxRange(block.range))
         }
+        // A character that is a newline splits here, so CRLF is one break and
+        // no line keeps a stray carriage return.
+        let lines = body.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }

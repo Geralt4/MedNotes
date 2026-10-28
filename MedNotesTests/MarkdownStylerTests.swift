@@ -18,7 +18,8 @@ final class MarkdownStylerTests: XCTestCase {
             XCTAssertEqual(texts(.syntaxMarker, in: text), [String(repeating: "#", count: level)])
         }
         XCTAssertTrue(MarkdownStyler.spans(in: "####### seven").isEmpty)
-        XCTAssertTrue(MarkdownStyler.spans(in: "#hashtag").isEmpty, "a heading needs the space")
+        XCTAssertEqual(texts(.heading(level: 1), in: "#hashtag"), [], "a heading needs the space")
+        XCTAssertEqual(texts(.tag, in: "#hashtag"), ["#hashtag"], "without the space it is a tag")
     }
 
     func testBoldAndItalic() {
@@ -50,6 +51,33 @@ final class MarkdownStylerTests: XCTestCase {
         let text = "See [[Γεώργιος Παπαδόπουλος]] today"
         XCTAssertEqual(texts(.wikiLink, in: text), ["Γεώργιος Παπαδόπουλος"])
         XCTAssertEqual(texts(.syntaxMarker, in: text), ["[[", "]]"])
+    }
+
+    func testWikiLinkStylingFollowsTheLinkIndex() {
+        let text = "a [[One]] `[[In code]]`\n```\n[[Fenced]]\n```\n![[Embed|alias]] [[Plan #2|see]]"
+        let parsed = WikiLinkParser.scan(text).links
+        XCTAssertEqual(parsed.count, 3)
+        XCTAssertEqual(texts(.wikiLink, in: text), ["One", "Embed|alias", "Plan #2|see"],
+                       "links in code are not styled, because they are not indexed")
+        XCTAssertEqual(texts(.syntaxMarker, in: "![[x]]"), ["![[", "]]"])
+        let styled = MarkdownStyler.spans(in: text).filter { $0.role == .wikiLink }
+        for (span, link) in zip(styled, parsed) {
+            XCTAssertEqual(NSIntersectionRange(span.range, link.range), span.range)
+        }
+    }
+
+    func testTagsAreStyledWhereTheyAreIndexed() {
+        XCTAssertEqual(texts(.tag, in: "seen #cardio/ward and #Έλεγχος, not a#b or `#code`"), ["#cardio/ward", "#Έλεγχος"])
+        XCTAssertEqual(texts(.tag, in: "```\n#fenced\n```\n#real"), ["#real"])
+        XCTAssertEqual(texts(.tag, in: "## Plan #follow-up"), ["#follow-up"])
+        XCTAssertEqual(texts(.tag, in: "---\n# yaml comment\n---\n#body"), ["#body"])
+    }
+
+    func testMarkdownInsideAFenceIsNotStyled() {
+        let text = "# Real\n```\n# not a heading\n**not bold**\n```\n## Also real"
+        XCTAssertEqual(texts(.heading(level: 1), in: text), ["# Real"])
+        XCTAssertEqual(texts(.heading(level: 2), in: text), ["## Also real"])
+        XCTAssertEqual(texts(.bold, in: text), [])
     }
 
     func testFrontMatterOnlyAtTheVeryStart() {

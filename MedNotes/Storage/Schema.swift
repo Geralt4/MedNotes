@@ -1,7 +1,7 @@
 import Foundation
 
 enum Schema {
-    static let currentVersion = 4
+    static let currentVersion = 8
 
     static let v1: [String] = [
         """
@@ -154,6 +154,9 @@ enum Schema {
             fathers_name
         )
         """,
+        // The six full-text triggers below are the original text. `migrateV8`
+        // replaces them with the folded versions in `SchemaFTS.swift`, which is
+        // the text to edit; these are kept only so older databases still open.
         """
         CREATE TRIGGER IF NOT EXISTS patients_fts_insert AFTER INSERT ON patients BEGIN
             INSERT INTO patients_fts(rowid, id, first_name, last_name, full_name, phone, email, amka, fathers_name)
@@ -285,8 +288,171 @@ enum Schema {
         "CREATE INDEX IF NOT EXISTS idx_sync_map_destination ON sync_object_map(destination_id)"
     ]
 
+    // MARK: - v5 (derived wiki-link edges)
+
+    /// The link index, derived from note text by `LinkIndex`; deleting both
+    /// tables loses nothing, the next open derives them again.
+    ///
+    /// `wikilinks` holds one row per `[[...]]` occurrence, resolved or not.
+    /// `dst_id` has no foreign key on purpose: an edge outlives the note or
+    /// patient it pointed at and is resolved again, rather than cascading
+    /// away. `link_sources` records which text each note's rows were derived
+    /// from, so a stale note (restored, imported, saved by an older build)
+    /// is found by comparing hashes.
+    ///
+    /// `note_links` (v2) is superseded and no longer read or written. It is
+    /// kept because dropping a table cannot be undone.
+    static let v5: [String] = [
+        """
+        CREATE TABLE IF NOT EXISTS wikilinks (
+            id TEXT PRIMARY KEY NOT NULL,
+            src_note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            raw_target TEXT NOT NULL DEFAULT '',
+            target_key TEXT NOT NULL DEFAULT '',
+            inner_key TEXT NOT NULL DEFAULT '',
+            heading TEXT,
+            block_id TEXT,
+            alias TEXT,
+            is_embed INTEGER NOT NULL DEFAULT 0,
+            start_offset INTEGER NOT NULL,
+            end_offset INTEGER NOT NULL,
+            state TEXT NOT NULL DEFAULT 'unresolved',
+            dst_kind TEXT,
+            dst_id TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_wikilinks_src ON wikilinks(src_note_id)",
+        "CREATE INDEX IF NOT EXISTS idx_wikilinks_dst ON wikilinks(dst_id)",
+        "CREATE INDEX IF NOT EXISTS idx_wikilinks_target_key ON wikilinks(target_key)",
+        """
+        CREATE TABLE IF NOT EXISTS link_sources (
+            note_id TEXT PRIMARY KEY NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            content_hash TEXT NOT NULL,
+            parser_version INTEGER NOT NULL
+        )
+        """
+    ]
+
+    // MARK: - v6 (derived note metadata)
+
+    /// What a note's text says about itself, derived with the links
+    /// (`LinkIndex.deriveRows`, `MetadataIndex`): headings for the Outline,
+    /// block ids, tags (inline `#tags` and the `tags:` property), aliases and
+    /// the typed properties. Like the link tables these can be thrown away
+    /// and rebuilt from the notes; they hold nothing the text does not.
+    ///
+    /// A note's own tag field (`notes.tags_json`) is not copied here: it is
+    /// edited without touching the text, so a copy would go stale. Tag
+    /// queries read it alongside these tables.
+    ///
+    /// Also adds `wikilinks.head_key` (see `migrateV6`).
+    static let v6: [String] = [
+        """
+        CREATE TABLE IF NOT EXISTS note_headings (
+            note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            level INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            key TEXT NOT NULL,
+            start_offset INTEGER NOT NULL,
+            PRIMARY KEY (note_id, ordinal)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS note_blocks (
+            note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            block_id TEXT NOT NULL,
+            start_offset INTEGER NOT NULL,
+            PRIMARY KEY (note_id, block_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS note_tags (
+            note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            tag_key TEXT NOT NULL,
+            source TEXT NOT NULL,
+            start_offset INTEGER,
+            PRIMARY KEY (note_id, ordinal)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_note_tags_key ON note_tags(tag_key)",
+        """
+        CREATE TABLE IF NOT EXISTS note_aliases (
+            note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            alias TEXT NOT NULL,
+            alias_key TEXT NOT NULL,
+            PRIMARY KEY (note_id, ordinal)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_note_aliases_key ON note_aliases(alias_key)",
+        """
+        CREATE TABLE IF NOT EXISTS note_properties (
+            note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            key TEXT NOT NULL,
+            key_norm TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            text_value TEXT,
+            number_value REAL,
+            list_json TEXT,
+            PRIMARY KEY (note_id, ordinal)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_note_properties_key ON note_properties(key_norm)"
+    ]
+
+    /// Schema v7: small named values the app keeps for itself, such as the
+    /// graph's settings. Encrypted with the rest of the store and carried by
+    /// backups; no triggers, and not derived from anything, so an index
+    /// rebuild leaves it alone.
+    static let v7: [String] = [
+        """
+        CREATE TABLE IF NOT EXISTS app_state (
+            key TEXT PRIMARY KEY,
+            value_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    ]
+
+    /// Ignores formatting whitespace in a trigger's SQL while keeping the
+    /// whitespace inside string literals, escaped quotes included. SQLite
+    /// stores a trigger's text as written, minus `IF NOT EXISTS`.
+    static func canonicalTriggerSQL(_ sql: String) -> String {
+        var result = ""
+        var quoted = false
+        var pendingSpace = false
+        for character in sql {
+            if character == "'" {
+                if pendingSpace && !result.isEmpty { result.append(" ") }
+                pendingSpace = false
+                quoted.toggle()
+                result.append(character)
+            } else if character.isWhitespace && !quoted {
+                pendingSpace = true
+            } else {
+                if pendingSpace && !result.isEmpty { result.append(" ") }
+                pendingSpace = false
+                result.append(character)
+            }
+        }
+        return result
+    }
+
+    /// Whether `stored` is the trigger `trusted` (already canonical), byte for
+    /// byte: SQLite's `replace()` compares bytes, while Swift's `==` treats a
+    /// letter and its decomposed form as the same.
+    static func sameTriggerSQL(_ trusted: String?, _ stored: String) -> Bool {
+        guard let trusted else { return false }
+        return Array(trusted.utf8) == Array(canonicalTriggerSQL(stored).utf8)
+    }
+
     static func ftsQuery(_ rawQuery: String) -> String {
-        let tokens = splitTokens(rawQuery)
+        let tokens = foldedTokens(rawQuery)
         if tokens.isEmpty {
             return "\"\""
         }

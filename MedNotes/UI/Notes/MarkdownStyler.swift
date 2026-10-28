@@ -3,9 +3,10 @@ import Foundation
 /// Where a note body's Markdown wants styling, for drawing it in the editor
 /// while the stored text stays plain Markdown.
 ///
-/// Line-based and deliberately small: ATX headings, bold, italic, wiki-links
-/// and a front-matter block at the very start. It answers "what should look
-/// different", not "what does this parse to"; `MarkdownPreview` renders.
+/// Line-based and deliberately small: ATX headings, bold, italic and a
+/// front-matter block at the very start, plus wiki-links from
+/// `WikiLinkParser`. It answers "what should look different", not "what does
+/// this parse to"; `MarkdownPreview` renders.
 /// Ranges are UTF-16, the units `NSTextView` and `NSString` count in.
 enum MarkdownStyler {
     struct Span: Equatable {
@@ -18,6 +19,8 @@ enum MarkdownStyler {
             case frontMatter
             /// The text between `[[` and `]]`.
             case wikiLink
+            /// A `#tag`, `#` included.
+            case tag
         }
 
         let range: NSRange
@@ -29,43 +32,71 @@ enum MarkdownStyler {
         var spans: [Span] = []
         var location = 0
 
-        // Front matter: a `---` first line, through the next `---` line.
-        if let end = frontMatterEnd(in: ns) {
-            spans.append(Span(range: NSRange(location: 0, length: end), role: .frontMatter))
-            location = end
+        // Front matter: properties between a `---` first line and the next
+        // `---` line (`FrontMatter`, the one definition every reader shares).
+        if let block = FrontMatter.properties(in: ns) {
+            spans.append(Span(range: block.range, role: .frontMatter))
+            location = NSMaxRange(block.range)
         }
+
+        // Code and comments that run across lines are not styled as Markdown:
+        // a `#` line inside a fence is code, not a heading.
+        let linkScan = WikiLinkParser.scan(text)
+        let multiLine = mergedRanges(linkScan.protectedRanges)
 
         while location < ns.length {
             var lineEnd = 0, contentsEnd = 0
             ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
                             for: NSRange(location: location, length: 0))
             let line = NSRange(location: location, length: contentsEnd - location)
-            spans += lineSpans(ns, line)
+            if !coveredAcrossLines(multiLine, line) { spans += lineSpans(ns, line) }
             location = lineEnd
         }
+        spans += wikiLinkSpans(from: linkScan)
+        spans += NoteMetadata.scan(text, links: linkScan).tags.map { Span(range: $0.range, role: .tag) }
         return spans
     }
 
-    // MARK: - Front matter
-
-    private static func frontMatterEnd(in ns: NSString) -> Int? {
-        var firstEnd = 0, firstContents = 0
-        ns.getLineStart(nil, end: &firstEnd, contentsEnd: &firstContents,
-                        for: NSRange(location: 0, length: 0))
-        guard ns.substring(with: NSRange(location: 0, length: firstContents)) == "---",
-              firstEnd < ns.length else { return nil }
-        var location = firstEnd
-        while location < ns.length {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
-            if ns.substring(with: NSRange(location: location, length: contentsEnd - location)) == "---" {
-                return lineEnd
-            }
-            location = lineEnd
+    /// Whether the line starts inside a range that began on an earlier line or
+    /// runs past this one: a fence, a block comment. A code span that opens and
+    /// closes within the line does not make it code.
+    private static func coveredAcrossLines(_ ranges: [NSRange], _ line: NSRange) -> Bool {
+        for range in ranges where range.location <= line.location && line.location < NSMaxRange(range) {
+            return range.location < line.location || NSMaxRange(range) > NSMaxRange(line)
         }
-        // Never closed: an ordinary rule followed by text, not front matter.
-        return nil
+        return false
+    }
+
+    private static func mergedRanges(_ ranges: [NSRange]) -> [NSRange] {
+        var out: [NSRange] = []
+        for range in ranges.filter({ $0.length > 0 }).sorted(by: { $0.location < $1.location }) {
+            if let last = out.last, range.location <= NSMaxRange(last) {
+                out[out.count - 1] = NSRange(
+                    location: last.location, length: max(NSMaxRange(last), NSMaxRange(range)) - last.location)
+            } else {
+                out.append(range)
+            }
+        }
+        return out
+    }
+
+    /// Wiki-link styling comes from `WikiLinkParser`, the definition the link
+    /// index uses, so a link is styled exactly when it is indexed: not inside
+    /// code or a comment, and an embed's `!` is part of its opening marker.
+    private static func wikiLinkSpans(from scan: WikiLinkParser.Scan) -> [Span] {
+        var spans: [Span] = []
+        for link in scan.links {
+            let openLength = link.isEmbed ? 3 : 2
+            let inner = NSRange(
+                location: link.range.location + openLength,
+                length: link.range.length - openLength - 2)
+            spans.append(Span(range: inner, role: .wikiLink))
+            spans.append(Span(
+                range: NSRange(location: link.range.location, length: openLength), role: .syntaxMarker))
+            spans.append(Span(
+                range: NSRange(location: NSMaxRange(link.range) - 2, length: 2), role: .syntaxMarker))
+        }
+        return spans
     }
 
     // MARK: - One line
@@ -77,7 +108,6 @@ enum MarkdownStyler {
     // stays plain) and not part of a double marker.
     private static let italic = try! NSRegularExpression(
         pattern: "(?<![\\p{L}\\p{N}*_])([*_])(?![*_\\s])(.+?)(?<![*_\\s])\\1(?![\\p{L}\\p{N}*_])")
-    private static let wikiLink = try! NSRegularExpression(pattern: "\\[\\[([^\\[\\]\\n]+)\\]\\]")
 
     private static func lineSpans(_ ns: NSString, _ line: NSRange) -> [Span] {
         guard line.length > 0 else { return [] }
@@ -101,10 +131,6 @@ enum MarkdownStyler {
             spans += markers(around: match.range, length: 1)
         }
 
-        for match in wikiLink.matches(in: ns as String, range: line) {
-            spans.append(Span(range: match.range(at: 1), role: .wikiLink))
-            spans += markers(around: match.range, length: 2)
-        }
         return spans
     }
 

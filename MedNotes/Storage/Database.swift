@@ -46,11 +46,14 @@ actor Database {
         return d
     }
 
-    init(path: String) throws {
+    /// `deriveLinks: false` opens a store only to read it (the owner's original
+    /// plaintext store during encryption migration): the schema is brought up
+    /// to date, but no derived link rows are written into it.
+    init(path: String, deriveLinks: Bool = true) throws {
         self.databaseKey = nil
         self.conn = try SQLConnection(path: path)
         try Self.configure(conn)
-        try Self.migrate(conn)
+        try Self.migrate(conn, deriveLinks: deriveLinks)
     }
 
     /// Production construction: an encrypted connection keyed from the device
@@ -303,7 +306,7 @@ actor Database {
         removeSQLiteSidecars(at: dest)
     }
 
-    private nonisolated static func migrate(_ conn: SQLConnection) throws {
+    private nonisolated static func migrate(_ conn: SQLConnection, deriveLinks: Bool = true) throws {
         for statement in Schema.v1 {
             try conn.exec(statement)
         }
@@ -312,6 +315,11 @@ actor Database {
         try migrateV2(conn)
         try migrateV3(conn)
         try migrateV4(conn)
+        try migrateV5(conn)
+        try migrateV6(conn)
+        try migrateV7(conn)
+        // The plaintext store being read for a migration is left as it is.
+        if deriveLinks { try migrateV8(conn) }
         let stmt = try conn.prepare("SELECT COUNT(*) FROM migrations WHERE version = ?")
         stmt.bind(1, "1.0-clean")
         if try stmt.step(), (stmt.columnInt(0) ?? 0) == 0 {
@@ -322,6 +330,112 @@ actor Database {
             insert.bind(3, 0.0)
             _ = try insert.step()
         }
+        // Last: the link tables are derived from the notes, so every other
+        // table is in its final shape before they are brought up to date.
+        if deriveLinks { LinkIndex.deriveOnOpen(conn) }
+    }
+
+    /// Schema v5: the derived wiki-link tables. Only new tables, so a v4
+    /// database opens unchanged and an older build ignores them.
+    private nonisolated static func migrateV5(_ conn: SQLConnection) throws {
+        for statement in Schema.v5 {
+            try conn.exec(statement)
+        }
+        let marker = try conn.prepare(
+            "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
+        marker.bind(1, "5.0-link-tables")
+        marker.bind(2, "wikilinks and link_sources: derived wiki-link edges")
+        marker.bind(3, 0.0)
+        _ = try marker.step()
+        marker.finalize()
+    }
+
+    /// Schema v6: the derived metadata tables, and the key of the text before
+    /// a link's alias (`wikilinks.head_key`), so `[[Plan #2|see]]` can resolve
+    /// to a note titled "Plan #2". Additive: a v5 database opens unchanged and
+    /// every note is derived again once, because its stored derivation version
+    /// is older.
+    private nonisolated static func migrateV6(_ conn: SQLConnection) throws {
+        for statement in Schema.v6 {
+            try conn.exec(statement)
+        }
+        try addColumnIfMissing(conn, table: "wikilinks", column: "head_key", decl: "TEXT NOT NULL DEFAULT ''")
+        let marker = try conn.prepare(
+            "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
+        marker.bind(1, "6.0-note-metadata")
+        marker.bind(2, "headings, blocks, tags, aliases and properties: derived note metadata")
+        marker.bind(3, 0.0)
+        _ = try marker.step()
+        marker.finalize()
+    }
+
+    /// Schema v7: the `app_state` table. Additive: a v6 database opens
+    /// unchanged.
+    private nonisolated static func migrateV7(_ conn: SQLConnection) throws {
+        for statement in Schema.v7 {
+            try conn.exec(statement)
+        }
+        let marker = try conn.prepare(
+            "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
+        marker.bind(1, "7.0-app-state")
+        marker.bind(2, "app_state: small named values kept by the app")
+        marker.bind(3, 0.0)
+        _ = try marker.step()
+        marker.finalize()
+    }
+
+    /// Schema v8: the full-text indexes hold a folded copy of the text (Greek
+    /// accents, capitals and the final sigma removed; see `GreekFold`), so the
+    /// six triggers are replaced and both indexes are filled again. The triggers
+    /// were created `IF NOT EXISTS`, so an existing database keeps the old ones
+    /// until this runs. Detection is by trigger text, byte for byte; the marker
+    /// only covers a database whose triggers are right but whose rows were never
+    /// refilled. All of it is one savepoint: a failure leaves the old triggers
+    /// and indexes, and the next open tries again.
+    #if DEBUG
+    /// Makes `migrateV8` fail after it has replaced the triggers, to prove
+    /// the savepoint puts the old ones back.
+    nonisolated(unsafe) static var failFTSFoldingForTesting = false
+    #endif
+
+    private nonisolated static func migrateV8(_ conn: SQLConnection) throws {
+        var stored: [String: String] = [:]
+        let names = Schema.ftsTriggerNames.map { "'\($0)'" }.joined(separator: ", ")
+        let read = try conn.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN (\(names))")
+        while try read.step() {
+            if let name = read.columnText(0), let sql = read.columnText(1) { stored[name] = sql }
+        }
+        read.finalize()
+        let current = Schema.ftsTriggers.allSatisfy {
+            Schema.sameTriggerSQL(Schema.canonicalTriggerSQL($0.sql), stored[$0.name] ?? "")
+        }
+        let marked = try conn.prepare("SELECT COUNT(*) FROM migrations WHERE version = ?")
+        marked.bind(1, "8.0-fts-folding")
+        let hasMarker = try marked.step() && (marked.columnInt(0) ?? 0) > 0
+        marked.finalize()
+        guard !current || !hasMarker else { return }
+
+        let started = Date()
+        try LinkIndex.withSavepoint(conn) {
+            // Every one of the six, so a trigger that was altered is replaced too.
+            for name in Schema.ftsTriggerNames { try conn.exec("DROP TRIGGER IF EXISTS \(name)") }
+            for trigger in Schema.ftsTriggers { try conn.exec(trigger.sql) }
+            #if DEBUG
+            if failFTSFoldingForTesting { throw SQLiteError.exec("folding fault", sql: "") }
+            #endif
+            try conn.exec("DELETE FROM notes_fts")
+            try conn.exec(Schema.ftsRefillNotes)
+            try conn.exec("DELETE FROM patients_fts")
+            try conn.exec(Schema.ftsRefillPatients)
+            let marker = try conn.prepare(
+                "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
+            marker.bind(1, "8.0-fts-folding")
+            marker.bind(2, "full-text indexes hold accent-, case- and final-sigma-folded text")
+            marker.bind(3, Date().timeIntervalSince(started))
+            _ = try marker.step()
+            marker.finalize()
+        }
+        NSLog("MedNotes: search indexes refolded in %.2f s", Date().timeIntervalSince(started))
     }
 
     /// Schema v2: `[[wiki-links]]`, note templates, and Apple Calendar sync
@@ -583,6 +697,9 @@ actor Database {
                     name: linkedName.isEmpty ? nil : linkedName)
             }
         }
+        // Imported notes arrive without link rows. Derived after the import
+        // has committed and never allowed to fail it.
+        refreshStaleLinks()
     }
 
     // MARK: - Patients
@@ -1022,22 +1139,33 @@ actor Database {
             // otherwise the rows can no longer be found by patient_id.
             try updateTodoPatientNames(patientId: id, name: nil)
             try unlinkPatientFromNotes(patientId: id)
-            // Same reason: note_links.dst_patient_id is ON DELETE SET NULL, so
-            // after the patient row goes the edge survives with both dst columns
-            // NULL and can no longer be found by patient id. linksFromNote would
-            // then render it as a patient link labelled "(missing)".
-            try deleteNoteLinksToPatient(patientId: id)
             let s = try conn.prepare("DELETE FROM patients WHERE id = ?")
             s.bind(1, id.uuidString)
             _ = try s.step()
+            s.finalize()
+            // Links that named the patient stay in their notes as unresolved
+            // links (`wikilinks.dst_id` has no foreign key to cascade).
+            try LinkIndex.resolveAll(conn)
         }
     }
 
-    private func deleteNoteLinksToPatient(patientId: UUID) throws {
-        let s = try conn.prepare("DELETE FROM note_links WHERE dst_patient_id = ?")
-        s.bind(1, patientId.uuidString)
-        _ = try s.step()
-        s.finalize()
+    /// Resolves every stored wiki-link again. Cheap; call after anything that
+    /// can change what a link names (a patient saved, renamed or archived).
+    func resolveAllLinks() throws {
+        try transaction { try LinkIndex.resolveAll(conn) }
+    }
+
+    /// Derives one note's wiki-link rows from its current text and resolves
+    /// every link. Separate from `saveNote` on purpose: a failure here must
+    /// never undo the save.
+    func relinkNote(id: UUID) throws {
+        try transaction { try LinkIndex.relink(conn, noteID: id.uuidString) }
+    }
+
+    /// Derives again every note whose text changed since its link rows were
+    /// made. Never throws.
+    func refreshStaleLinks() {
+        _ = try? transaction { try LinkIndex.refreshStale(conn) }
     }
 
     private func unlinkPatientFromNotes(patientId: UUID) throws {
@@ -1094,7 +1222,7 @@ actor Database {
         let tokenClauses = tokens.map { _ in
             """
             (id IN (SELECT id FROM patients_fts WHERE patients_fts MATCH ?)
-             OR instr(lower(ifnull(fathers_name, '')), lower(?)) > 0)
+             OR instr(\(GreekFold.sql("ifnull(fathers_name, '')")), ?) > 0)
             """
         }.joined(separator: " AND ")
         let sql = Self.patientColumns + """
@@ -1108,7 +1236,7 @@ actor Database {
         for token in tokens {
             s.bind(idx, Schema.ftsQuery(token))
             idx += 1
-            s.bind(idx, token)
+            s.bind(idx, GreekFold.fold(token))
             idx += 1
         }
         s.bind(idx, includeArchived)
@@ -1186,7 +1314,7 @@ actor Database {
         }
     }
 
-    private func decodeNote(_ row: Statement) throws -> Note? {
+    func decodeNote(_ row: Statement) throws -> Note? {
         guard let idStr = row.columnText(0), let id = UUID(uuidString: idStr) else { return nil }
         func strArray(_ col: Int32) -> [String] {
             guard let t = row.columnText(col), let d = t.data(using: .utf8) else { return [] }
@@ -1249,9 +1377,16 @@ actor Database {
     }
 
     func deleteNote(id: UUID) throws {
-        let s = try conn.prepare("DELETE FROM notes WHERE id = ?")
-        s.bind(1, id.uuidString)
-        _ = try s.step()
+        try transaction {
+            let s = try conn.prepare("DELETE FROM notes WHERE id = ?")
+            s.bind(1, id.uuidString)
+            _ = try s.step()
+            s.finalize()
+            // The note's own links go with it (foreign-key cascade); links in
+            // other notes that named it stay, and now resolve to another note
+            // with that title or to nothing.
+            try LinkIndex.resolveAll(conn)
+        }
     }
 
     func toggleNotePinned(id: UUID) throws {
@@ -1272,7 +1407,7 @@ actor Database {
         let patientTokenClauses = tokens.map { _ in
             """
             (id IN (SELECT id FROM patients_fts WHERE patients_fts MATCH ?)
-             OR instr(lower(ifnull(fathers_name, '')), lower(?)) > 0)
+             OR instr(\(GreekFold.sql("ifnull(fathers_name, '')")), ?) > 0)
             """
         }.joined(separator: " AND ")
         let s = try conn.prepare("""
@@ -1295,7 +1430,7 @@ actor Database {
         for token in tokens {
             s.bind(idx, Schema.ftsQuery(token))
             idx += 1
-            s.bind(idx, token)
+            s.bind(idx, GreekFold.fold(token))
             idx += 1
         }
         s.bind(idx, limit)

@@ -24,6 +24,7 @@ enum SettingsIdentifiers {
     static let lastBackup = "settings.data.lastBackup"
     static let restorePointList = "settings.data.restorePoints"
     static let integrityButton = "settings.data.integrityCheck"
+    static let rebuildIndexesButton = "settings.data.rebuildIndexes"
     static let markdownExport = "settings.data.markdownExport"
 
     static let backupPassphrase = "backup.passphrase"

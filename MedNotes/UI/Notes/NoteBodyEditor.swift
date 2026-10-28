@@ -136,6 +136,82 @@ final class NoteBodyEditor: ObservableObject {
         return true
     }
 
+    /// What `editProperty` did.
+    enum PropertyEditOutcome: Equatable {
+        /// The text view now holds the edit, as one undo step.
+        case applied
+        /// Nothing changed: the property is not editable, its lines are no
+        /// longer what the panel showed, or text is being composed.
+        case refused
+        /// No body text view to edit through (Preview is showing); the caller
+        /// edits the draft itself, which clears the undo stack.
+        case noTextView
+    }
+
+    /// Changes one front matter property of the note as an edit of the text
+    /// view itself: one undo step, the caret kept (shifted by the change), and
+    /// neither focus nor scroll position moved, so the panel the edit came
+    /// from stays where it is.
+    ///
+    /// The edit is computed from the text view's text *now*, not from the
+    /// draft or from any earlier parse: typing may be ahead of both, and a
+    /// line that is no longer exactly `expecting` means the panel is out of
+    /// date, so nothing is written. `updateDraft` receives the new text
+    /// before the text view does, as in `complete`.
+    func editProperty(
+        _ operation: FrontMatterEditor.Operation, expecting: String?, in note: Note,
+        updateDraft: (String) -> Void
+    ) -> PropertyEditOutcome {
+        guard let textView = liveBody(for: note) else { return .noTextView }
+        // Mid-composition the text view is ahead of everything else.
+        guard !textView.hasMarkedText() else { return .refused }
+        let text = textView.string
+        guard let edit = FrontMatterEditor.edit(operation, in: text, expecting: expecting) else { return .refused }
+        let selection = textView.selectedRange()
+        let replacementLength = (edit.replacement as NSString).length
+
+        textView.breakUndoCoalescing()
+        guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return .refused }
+        updateDraft(FrontMatterEditor.apply(edit, to: text))
+        textView.textStorage?.replaceCharacters(in: edit.range, with: edit.replacement)
+        textView.didChangeText()
+        textView.breakUndoCoalescing()
+
+        let delta = replacementLength - edit.range.length
+        var caret = selection
+        if selection.location >= NSMaxRange(edit.range) {
+            caret.location += delta
+        } else if selection.location > edit.range.location {
+            caret = NSRange(location: edit.range.location + replacementLength, length: 0)   // inside the edit
+        }
+        let length = (textView.string as NSString).length
+        caret.location = min(max(caret.location, 0), length)
+        caret.length = min(caret.length, length - caret.location)
+        textView.setSelectedRange(caret)
+        return .applied
+    }
+
+    /// Puts the caret at `utf16Offset` of the note's body and scrolls it into
+    /// view; false when there is no body text view (Preview).
+    @discardableResult
+    func reveal(utf16Offset: Int, in note: Note) -> Bool {
+        guard let textView = liveBody(for: note) else { return false }
+        let length = (textView.string as NSString).length
+        let range = NSRange(location: min(max(utf16Offset, 0), length), length: 0)
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+        textView.window?.makeFirstResponder(textView)
+        return true
+    }
+
+    /// The body's text view for `note`, even when typing has put it ahead of
+    /// the draft; or, for a note just opened that nothing has reported on,
+    /// the text view in this window showing exactly its body.
+    private func liveBody(for note: Note) -> NSTextView? {
+        if let known = textView, noteID == note.id, known.window != nil { return known }
+        return window?.contentView.flatMap { Self.findBody(showing: note, in: $0) }
+    }
+
     /// The body's text after an undo or redo, when `note` no longer has it.
     ///
     /// Undo and redo change the text view without `didChangeText`, so the
@@ -269,7 +345,7 @@ final class NoteBodyEditor: ObservableObject {
                     .font: NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular),
                     .foregroundColor: NSColor.secondaryLabelColor
                 ], range: span.range)
-            case .wikiLink:
+            case .wikiLink, .tag:
                 storage.addAttribute(.foregroundColor, value: NSColor(named: "AccentColor") ?? .controlAccentColor,
                                      range: span.range)
             }

@@ -241,13 +241,23 @@ struct TagChipRow: View {
 /// buttons then pack leftward from that edge and land across the split-view
 /// divider on anything but a wide window. Here the column owns its search, the
 /// way Mail and Notes do, and the toolbar keeps only the action buttons.
-struct ListSearchField: View {
+struct ListSearchField<Accessory: View>: View {
     let prompt: LocalizedStringKey
     @Binding var text: String
     /// Bumped by the Find command; every change pulls focus into the field.
     var focusToken: Int = 0
+    /// Something after the clear button, such as a syntax help button.
+    private let accessory: Accessory
 
     @FocusState private var isFocused: Bool
+
+    init(prompt: LocalizedStringKey, text: Binding<String>, focusToken: Int = 0,
+         @ViewBuilder accessory: () -> Accessory) {
+        self.prompt = prompt
+        self._text = text
+        self.focusToken = focusToken
+        self.accessory = accessory()
+    }
 
     var body: some View {
         HStack(spacing: Chrome.Space.xs + 2) {
@@ -274,6 +284,8 @@ struct ListSearchField: View {
                 .help("Clear search")
                 .accessibilityLabel("Clear search")
             }
+
+            accessory
         }
         .padding(.horizontal, Chrome.Space.sm)
         .padding(.vertical, Chrome.Space.xs + 1)
@@ -296,6 +308,12 @@ struct ListSearchField: View {
                 text = ""
             }
         }
+    }
+}
+
+extension ListSearchField where Accessory == EmptyView {
+    init(prompt: LocalizedStringKey, text: Binding<String>, focusToken: Int = 0) {
+        self.init(prompt: prompt, text: text, focusToken: focusToken) { EmptyView() }
     }
 }
 

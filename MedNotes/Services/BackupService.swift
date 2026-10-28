@@ -20,14 +20,22 @@ extension Database {
                 throw BackupError.unexpectedSchema(String(localized: "\(table) is missing \(column)"))
             }
         }
+        // SQLite removes IF NOT EXISTS when it stores CREATE statements.
+        // Compare the entire definition, not just the name: a trigger with an
+        // otherwise familiar name can contain arbitrary destructive SQL.
+        // Every trigger the app creates is a full-text one, and the restored
+        // snapshot was opened through `Database(path:key:)`, which already
+        // replaced any of those six with the current text.
+        let trusted = Dictionary(uniqueKeysWithValues: Schema.ftsTriggers.map {
+            ($0.name, Schema.canonicalTriggerSQL($0.sql))
+        })
         let objects = try conn.prepare(
-            "SELECT type, name FROM sqlite_master WHERE type IN ('view', 'trigger')")
+            "SELECT type, name, sql FROM sqlite_master WHERE type IN ('view', 'trigger')")
         var unexpected: [String] = []
         while try objects.step() {
             guard let type = objects.columnText(0), let name = objects.columnText(1) else { continue }
-            let allowed = name.hasSuffix("_fts_insert") || name.hasSuffix("_fts_delete")
-                || name.hasSuffix("_fts_update")
-            if type == "view" || !allowed {
+            let sql = objects.columnText(2) ?? ""
+            if type != "trigger" || !Schema.sameTriggerSQL(trusted[name], sql) {
                 unexpected.append("\(type) \(name)")
             }
         }
