@@ -4,27 +4,32 @@ import Foundation
 /// of `Database.swift` so the CLI's system-only typecheck never sees it.
 extension Database {
     /// Checks an untrusted snapshot's triggers and views on a bare connection
-    /// **before** anything opens it as a `Database` (which migrates it, and a
-    /// trigger planted on a table the migration writes to would run then).
-    /// Every trigger must be one of the spellings this app or an older build
-    /// writes for the six full-text triggers; any view is rejected. Nothing is
-    /// written to the file.
-    static func validateSnapshotFile(path: String, key: Data) throws {
-        let connection = try SQLConnection(path: path, key: key)
+    /// **before** anything opens it as a `Database` (which migrates it: a trigger
+    /// planted on a table the migration writes to would run then). `key` nil
+    /// reads a plaintext snapshot. Any view is rejected, and so is any trigger
+    /// that is not one of the six full-text names on `notes` or `patients`; the
+    /// migration writes nothing to those two tables and replaces all six
+    /// triggers, and the exact-text check after it (`validateExpectedSchema`)
+    /// still rejects anything else. Nothing is written to the file.
+    static func validateSnapshotFile(path: String, key: Data?) throws {
+        #if DEBUG
+        eventsForTesting.append("validate")
+        #endif
+        let connection = try key.map { try SQLConnection(path: path, key: $0) } ?? SQLConnection(path: path)
         defer { connection.close() }
         try connection.exec("PRAGMA query_only = ON")
         try connection.exec("PRAGMA trusted_schema = OFF")
-        let accepted = Schema.acceptedFTSTriggerTexts
+        let owner: [String: String] = [
+            "patients_fts_insert": "patients", "patients_fts_delete": "patients", "patients_fts_update": "patients",
+            "notes_fts_insert": "notes", "notes_fts_delete": "notes", "notes_fts_update": "notes"
+        ]
         let objects = try connection.prepare(
-            "SELECT type, name, sql FROM sqlite_master WHERE type IN ('view', 'trigger')")
+            "SELECT type, name, tbl_name FROM sqlite_master WHERE type IN ('view', 'trigger')")
         defer { objects.finalize() }
         var unexpected: [String] = []
         while try objects.step() {
             guard let type = objects.columnText(0), let name = objects.columnText(1) else { continue }
-            let sql = objects.columnText(2) ?? ""
-            let known = type == "trigger"
-                && (accepted[name] ?? []).contains { Schema.triggerIsExactly(sql, $0) }
-            if !known { unexpected.append("\(type) \(name)") }
+            if type != "trigger" || owner[name] != objects.columnText(2) { unexpected.append("\(type) \(name)") }
         }
         guard unexpected.isEmpty else {
             throw BackupError.unexpectedSchema(unexpected.joined(separator: ", "))

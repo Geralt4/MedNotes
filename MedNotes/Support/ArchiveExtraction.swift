@@ -99,6 +99,8 @@ enum ArchiveExtraction {
     /// already encrypted is left alone.
     static func ensureEncryptedSnapshot(at url: URL, key: Data) async throws {
         guard SQLiteHeaderInspection.isPlaintextSQLite(at: url) else { return }
+        // Judged before `Database(path:)` migrates it.
+        try Database.validateSnapshotFile(path: url.path, key: nil)
         let plain = try Database(path: url.path)
         let converted = url.appendingPathExtension("encrypted")
         do {

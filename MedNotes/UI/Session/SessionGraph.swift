@@ -49,11 +49,13 @@ extension AppSession {
     }
 
     private func refreshGraphQuerySets() async {
+        guard let asked = store else { return }
         let settings = graphSettings
         let sets = await graphQuerySets(for: settings)
         func queries(_ settings: GraphSettings) -> [String] { [settings.query] + settings.groups.map(\.query) }
-        // Settings edited while the store was asked: that edit has its own pass.
-        guard !Task.isCancelled, queries(settings) == queries(graphSettings) else { return }
+        // A lock may have come in, or the settings may have been edited, while
+        // the store was asked; an edit has its own pass.
+        guard !Task.isCancelled, asked === store, queries(settings) == queries(graphSettings) else { return }
         graphMatching = sets.matching
         graphGroupMatches = sets.groups
         applyGraphFilter()

@@ -23,7 +23,7 @@ actor Database {
     /// The folded full-text triggers could not be put in place when the store
     /// opened (the old ones and the old indexes are still there): the app says
     /// so and Rebuild Indexes repairs it.
-    var searchIndexNeedsRebuild = false
+    private(set) var searchIndexNeedsRebuild = false
     /// The raw database key, kept so `reopen` and `replaceDatabaseFile` can
     /// rebuild the connection without another Keychain round-trip.
     private let databaseKey: Data?
@@ -98,6 +98,9 @@ actor Database {
         try conn.exec("PRAGMA trusted_schema = OFF")
         try conn.exec("PRAGMA defensive = ON")
     }
+
+    /// The refold that failed at open has been done by a rebuild.
+    func markSearchIndexRebuilt() { searchIndexNeedsRebuild = false }
 
     func close() {
         transactionDepth = 0
@@ -313,8 +316,17 @@ actor Database {
     /// Brings the schema up to date. Returns whether the folded full-text
     /// triggers could not be put in place (the old ones stay, and the store
     /// still opens).
+    #if DEBUG
+    /// What opened or checked a file, in order, for tests that prove an
+    /// untrusted snapshot is judged before anything migrates it.
+    nonisolated(unsafe) static var eventsForTesting: [String] = []
+    #endif
+
     @discardableResult
     private nonisolated static func migrate(_ conn: SQLConnection, deriveLinks: Bool = true) throws -> Bool {
+        #if DEBUG
+        eventsForTesting.append("migrate")
+        #endif
         for statement in Schema.v1 {
             try conn.exec(statement)
         }
@@ -334,8 +346,10 @@ actor Database {
                 try migrateV8(conn)
             } catch {
                 // The savepoint left the old triggers and indexes. Opening still
-                // works, and the app says search needs rebuilding.
-                NSLog("MedNotes: the search index could not be refolded; Rebuild Indexes will repair it")
+                // works, and the app says search needs rebuilding. The error text
+                // carries no SQL and no row values.
+                NSLog("MedNotes: the search index could not be refolded (%@); Rebuild Indexes will repair it",
+                      error.localizedDescription)
                 foldingFailed = true
             }
         }

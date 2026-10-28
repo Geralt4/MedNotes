@@ -236,7 +236,8 @@ final class WikiLinkParserTests: XCTestCase {
 
     /// Many unclosed openers used to cost "openers x paragraph x fences": a 54 KB
     /// note took seconds on every save and every open.
-    func testManyUnclosedBacktickOpenersAreReadInLinearTime() {
+    func testManyUnclosedBacktickOpenersAreReadInLinearTime() throws {
+        try XCTSkipIf(TestEnvironment.isSanitized, "a wall-clock limit")
         var text = ""
         for length in 1...100 { text += String(repeating: "`", count: length) + "x " }
         text += String(repeating: "word ", count: 5_000)
@@ -248,7 +249,8 @@ final class WikiLinkParserTests: XCTestCase {
         XCTAssertFalse(scan.protectedRanges.isEmpty)
     }
 
-    func testManyUnclosedCommentOpenersAreReadInLinearTime() {
+    func testManyUnclosedCommentOpenersAreReadInLinearTime() throws {
+        try XCTSkipIf(TestEnvironment.isSanitized, "a wall-clock limit")
         for opener in ["<!-- ", "%% x "] {
             // An even count of %% would pair up; the odd one out is the point.
             let text = String(repeating: opener, count: opener == "%% x " ? 20_001 : 12_000)

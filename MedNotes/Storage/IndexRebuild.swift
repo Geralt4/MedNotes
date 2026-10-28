@@ -126,7 +126,7 @@ extension Database {
                 INSERT OR IGNORE INTO migrations(version, description, execution_time)
                 VALUES ('8.0-fts-folding', 'full-text indexes hold accent-, case- and final-sigma-folded text', 0.0)
                 """)
-            searchIndexNeedsRebuild = false
+            markSearchIndexRebuilt()
         }
         return report
     }

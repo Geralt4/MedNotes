@@ -188,7 +188,8 @@ final class GraphLayoutTests: XCTestCase {
     }
 
     /// About a real practice: 400 patients with notes and events, plus loose notes.
-    func testLargeGraphLaysOutQuickly() {
+    func testLargeGraphLaysOutQuickly() throws {
+        try XCTSkipIf(TestEnvironment.isSanitized, "a wall-clock limit")
         let (nodes, edges) = clusters(patients: 400, perPatient: 5, loose: 600)
         XCTAssertGreaterThanOrEqual(nodes.count, 3000)
         let start = Date()

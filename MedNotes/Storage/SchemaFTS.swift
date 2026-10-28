@@ -85,17 +85,6 @@ extension Schema {
         """
     }
 
-    /// The six triggers as `Schema.v1` creates them; SQLite stores them without
-    /// `IF NOT EXISTS`. An older backup or store carries exactly this text.
-    static var originalFTSTriggers: [(name: String, sql: String)] {
-        v1.compactMap { statement in
-            let prefix = "CREATE TRIGGER IF NOT EXISTS "
-            guard statement.hasPrefix(prefix) else { return nil }
-            let name = String(statement.dropFirst(prefix.count).prefix { !$0.isWhitespace })
-            return (name, "CREATE TRIGGER " + statement.dropFirst(prefix.count))
-        }
-    }
-
     /// The patients triggers `Database.migratePatientsFTSFathersName` wrote for
     /// a store whose index predated the father's name: the same statements as
     /// `v1` laid out differently, so their stored text differs. Kept byte for
@@ -123,16 +112,6 @@ extension Schema {
         END
         """)
     ]
-
-    /// Every spelling of each full-text trigger an older build may have left
-    /// in a backup or store: the original, the migration's copy, the current.
-    static var acceptedFTSTriggerTexts: [String: [String]] {
-        var accepted: [String: [String]] = [:]
-        for trigger in originalFTSTriggers + migrationCopyPatientTriggers + ftsTriggers {
-            accepted[trigger.name, default: []].append(trigger.sql)
-        }
-        return accepted
-    }
 
     /// The tokens of a typed search, folded like the index: what a `MATCH`
     /// is built from. Letters and digits only.

@@ -20,6 +20,16 @@ final class GreekSearchTests: XCTestCase {
         if let dir = tempDir { try? FileManager.default.removeItem(at: dir) }
     }
 
+    /// The six triggers as `Schema.v1` creates them (SQLite stores them without `IF NOT EXISTS`).
+    private var originalTriggers: [(name: String, sql: String)] {
+        Schema.v1.compactMap { statement in
+            let prefix = "CREATE TRIGGER IF NOT EXISTS "
+            guard statement.hasPrefix(prefix) else { return nil }
+            let name = String(statement.dropFirst(prefix.count).prefix { !$0.isWhitespace })
+            return (name, "CREATE TRIGGER " + statement.dropFirst(prefix.count))
+        }
+    }
+
     private func makeRoot(_ name: String = "root") throws -> DataRoot {
         try DataRoot(rootURL: tempDir.appendingPathComponent(name, isDirectory: true))
     }
@@ -66,20 +76,6 @@ final class GreekSearchTests: XCTestCase {
         XCTAssertEqual(one, ["Oxia"])
         let two = try await titles(store, "πονοσ")
         XCTAssertEqual(two, ["Oxia word"], "oxia ό is the same letter as tonos ό")
-        await store.close()
-    }
-
-    func testTheFoldingTriggersAreRefilledWhenTheFoldTableGrew() async throws {
-        let root = try makeRoot()
-        try await seed(root)
-        // The triggers of the build before the oxia spellings were added: one pair fewer in the chain.
-        let older = Schema.ftsTriggers.first { $0.name == "notes_fts_insert" }!.sql
-            .replacingOccurrences(of: "replace(", with: "replace(", options: [], range: nil)
-        XCTAssertFalse(older.isEmpty)
-        try exec(root, ["DROP TRIGGER notes_fts_insert",
-                        older.replacingOccurrences(of: "'\u{1F71}'", with: "'\u{1F71}\u{1F71}'")])
-        let store = try AppStore.testStore(dataRoot: root)
-        try assertCurrentTriggers(root)
         await store.close()
     }
 
@@ -297,7 +293,7 @@ final class GreekSearchTests: XCTestCase {
         let needs = await store.db.searchIndexNeedsRebuild
         XCTAssertTrue(needs, "the store should know its search index was not refolded")
         XCTAssertEqual(try rows(root, "SELECT title || '|' || content FROM notes_fts"), before, "the index was left as it was")
-        let legacy = Schema.originalFTSTriggers.first { $0.name == "notes_fts_insert" }?.sql
+        let legacy = originalTriggers.first { $0.name == "notes_fts_insert" }?.sql
         XCTAssertTrue(Schema.triggerIsExactly(try triggerSQL(root)["notes_fts_insert"], legacy ?? ""), "the old trigger is still there")
         XCTAssertEqual(try rows(root, "SELECT COUNT(*) FROM migrations WHERE version = '8.0-fts-folding'"), ["0"])
         let missed = try await titles(store, "ασθενης")
@@ -437,32 +433,101 @@ final class GreekSearchTests: XCTestCase {
                        "the file was migrated before it was judged")
     }
 
-    func testViewsAndAlteredFullTextTriggersAreRejectedBeforeMigration() async throws {
+    func testViewsAndTriggersOnTheWrongTableAreRejectedBeforeMigration() async throws {
         let root = try makeRoot()
         try await seed(root)
+        let key = TestKeys.database(for: root)
         try exec(root, ["CREATE VIEW sneaky AS SELECT id FROM notes"])
-        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root)))
-        try exec(root, ["DROP VIEW sneaky", "DROP TRIGGER notes_fts_update", forgedUpdateTrigger(with: "\u{00A0}")])
-        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root)))
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: key))
+        try exec(root, ["DROP VIEW sneaky",
+                        "CREATE TRIGGER notes_fts_extra AFTER INSERT ON notes BEGIN SELECT 1; END"])
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: key), "an unknown name")
+        try exec(root, ["DROP TRIGGER notes_fts_extra",
+                        "DROP TRIGGER notes_fts_delete",
+                        "CREATE TRIGGER notes_fts_delete AFTER DELETE ON migrations BEGIN SELECT 1; END"])
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: key),
+                             "a full-text name on a table the migration writes to")
+    }
+
+    /// A known name on its own table passes the early check (the migration
+    /// writes nothing to those tables and replaces all six), and the exact-text
+    /// check after the migration is what catches a changed body.
+    func testAnAlteredBodyPassesTheEarlyCheckAndIsReplacedByTheMigration() async throws {
+        let root = try makeRoot()
+        try await seed(root)
+        try exec(root, ["DROP TRIGGER notes_fts_update", forgedUpdateTrigger(with: "\u{00A0}")])
+        try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root))
+        let opened = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
+        try assertCurrentTriggers(root)
+        try await opened.validateExpectedSchema()
     }
 
     func testEverySpellingAnOlderBuildWroteIsAccepted() async throws {
-        // The current triggers.
         let current = try makeRoot("current")
         try await seed(current)
         try Database.validateSnapshotFile(path: current.databaseURL.path, key: TestKeys.database(for: current))
-        // The original six, from before folding.
         let original = try makeRoot("original")
         try await seed(original)
         try makeLegacy(original)
         try Database.validateSnapshotFile(path: original.databaseURL.path, key: TestKeys.database(for: original))
-        // The patients triggers the old fathers_name migration wrote.
+        // The patients triggers the old father's-name migration wrote.
         let copied = try makeRoot("copied")
         try await seed(copied)
         try exec(copied, ["DROP TRIGGER patients_fts_insert", "DROP TRIGGER patients_fts_delete", "DROP TRIGGER patients_fts_update"]
                  + Schema.migrationCopyPatientTriggers.map(\.sql))
         try Database.validateSnapshotFile(path: copied.databaseURL.path, key: TestKeys.database(for: copied))
     }
+
+    #if DEBUG
+    /// The wiring: a restore rejects the snapshot before any `Database` is
+    /// opened on it (which would migrate it), and leaves the target alone.
+    func testARestoreJudgesTheSnapshotBeforeItIsMigrated() async throws {
+        let sourceRoot = try makeRoot("source")
+        let source = try AppStore.testStore(dataRoot: sourceRoot)
+        try await source.notes.save(Note(title: "From the backup", content: "x"))
+        try exec(sourceRoot, ["""
+            CREATE TRIGGER planted AFTER INSERT ON migrations BEGIN
+                INSERT OR REPLACE INTO app_state(key, value_json, updated_at) VALUES ('planted', '1', 'x');
+            END
+            """])
+        let file = tempDir.appendingPathComponent("planted.mednotesbackup")
+        _ = try await source.backups.createEncryptedBackup(name: "planted", to: file, passphrase: "a long enough passphrase")
+        await source.close()
+
+        let targetRoot = try makeRoot("target")
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        try await target.notes.save(Note(title: "Already here", content: "y"))
+        Database.eventsForTesting = []
+        do {
+            _ = try await target.backups.restore(
+                fromEncryptedBackupAt: file, passphrase: "a long enough passphrase",
+                databaseKey: TestKeys.database(for: targetRoot), attachmentKey: TestKeys.attachment(for: targetRoot),
+                createRestorePoint: false)
+            XCTFail("a snapshot with a planted trigger was restored")
+        } catch {}
+        XCTAssertEqual(Database.eventsForTesting, ["validate"],
+                       "the snapshot must be judged first, and nothing may open (migrate) it afterwards")
+        let kept = try await target.notes.loadAll().map(\.title)
+        XCTAssertEqual(kept, ["Already here"])
+        await target.close()
+    }
+
+    func testAPlaintextSnapshotInsideAnArchiveIsJudgedBeforeItIsMigrated() async throws {
+        let path = tempDir.appendingPathComponent("plaintext-snapshot.db").path
+        let plain = try Database(path: path)
+        try await plain.saveNote(Note(title: "Visit", content: "x"))
+        await plain.close()
+        let conn = try SQLConnection(path: path)
+        try conn.exec("CREATE TRIGGER planted AFTER INSERT ON migrations BEGIN SELECT 1; END")
+        conn.close()
+        Database.eventsForTesting = []
+        do {
+            try await ArchiveExtraction.ensureEncryptedSnapshot(at: URL(fileURLWithPath: path), key: Data(repeating: 7, count: 32))
+            XCTFail("a plaintext snapshot with a planted trigger was converted")
+        } catch {}
+        XCTAssertEqual(Database.eventsForTesting, ["validate"])
+    }
+    #endif
 
     // MARK: - Altered triggers (the security review's H1)
 

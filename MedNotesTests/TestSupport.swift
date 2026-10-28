@@ -175,6 +175,15 @@ extension EncryptedFileStore {
     }
 }
 
+/// Wall-clock limits in tests assume an uninstrumented build: under the address
+/// or thread sanitizer everything runs several times slower.
+enum TestEnvironment {
+    static var isSanitized: Bool {
+        let inserted = ProcessInfo.processInfo.environment["DYLD_INSERT_LIBRARIES"] ?? ""
+        return inserted.contains("asan") || inserted.contains("tsan") || inserted.contains("ubsan")
+    }
+}
+
 extension SQLConnection {
     /// An encrypted connection to a test store, keyed from the path.
     static func testConnection(path: String) throws -> SQLConnection {
