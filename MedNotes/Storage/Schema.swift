@@ -419,36 +419,14 @@ enum Schema {
         """
     ]
 
-    /// Ignores formatting whitespace in a trigger's SQL while keeping the
-    /// whitespace inside string literals, escaped quotes included. SQLite
-    /// stores a trigger's text as written, minus `IF NOT EXISTS`.
-    static func canonicalTriggerSQL(_ sql: String) -> String {
-        var result = ""
-        var quoted = false
-        var pendingSpace = false
-        for character in sql {
-            if character == "'" {
-                if pendingSpace && !result.isEmpty { result.append(" ") }
-                pendingSpace = false
-                quoted.toggle()
-                result.append(character)
-            } else if character.isWhitespace && !quoted {
-                pendingSpace = true
-            } else {
-                if pendingSpace && !result.isEmpty { result.append(" ") }
-                pendingSpace = false
-                result.append(character)
-            }
-        }
-        return result
-    }
-
-    /// Whether `stored` is the trigger `trusted` (already canonical), byte for
-    /// byte: SQLite's `replace()` compares bytes, while Swift's `==` treats a
+    /// Whether a stored trigger is exactly the expected text, byte for byte.
+    /// SQLite keeps a trigger's text as it was written (minus `IF NOT EXISTS`),
+    /// so a trigger the app created compares equal. Nothing is normalized: a
+    /// Unicode space is not whitespace to SQLite, and Swift's `==` would treat a
     /// letter and its decomposed form as the same.
-    static func sameTriggerSQL(_ trusted: String?, _ stored: String) -> Bool {
-        guard let trusted else { return false }
-        return Array(trusted.utf8) == Array(canonicalTriggerSQL(stored).utf8)
+    static func triggerIsExactly(_ stored: String?, _ expected: String) -> Bool {
+        guard let stored else { return false }
+        return Array(stored.utf8) == Array(expected.utf8)
     }
 
     static func ftsQuery(_ rawQuery: String) -> String {
@@ -459,12 +437,32 @@ enum Schema {
         return tokens.map { "\"\($0)\"*" }.joined(separator: " AND ")
     }
 
+    /// Runs of letters and digits (with their combining marks). Decided scalar
+    /// by scalar: a character-level test looks only at the first scalar, so a
+    /// letter that takes a following `"` into its cluster would let the quote
+    /// into a `MATCH` string.
     static func splitTokens(_ rawQuery: String) -> [String] {
-        rawQuery
-            .map { ($0.isLetter || $0.isNumber) ? $0 : " " }
-            .reduce(into: String()) { $0.append($1) }
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-            .filter { !$0.isEmpty }
+        var tokens: [String] = []
+        var current = String.UnicodeScalarView()
+        var hasBase = false
+        func flush() {
+            if !current.isEmpty, hasBase { tokens.append(String(current)) }
+            current = String.UnicodeScalarView()
+            hasBase = false
+        }
+        for scalar in rawQuery.unicodeScalars {
+            let props = scalar.properties
+            let isMark = [.nonspacingMark, .spacingMark, .enclosingMark].contains(props.generalCategory)
+            if props.isAlphabetic || props.numericType != nil {
+                current.append(scalar)
+                hasBase = true
+            } else if isMark, hasBase {
+                current.append(scalar)
+            } else {
+                flush()
+            }
+        }
+        flush()
+        return tokens
     }
 }

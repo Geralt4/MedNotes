@@ -636,7 +636,7 @@ final class AppSession: ObservableObject {
     /// encryption migration, key recovery) compares it with the count it
     /// started from: a lock that arrived in between wins, and the store it
     /// opened is closed again instead of published behind a locked curtain.
-    var lockRequests = 0
+    private(set) var lockRequests = 0
 
     /// Re-authenticates and reopens the store after a lock.
     ///

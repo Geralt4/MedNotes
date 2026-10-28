@@ -102,13 +102,19 @@ extension AppSession {
 
     func refreshLinks(noteId: UUID) async {
         guard let store else { return }
+        var incoming: [(noteId: UUID, title: String)] = []
+        var outgoing: [LinkingService.OutgoingLink] = []
         do {
-            backlinks = try await store.linking.backlinks(noteId: noteId)
-            linksOut = try await store.linking.outgoingLinks(noteId: noteId)
+            incoming = try await store.linking.backlinks(noteId: noteId)
+            outgoing = try await store.linking.outgoingLinks(noteId: noteId)
         } catch {
-            backlinks = []
-            linksOut = []
+            incoming = []
+            outgoing = []
         }
+        // A lock may have come in while the links were read.
+        guard store === self.store else { return }
+        backlinks = incoming
+        linksOut = outgoing
     }
 
     /// Notes that name this note's title without linking to it. Read apart

@@ -57,6 +57,10 @@ extension Database {
             let derived = try LinkIndex.refreshStale(conn)
             report.failedNotes = derived.failedNotes
 
+            // The triggers too: a damaged or altered one would leave the next
+            // edit out of the index again.
+            for name in Schema.ftsTriggerNames { try conn.exec("DROP TRIGGER IF EXISTS \(name)") }
+            for trigger in Schema.ftsTriggers { try conn.exec(trigger.sql) }
             try conn.exec("DELETE FROM notes_fts")
             try conn.exec(Schema.ftsRefillNotes)
             try conn.exec("DELETE FROM patients_fts")
@@ -115,6 +119,15 @@ extension Database {
         // After the commit: the file's own check, and folding the log back in.
         if try integrityCheck() != "ok" { report.problems.append("integrity_check") }
         try? conn.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+        if report.passed {
+            // The six triggers are the current ones again and the indexes are
+            // filled: the refold that failed at open has nothing left to do.
+            try? conn.exec("""
+                INSERT OR IGNORE INTO migrations(version, description, execution_time)
+                VALUES ('8.0-fts-folding', 'full-text indexes hold accent-, case- and final-sigma-folded text', 0.0)
+                """)
+            searchIndexNeedsRebuild = false
+        }
         return report
     }
 }

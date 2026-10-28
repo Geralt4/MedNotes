@@ -96,11 +96,15 @@ extension AppSession {
 
     func loadGraph() async {
         guard let store else { return }
+        let data: LinkingService.GraphData
         do {
-            graphData = try await store.linking.graph()
+            data = try await store.linking.graph()
         } catch {
-            graphData = LinkingService.GraphData()
+            data = LinkingService.GraphData()
         }
+        // A lock may have come in while the store was read: nothing of it is shown.
+        guard store === self.store else { return }
+        graphData = data
         // Notes may have changed since the last pass: ask again, then filter.
         graphQueryTask?.cancel()
         await refreshGraphQuerySets()

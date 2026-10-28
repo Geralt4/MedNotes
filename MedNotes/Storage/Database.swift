@@ -20,6 +20,10 @@ struct StaleAttachmentError: Error, LocalizedError {
 
 actor Database {
     private(set) var conn: SQLConnection
+    /// The folded full-text triggers could not be put in place when the store
+    /// opened (the old ones and the old indexes are still there): the app says
+    /// so and Rebuild Indexes repairs it.
+    var searchIndexNeedsRebuild = false
     /// The raw database key, kept so `reopen` and `replaceDatabaseFile` can
     /// rebuild the connection without another Keychain round-trip.
     private let databaseKey: Data?
@@ -53,7 +57,7 @@ actor Database {
         self.databaseKey = nil
         self.conn = try SQLConnection(path: path)
         try Self.configure(conn)
-        try Self.migrate(conn, deriveLinks: deriveLinks)
+        searchIndexNeedsRebuild = try Self.migrate(conn, deriveLinks: deriveLinks)
     }
 
     /// Production construction: an encrypted connection keyed from the device
@@ -62,7 +66,7 @@ actor Database {
         self.databaseKey = key
         self.conn = try SQLConnection(path: path, key: key)
         try Self.configure(conn)
-        try Self.migrate(conn)
+        searchIndexNeedsRebuild = try Self.migrate(conn)
     }
 
     init(connection: SQLConnection) throws {
@@ -73,7 +77,7 @@ actor Database {
         }
         self.conn = connection
         try Self.configure(connection)
-        try Self.migrate(connection)
+        searchIndexNeedsRebuild = try Self.migrate(connection)
     }
 
     private nonisolated static func configure(_ conn: SQLConnection) throws {
@@ -105,7 +109,7 @@ actor Database {
         conn.close()
         self.conn = try Self.open(path: conn.path, key: databaseKey)
         try Self.configure(conn)
-        try Self.migrate(conn)
+        searchIndexNeedsRebuild = try Self.migrate(conn)
     }
 
     private nonisolated static func open(path: String, key: Data?) throws -> SQLConnection {
@@ -176,12 +180,12 @@ actor Database {
             }
             conn = try Self.open(path: dest, key: targetKey)
             try Self.configure(conn)
-            try Self.migrate(conn)
+            searchIndexNeedsRebuild = try Self.migrate(conn)
         } catch {
             if FileManager.default.fileExists(atPath: dest) {
                 conn = try Self.open(path: dest, key: targetKey)
                 try Self.configure(conn)
-                try Self.migrate(conn)
+                searchIndexNeedsRebuild = try Self.migrate(conn)
             }
             throw error
         }
@@ -215,7 +219,7 @@ actor Database {
             }
             conn = try Self.open(path: dest, key: targetKey)
             try Self.configure(conn)
-            try Self.migrate(conn)
+            searchIndexNeedsRebuild = try Self.migrate(conn)
         } catch {
             do {
                 try reinstateDatabaseFile(from: folder)
@@ -306,7 +310,11 @@ actor Database {
         removeSQLiteSidecars(at: dest)
     }
 
-    private nonisolated static func migrate(_ conn: SQLConnection, deriveLinks: Bool = true) throws {
+    /// Brings the schema up to date. Returns whether the folded full-text
+    /// triggers could not be put in place (the old ones stay, and the store
+    /// still opens).
+    @discardableResult
+    private nonisolated static func migrate(_ conn: SQLConnection, deriveLinks: Bool = true) throws -> Bool {
         for statement in Schema.v1 {
             try conn.exec(statement)
         }
@@ -318,8 +326,19 @@ actor Database {
         try migrateV5(conn)
         try migrateV6(conn)
         try migrateV7(conn)
-        // The plaintext store being read for a migration is left as it is.
-        if deriveLinks { try migrateV8(conn) }
+        // The plaintext store being read for a migration keeps its full-text
+        // triggers and indexes as they are (they are never searched).
+        var foldingFailed = false
+        if deriveLinks {
+            do {
+                try migrateV8(conn)
+            } catch {
+                // The savepoint left the old triggers and indexes. Opening still
+                // works, and the app says search needs rebuilding.
+                NSLog("MedNotes: the search index could not be refolded; Rebuild Indexes will repair it")
+                foldingFailed = true
+            }
+        }
         let stmt = try conn.prepare("SELECT COUNT(*) FROM migrations WHERE version = ?")
         stmt.bind(1, "1.0-clean")
         if try stmt.step(), (stmt.columnInt(0) ?? 0) == 0 {
@@ -333,6 +352,7 @@ actor Database {
         // Last: the link tables are derived from the notes, so every other
         // table is in its final shape before they are brought up to date.
         if deriveLinks { LinkIndex.deriveOnOpen(conn) }
+        return foldingFailed
     }
 
     /// Schema v5: the derived wiki-link tables. Only new tables, so a v4
@@ -406,9 +426,7 @@ actor Database {
             if let name = read.columnText(0), let sql = read.columnText(1) { stored[name] = sql }
         }
         read.finalize()
-        let current = Schema.ftsTriggers.allSatisfy {
-            Schema.sameTriggerSQL(Schema.canonicalTriggerSQL($0.sql), stored[$0.name] ?? "")
-        }
+        let current = Schema.ftsTriggers.allSatisfy { Schema.triggerIsExactly(stored[$0.name], $0.sql) }
         let marked = try conn.prepare("SELECT COUNT(*) FROM migrations WHERE version = ?")
         marked.bind(1, "8.0-fts-folding")
         let hasMarker = try marked.step() && (marked.columnInt(0) ?? 0) > 0
@@ -540,13 +558,14 @@ actor Database {
     /// Older DBs indexed names in FTS but left fathers_name to SQL lower(),
     /// which does not case-fold Greek. Rebuild so father's name uses FTS.
     private nonisolated static func migratePatientsFTSFathersName(_ conn: SQLConnection) throws {
-        let check = try conn.prepare(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'patients_fts'")
-        var needsMigration = true
-        if try check.step(), let sql = check.columnText(0), sql.contains("fathers_name") {
-            needsMigration = false
+        // The column list, not the stored CREATE text: a snapshot may be hostile.
+        let info = try conn.prepare("PRAGMA table_info(patients_fts)")
+        var hasFathersName = false
+        while try info.step() {
+            if info.columnText(1) == "fathers_name" { hasFathersName = true }
         }
-        check.finalize()
+        info.finalize()
+        let needsMigration = !hasFathersName
         guard needsMigration else { return }
         try conn.exec("DROP TRIGGER IF EXISTS patients_fts_insert")
         try conn.exec("DROP TRIGGER IF EXISTS patients_fts_delete")
@@ -564,27 +583,7 @@ actor Database {
                 fathers_name
             )
             """)
-        try conn.exec("""
-            CREATE TRIGGER patients_fts_insert AFTER INSERT ON patients BEGIN
-                INSERT INTO patients_fts(rowid, id, first_name, last_name, full_name, phone, email, amka, fathers_name)
-                VALUES (NEW.rowid, NEW.id, NEW.first_name, NEW.last_name,
-                        NEW.first_name || ' ' || NEW.last_name, NEW.phone, NEW.email, NEW.amka, NEW.fathers_name);
-            END
-            """)
-        try conn.exec("""
-            CREATE TRIGGER patients_fts_delete AFTER DELETE ON patients BEGIN
-                DELETE FROM patients_fts WHERE rowid = OLD.rowid;
-            END
-            """)
-        try conn.exec("""
-            CREATE TRIGGER patients_fts_update AFTER UPDATE OF
-                first_name, last_name, phone, email, amka, fathers_name ON patients BEGIN
-                DELETE FROM patients_fts WHERE rowid = OLD.rowid;
-                INSERT INTO patients_fts(rowid, id, first_name, last_name, full_name, phone, email, amka, fathers_name)
-                VALUES (NEW.rowid, NEW.id, NEW.first_name, NEW.last_name,
-                        NEW.first_name || ' ' || NEW.last_name, NEW.phone, NEW.email, NEW.amka, NEW.fathers_name);
-            END
-            """)
+        for trigger in Schema.migrationCopyPatientTriggers { try conn.exec(trigger.sql) }
         try conn.exec("""
             INSERT INTO patients_fts(rowid, id, first_name, last_name, full_name, phone, email, amka, fathers_name)
             SELECT rowid, id, first_name, last_name, first_name || ' ' || last_name,

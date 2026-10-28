@@ -30,7 +30,15 @@ enum GreekFold {
             (0x038C, 0x03BF), (0x038E, 0x03C5), (0x038F, 0x03C9), (0x03AA, 0x03B9),
             (0x03AB, 0x03C5),
             // Final sigma ς
-            (0x03C2, 0x03C3)
+            (0x03C2, 0x03C3),
+            // The same letters spelled with oxia (U+1F71 for ά, from older
+            // sources and PDFs). Canonically equivalent to the tonos forms, but a
+            // different byte sequence that SQL's replace() would not otherwise see.
+            (0x1F71, 0x03B1), (0x1F73, 0x03B5), (0x1F75, 0x03B7), (0x1F77, 0x03B9),
+            (0x1F79, 0x03BF), (0x1F7B, 0x03C5), (0x1F7D, 0x03C9),
+            (0x1FD3, 0x03B9), (0x1FE3, 0x03C5),
+            (0x1FBB, 0x03B1), (0x1FC9, 0x03B5), (0x1FCB, 0x03B7), (0x1FDB, 0x03B9),
+            (0x1FF9, 0x03BF), (0x1FEB, 0x03C5), (0x1FFB, 0x03C9)
         ]
         for (from, to) in accented { out.append((scalar(from), scalar(to))) }
         // Plain capitals Α…Ω (U+0391…U+03A9, without the unassigned U+03A2).

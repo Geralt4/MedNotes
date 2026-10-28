@@ -62,6 +62,13 @@ enum WikiLinkParser {
         let fences = fenceRanges(units, ns, from: bodyStart)
         var protected = fences
         var links: [ParsedLink] = []
+        // A search that found no closer once will find none later in the same
+        // stretch, so a text full of unclosed openers is still read in linear
+        // time (a hostile note took seconds without this).
+        let fenceStarts = Set(fences.map(\.location))
+        var backtickFailedUntil: [Int: Int] = [:]
+        var noCommentCloser = false
+        var noPercentCloser = false
         var fenceIndex = 0
         // The index of the last character a backslash escaped.
         var escaped = -1
@@ -84,25 +91,34 @@ enum WikiLinkParser {
             case 0x60: // `
                 var run = 0
                 while i + run < n, units[i + run] == 0x60 { run += 1 }
-                if let end = closingBackticks(units, from: i + run, length: run, fences: fences) {
+                if let end = closingBackticks(
+                    units, from: i + run, length: run, fenceStarts: fenceStarts, failedUntil: &backtickFailedUntil) {
                     protected.append(NSRange(location: i, length: end - i))
                     i = end
                 } else {
                     i += run
                 }
             case 0x25: // %
-                if i + 1 < n, units[i + 1] == 0x25,
-                   let end = find([0x25, 0x25], in: units, from: i + 2) {
-                    protected.append(NSRange(location: i, length: end + 2 - i))
-                    i = end + 2
+                if i + 1 < n, units[i + 1] == 0x25, !noPercentCloser {
+                    if let end = find([0x25, 0x25], in: units, from: i + 2) {
+                        protected.append(NSRange(location: i, length: end + 2 - i))
+                        i = end + 2
+                    } else {
+                        noPercentCloser = true
+                        i += 1
+                    }
                 } else {
                     i += 1
                 }
             case 0x3C: // <
-                if hasPrefix([0x3C, 0x21, 0x2D, 0x2D], in: units, at: i),
-                   let end = find([0x2D, 0x2D, 0x3E], in: units, from: i + 4) {
-                    protected.append(NSRange(location: i, length: end + 3 - i))
-                    i = end + 3
+                if !noCommentCloser, hasPrefix([0x3C, 0x21, 0x2D, 0x2D], in: units, at: i) {
+                    if let end = find([0x2D, 0x2D, 0x3E], in: units, from: i + 4) {
+                        protected.append(NSRange(location: i, length: end + 3 - i))
+                        i = end + 3
+                    } else {
+                        noCommentCloser = true
+                        i += 1
+                    }
                 } else {
                     i += 1
                 }
@@ -254,16 +270,19 @@ enum WikiLinkParser {
 
     /// The index just past the backtick run of exactly `length` that closes a
     /// code span opened before `from`. A span may cross a soft line break but
-    /// not a blank line or a fence.
+    /// not a blank line or a fence. When none is found, `failedUntil[length]`
+    /// remembers where the search stopped: an opener of the same length before
+    /// that point has no closer either.
     private static func closingBackticks(
-        _ units: [UInt16], from: Int, length: Int, fences: [NSRange]
+        _ units: [UInt16], from: Int, length: Int, fenceStarts: Set<Int>, failedUntil: inout [Int: Int]
     ) -> Int? {
+        if let limit = failedUntil[length], from <= limit { return nil }
         let n = units.count
         var p = from
         while p < n {
             let c = units[p]
-            if c == 0x0A || c == 0x0D, isParagraphBreak(units, at: p) { return nil }
-            if fences.contains(where: { $0.location == p }) { return nil }
+            if c == 0x0A || c == 0x0D, isParagraphBreak(units, at: p) { break }
+            if fenceStarts.contains(p) { break }
             if c == 0x60 {
                 var run = 0
                 while p + run < n, units[p + run] == 0x60 { run += 1 }
@@ -273,6 +292,7 @@ enum WikiLinkParser {
                 p += 1
             }
         }
+        failedUntil[length] = p
         return nil
     }
 

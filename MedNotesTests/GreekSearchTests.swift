@@ -58,6 +58,31 @@ final class GreekSearchTests: XCTestCase {
         await store.close()
     }
 
+    func testTextSpelledWithOxiaIsFoundByAnyOfTheForms() async throws {
+        let store = try AppStore.testStore(dataRoot: try makeRoot())
+        try await store.notes.save(Note(title: "Oxia", content: "α\u{03B3}\u{03C9}\u{03BD}\u{1F7B}"))   // ends in ύ spelled with oxia
+        try await store.notes.save(Note(title: "Oxia word", content: "\u{03B1}\u{03BB}\u{03B3}\u{03BF}\u{03C2}\u{0020}\u{03C0}\u{03BF}\u{03BD}\u{1F79}\u{03C2}"))   // πονός-like, ό as oxia
+        let one = try await titles(store, "αγωνυ")
+        XCTAssertEqual(one, ["Oxia"])
+        let two = try await titles(store, "πονοσ")
+        XCTAssertEqual(two, ["Oxia word"], "oxia ό is the same letter as tonos ό")
+        await store.close()
+    }
+
+    func testTheFoldingTriggersAreRefilledWhenTheFoldTableGrew() async throws {
+        let root = try makeRoot()
+        try await seed(root)
+        // The triggers of the build before the oxia spellings were added: one pair fewer in the chain.
+        let older = Schema.ftsTriggers.first { $0.name == "notes_fts_insert" }!.sql
+            .replacingOccurrences(of: "replace(", with: "replace(", options: [], range: nil)
+        XCTAssertFalse(older.isEmpty)
+        try exec(root, ["DROP TRIGGER notes_fts_insert",
+                        older.replacingOccurrences(of: "'\u{1F71}'", with: "'\u{1F71}\u{1F71}'")])
+        let store = try AppStore.testStore(dataRoot: root)
+        try assertCurrentTriggers(root)
+        await store.close()
+    }
+
     func testCapitalsFinalSigmaAndDecomposedTextAreFolded() async throws {
         let store = try AppStore.testStore(dataRoot: try makeRoot())
         try await store.notes.save(Note(title: "Caps", content: "ΚΑΡΔΙΟΛΟΓΊΑ ΚΌΣΜΟΣ"))
@@ -194,7 +219,7 @@ final class GreekSearchTests: XCTestCase {
         let stored = try triggerSQL(root)
         XCTAssertEqual(Set(stored.keys), Set(Schema.ftsTriggerNames), file: file, line: line)
         for trigger in Schema.ftsTriggers {
-            XCTAssertTrue(Schema.sameTriggerSQL(Schema.canonicalTriggerSQL(trigger.sql), stored[trigger.name] ?? ""),
+            XCTAssertTrue(Schema.triggerIsExactly(stored[trigger.name], trigger.sql),
                           "\(trigger.name) is not the current text", file: file, line: line)
         }
     }
@@ -256,28 +281,77 @@ final class GreekSearchTests: XCTestCase {
     }
 
     #if DEBUG
-    func testAFailedUpgradeLeavesTheOldTriggersAndIndexesAndTheNextOpenRetries() async throws {
+    /// A failed refold no longer keeps the store shut: the old triggers and
+    /// indexes stay, the store opens, it knows search needs rebuilding, and
+    /// Rebuild Indexes (or the next open) puts it right.
+    func testAFailedUpgradeLeavesTheOldTriggersAndIndexesTheStoreOpensAndRebuildRepairsIt() async throws {
         let root = try makeRoot()
         try await seed(root)
         try makeLegacy(root)
         let before = try rows(root, "SELECT title || '|' || content FROM notes_fts")
 
         Database.failFTSFoldingForTesting = true
-        XCTAssertThrowsError(try AppStore.testStore(dataRoot: root))
+        let store = try AppStore.testStore(dataRoot: root)
         Database.failFTSFoldingForTesting = false
 
+        let needs = await store.db.searchIndexNeedsRebuild
+        XCTAssertTrue(needs, "the store should know its search index was not refolded")
         XCTAssertEqual(try rows(root, "SELECT title || '|' || content FROM notes_fts"), before, "the index was left as it was")
-        let legacy = Schema.v1.first { $0.contains("notes_fts_insert") }
-        XCTAssertTrue(Schema.sameTriggerSQL(
-            Schema.canonicalTriggerSQL((legacy ?? "").replacingOccurrences(of: "IF NOT EXISTS ", with: "")),
-            try triggerSQL(root)["notes_fts_insert"] ?? ""), "the old trigger came back")
+        let legacy = Schema.originalFTSTriggers.first { $0.name == "notes_fts_insert" }?.sql
+        XCTAssertTrue(Schema.triggerIsExactly(try triggerSQL(root)["notes_fts_insert"], legacy ?? ""), "the old trigger is still there")
         XCTAssertEqual(try rows(root, "SELECT COUNT(*) FROM migrations WHERE version = '8.0-fts-folding'"), ["0"])
+        let missed = try await titles(store, "ασθενης")
+        XCTAssertTrue(missed.isEmpty, "until it is rebuilt an accentless word still misses")
 
-        let store = try AppStore.testStore(dataRoot: root)
+        let report = try await store.db.rebuildIndexes()
+        XCTAssertTrue(report.passed)
+        let after = await store.db.searchIndexNeedsRebuild
+        XCTAssertFalse(after)
         try assertCurrentTriggers(root)
         let found = try await titles(store, "ασθενης")
         XCTAssertEqual(found, ["Visit"])
         await store.close()
+    }
+
+    func testTheNextOpenRetriesAFailedRefold() async throws {
+        let root = try makeRoot()
+        try await seed(root)
+        try makeLegacy(root)
+        Database.failFTSFoldingForTesting = true
+        let first = try AppStore.testStore(dataRoot: root)
+        Database.failFTSFoldingForTesting = false
+        await first.close()
+        let second = try AppStore.testStore(dataRoot: root)
+        let needs = await second.db.searchIndexNeedsRebuild
+        XCTAssertFalse(needs)
+        try assertCurrentTriggers(root)
+        await second.close()
+    }
+
+    @MainActor
+    func testTheSessionSaysSearchNeedsRebuildingAndClearsItAfterARebuild() async throws {
+        let defaults = TestDefaults.suite("MedNotesTests.GreekRebuild")
+        defer { TestDefaults.clear("MedNotesTests.GreekRebuild") }
+        let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
+        try await seed(root)
+        try makeLegacy(root)
+        Database.failFTSFoldingForTesting = true
+        let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        let deadline = Date().addingTimeInterval(20)
+        while !session.isReady, session.initError == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        Database.failFTSFoldingForTesting = false
+        XCTAssertTrue(session.isReady)
+        let warned = Date().addingTimeInterval(5)
+        while session.integrityWarning != AppSession.searchRebuildWarning, Date() < warned {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(session.integrityWarning, AppSession.searchRebuildWarning)
+        let outcome = await session.rebuildIndexes()
+        XCTAssertTrue(outcome.passed)
+        XCTAssertNil(session.integrityWarning)
     }
     #endif
 
@@ -340,6 +414,108 @@ final class GreekSearchTests: XCTestCase {
             try await reopened.validateExpectedSchema()
             XCTFail("an unknown trigger was accepted")
         } catch {}
+    }
+
+    // MARK: - Untrusted snapshots are checked before they are migrated (M2)
+
+    func testAPlantedTriggerIsRejectedBeforeAnythingMigratesTheSnapshot() async throws {
+        let root = try makeRoot()
+        try await seed(root)
+        // An older file: the markers a migration would write are missing, and a
+        // trigger waits on the table it writes to.
+        try exec(root, [
+            "DELETE FROM migrations WHERE version IN ('7.0-app-state', '8.0-fts-folding')",
+            """
+            CREATE TRIGGER planted AFTER INSERT ON migrations BEGIN
+                INSERT OR REPLACE INTO app_state(key, value_json, updated_at) VALUES ('planted', '1', 'x');
+            END
+            """
+        ])
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root)))
+        XCTAssertEqual(try rows(root, "SELECT COUNT(*) FROM app_state WHERE key = 'planted'"), ["0"], "the planted trigger ran")
+        XCTAssertEqual(try rows(root, "SELECT COUNT(*) FROM migrations WHERE version = '8.0-fts-folding'"), ["0"],
+                       "the file was migrated before it was judged")
+    }
+
+    func testViewsAndAlteredFullTextTriggersAreRejectedBeforeMigration() async throws {
+        let root = try makeRoot()
+        try await seed(root)
+        try exec(root, ["CREATE VIEW sneaky AS SELECT id FROM notes"])
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root)))
+        try exec(root, ["DROP VIEW sneaky", "DROP TRIGGER notes_fts_update", forgedUpdateTrigger(with: "\u{00A0}")])
+        XCTAssertThrowsError(try Database.validateSnapshotFile(path: root.databaseURL.path, key: TestKeys.database(for: root)))
+    }
+
+    func testEverySpellingAnOlderBuildWroteIsAccepted() async throws {
+        // The current triggers.
+        let current = try makeRoot("current")
+        try await seed(current)
+        try Database.validateSnapshotFile(path: current.databaseURL.path, key: TestKeys.database(for: current))
+        // The original six, from before folding.
+        let original = try makeRoot("original")
+        try await seed(original)
+        try makeLegacy(original)
+        try Database.validateSnapshotFile(path: original.databaseURL.path, key: TestKeys.database(for: original))
+        // The patients triggers the old fathers_name migration wrote.
+        let copied = try makeRoot("copied")
+        try await seed(copied)
+        try exec(copied, ["DROP TRIGGER patients_fts_insert", "DROP TRIGGER patients_fts_delete", "DROP TRIGGER patients_fts_update"]
+                 + Schema.migrationCopyPatientTriggers.map(\.sql))
+        try Database.validateSnapshotFile(path: copied.databaseURL.path, key: TestKeys.database(for: copied))
+    }
+
+    // MARK: - Altered triggers (the security review's H1)
+
+    /// What a lookalike space does: SQLite reads these characters as part of a
+    /// name, so `title,<space>content` names a column that does not exist and the
+    /// trigger quietly never fires for body edits.
+    private static let lookalikeSpaces: [String] = ["\u{00A0}", "\u{2028}", "\u{3000}", " \u{0301}", "\u{2003}"]
+
+    private func forgedUpdateTrigger(with variant: String) -> String {
+        let expected = Schema.ftsTriggers.first { $0.name == "notes_fts_update" }!.sql
+        return expected.replacingOccurrences(of: "title, content", with: "title,\(variant)content")
+    }
+
+    func testAnAlteredTriggerWithALookalikeSpaceIsRejectedByValidationAndReplacedOnOpen() async throws {
+        var planted = 0
+        for variant in Self.lookalikeSpaces {
+            let root = try makeRoot("variant-\(planted)-\(UUID().uuidString.prefix(4))")
+            try await seed(root)
+            let live = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
+            let forged = forgedUpdateTrigger(with: variant)
+            XCTAssertFalse(Schema.triggerIsExactly(forged, Schema.ftsTriggers.first { $0.name == "notes_fts_update" }!.sql))
+            do {
+                try exec(root, ["DROP TRIGGER notes_fts_update", forged])
+            } catch {
+                continue   // SQLite refused this spelling at CREATE time: nothing to plant
+            }
+            planted += 1
+            do {
+                try await live.validateExpectedSchema()
+                XCTFail("a trigger with \(variant.unicodeScalars.map { String($0.value, radix: 16) }) was accepted")
+            } catch {}
+            let reopened = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
+            try assertCurrentTriggers(root)
+            try await reopened.validateExpectedSchema()
+        }
+        XCTAssertGreaterThan(planted, 0, "SQLite accepted none of the spellings, so the test checked nothing")
+    }
+
+    func testARebuildPutsTheTriggersBack() async throws {
+        let root = try makeRoot()
+        let store = try AppStore.testStore(dataRoot: root)
+        try await store.notes.save(Note(title: "Visit", content: "ασθενής"))
+        try exec(root, ["DROP TRIGGER notes_fts_update", forgedUpdateTrigger(with: "\u{00A0}")])
+        _ = try await store.db.rebuildIndexes()
+        try assertCurrentTriggers(root)
+        // An edit of the body now reaches the index again.
+        let all = try await store.notes.list(search: "", tagKey: nil)
+        var note = try XCTUnwrap(all.first)
+        note.content = "δύσπνοια"
+        try await store.notes.save(note)
+        let found = try await titles(store, "δυσπνοια")
+        XCTAssertEqual(found, ["Visit"])
+        await store.close()
     }
 
     func testARebuildKeepsTheIndexesFolded() async throws {

@@ -25,8 +25,8 @@ final class GreekFoldTests: XCTestCase {
             // A combining mark in the table would confuse the trigger-text canonicalizer.
             XCTAssertFalse((0x0300...0x036F).contains(pair.from.value), "\(pair.from) is a combining mark")
         }
-        // 20 accented and the final sigma, 24 capitals.
-        XCTAssertEqual(GreekFold.pairs.count, 21 + 24)
+        // 20 accented and the final sigma, 16 oxia spellings, 24 capitals.
+        XCTAssertEqual(GreekFold.pairs.count, 21 + 16 + 24)
     }
 
     func testAccentsCapitalsAndFinalSigmaFoldAway() {
@@ -36,6 +36,19 @@ final class GreekFoldTests: XCTestCase {
         XCTAssertEqual(GreekFold.fold("ΐΰ ϊϋ"), "ιυ ιυ")
         XCTAssertEqual(GreekFold.fold("Hello World"), "hello world", "Latin is lowercased too")
         XCTAssertEqual(GreekFold.fold("Ünïcode"), "Ünïcode", "non-Greek, non-ASCII letters are left to the tokenizer")
+    }
+
+    /// Oxia spellings are canonically equivalent to the tonos forms; both the Swift
+    /// fold (which normalizes first) and the SQL fold (bytes only) must agree on them.
+    func testOxiaSpellingsFoldLikeTheTonosForms() {
+        let oxia = GreekFold.pairs.filter { (0x1F00...0x1FFF).contains($0.from.value) }
+        XCTAssertEqual(oxia.count, 16)
+        for pair in oxia {
+            let composed = String(pair.from).precomposedStringWithCanonicalMapping
+            XCTAssertNotEqual(Array(composed.utf8), Array(String(pair.from).utf8), "U+\(String(pair.from.value, radix: 16)) is not a singleton")
+            XCTAssertEqual(GreekFold.fold(String(pair.from)), String(pair.to))
+            XCTAssertEqual(GreekFold.fold(composed), String(pair.to))
+        }
     }
 
     func testDecomposedTextFoldsLikeTheComposedForm() {
@@ -89,14 +102,16 @@ final class GreekFoldTests: XCTestCase {
 
     // MARK: - Trigger text
 
-    func testTriggerTextComparesByWhitespaceOutsideQuotesAndByBytesInsideThem() {
-        let trusted = Schema.canonicalTriggerSQL("CREATE TRIGGER t AFTER INSERT ON n BEGIN SELECT replace(x, 'ά', 'α'); END")
-        XCTAssertTrue(Schema.sameTriggerSQL(trusted, "CREATE TRIGGER t\n   AFTER INSERT ON n\n BEGIN\n SELECT   replace(x, 'ά', 'α');\n END"))
-        XCTAssertFalse(Schema.sameTriggerSQL(trusted, "CREATE TRIGGER t AFTER INSERT ON n BEGIN SELECT replace(x, 'ά ', 'α'); END"),
-                       "whitespace inside a literal counts")
-        // The decomposed spelling of the same letter is a different literal.
-        XCTAssertFalse(Schema.sameTriggerSQL(trusted, "CREATE TRIGGER t AFTER INSERT ON n BEGIN SELECT replace(x, 'α\u{0301}', 'α'); END"))
-        XCTAssertFalse(Schema.sameTriggerSQL(nil, "CREATE TRIGGER t"))
+    func testTriggerTextIsComparedByteForByte() {
+        let expected = "CREATE TRIGGER t AFTER INSERT ON n BEGIN SELECT replace(x, 'ά', 'α'); END"
+        XCTAssertTrue(Schema.triggerIsExactly(expected, expected))
+        XCTAssertFalse(Schema.triggerIsExactly(expected + " ", expected), "a trailing space")
+        XCTAssertFalse(Schema.triggerIsExactly(expected.replacingOccurrences(of: " BEGIN", with: "\nBEGIN"), expected))
+        // The decomposed spelling of a letter is a different literal, though Swift's == calls it equal.
+        let decomposed = expected.replacingOccurrences(of: "ά", with: "α\u{0301}")
+        XCTAssertEqual(expected, decomposed)
+        XCTAssertFalse(Schema.triggerIsExactly(decomposed, expected))
+        XCTAssertFalse(Schema.triggerIsExactly(nil, expected))
     }
 }
 

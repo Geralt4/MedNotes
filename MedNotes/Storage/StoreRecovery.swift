@@ -100,6 +100,8 @@ actor StoreRecovery {
         // Validate the snapshot under the archive key before anything moves.
         var validation: Database?
         do {
+            // Before it is opened, and so migrated: its triggers and views first.
+            try Database.validateSnapshotFile(path: snapshotURL.path, key: opened.archiveKey)
             let candidate = try Database(path: snapshotURL.path, key: opened.archiveKey)
             validation = candidate
             let validation = candidate

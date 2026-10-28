@@ -204,7 +204,8 @@ actor StoreMigrator {
         let encrypted = try Database(path: stagingDBURL.path, key: databaseKey)
 
         let plaintextPath = dataRoot.databaseURL.path
-        // Read only: the owner's original store gets no derived link rows.
+        // The original store gets its schema brought up to date (new tables and
+        // markers only) but no derived rows, and its data is never written.
         let plainReader = try Database(path: plaintextPath, deriveLinks: false)
         defer {
             Task { await plainReader.close() }
@@ -405,7 +406,7 @@ actor StoreMigrator {
     }
 
     /// Rollback on a failure before the swap: the staging tree and the journal
-    /// are removed, and the original plaintext store stays exactly as it was.
+    /// are removed, and the original plaintext store keeps its data as it was.
     func rollbackStaging() {
         let fm = FileManager.default
         try? fm.removeItem(at: Self.stagingDirectory(in: dataRoot))

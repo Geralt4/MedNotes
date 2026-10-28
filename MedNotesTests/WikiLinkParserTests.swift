@@ -231,4 +231,66 @@ final class WikiLinkParserTests: XCTestCase {
         XCTAssertNotEqual(key("Ward"), key("Wound"))
         XCTAssertEqual(key("   "), "")
     }
+
+    // MARK: - Hostile input (the security review's M1)
+
+    /// Many unclosed openers used to cost "openers x paragraph x fences": a 54 KB
+    /// note took seconds on every save and every open.
+    func testManyUnclosedBacktickOpenersAreReadInLinearTime() {
+        var text = ""
+        for length in 1...100 { text += String(repeating: "`", count: length) + "x " }
+        text += String(repeating: "word ", count: 5_000)
+        text += "\n\n" + String(repeating: "```\n```\n", count: 3_000)
+        XCTAssertGreaterThan(text.utf16.count, 40_000)
+        let start = Date()
+        let scan = WikiLinkParser.scan(text)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0, "a hostile 50 KB note took too long")
+        XCTAssertFalse(scan.protectedRanges.isEmpty)
+    }
+
+    func testManyUnclosedCommentOpenersAreReadInLinearTime() {
+        for opener in ["<!-- ", "%% x "] {
+            // An even count of %% would pair up; the odd one out is the point.
+            let text = String(repeating: opener, count: opener == "%% x " ? 20_001 : 12_000)
+            let start = Date()
+            _ = WikiLinkParser.scan(text)
+            XCTAssertLessThan(Date().timeIntervalSince(start), 1.0, "\(opener) openers took too long")
+        }
+    }
+
+    func testAFailedBacktickSearchDoesNotHideACloserInTheNextParagraph() {
+        let text = "`unclosed here\n\n`closed`"
+        let scan = WikiLinkParser.scan(text)
+        let ns = text as NSString
+        XCTAssertEqual(scan.protectedRanges.map { ns.substring(with: $0) }, ["`closed`"])
+    }
+
+    func testAnUnclosedRunOfOneLengthDoesNotStopACloserOfAnotherLength() {
+        let text = "`one ``two`` three"
+        let ns = text as NSString
+        let scan = WikiLinkParser.scan(text)
+        // The lone ` never closes (the run of two is not a run of one); the `` pair does.
+        XCTAssertEqual(scan.protectedRanges.map { ns.substring(with: $0) }, ["``two``"])
+    }
+
+    func testRandomTextKeepsProtectedRangesSortedAndLinksOutsideThem() {
+        var state: UInt64 = 0xBAC7
+        func next() -> UInt64 {
+            state &+= 0x9E3779B97F4A7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+            return z ^ (z >> 31)
+        }
+        let alphabet = Array("`[]%<!->~\n \\ab#")
+        for _ in 0..<1_500 {
+            let text = String((0..<Int(next() % 60)).map { _ in alphabet[Int(next() % UInt64(alphabet.count))] })
+            let scan = WikiLinkParser.scan(text)
+            XCTAssertEqual(scan.protectedRanges, scan.protectedRanges.sorted { $0.location < $1.location })
+            for link in scan.links {
+                XCTAssertFalse(scan.protectedRanges.contains { NSIntersectionRange($0, link.range).length > 0 },
+                               "link inside protected text: \(text.debugDescription)")
+            }
+        }
+    }
 }

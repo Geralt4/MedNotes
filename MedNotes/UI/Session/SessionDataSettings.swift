@@ -78,6 +78,7 @@ extension AppSession {
                 action: "indexes_rebuilt", entityType: "store", entityId: "settings",
                 details: report.auditDetails)
             await reload()
+            if report.passed, integrityWarning == Self.searchRebuildWarning { integrityWarning = nil }
             var detail = String(localized: "Rebuilt \(report.notes) notes: \(report.links) links (\(report.unresolvedLinks) unresolved), \(report.headings) headings, \(report.tags) tags.")
             if report.failedNotes > 0 {
                 detail += " " + String(localized: "\(report.failedNotes) notes could not be read into the indexes; they are tried again when the store opens.")
@@ -98,6 +99,11 @@ extension AppSession {
         }
     }
 
+    /// Shown when the one-time search refold failed at launch.
+    static var searchRebuildWarning: String {
+        String(localized: "Search needs rebuilding: open Settings › Data › Rebuild Indexes.")
+    }
+
     /// The same checks after launch, off the critical path: nothing on a
     /// pass (a row per launch would drown the trail), the warning and an
     /// audit row on a failure.
@@ -105,7 +111,14 @@ extension AppSession {
         guard let store else { return }
         let report = await runIntegrityChecks(on: store)
         if report.passed {
-            integrityWarning = nil
+            if await store.db.searchIndexNeedsRebuild {
+                try? await store.audit.log(
+                    action: "integrity_check", entityType: "store", entityId: "launch",
+                    details: "search index needs rebuilding")
+                integrityWarning = Self.searchRebuildWarning
+            } else {
+                integrityWarning = nil
+            }
             return
         }
         try? await store.audit.log(

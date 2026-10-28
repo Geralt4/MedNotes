@@ -3,6 +3,34 @@ import Foundation
 /// Schema and digest validation that depends on the archive format, kept out
 /// of `Database.swift` so the CLI's system-only typecheck never sees it.
 extension Database {
+    /// Checks an untrusted snapshot's triggers and views on a bare connection
+    /// **before** anything opens it as a `Database` (which migrates it, and a
+    /// trigger planted on a table the migration writes to would run then).
+    /// Every trigger must be one of the spellings this app or an older build
+    /// writes for the six full-text triggers; any view is rejected. Nothing is
+    /// written to the file.
+    static func validateSnapshotFile(path: String, key: Data) throws {
+        let connection = try SQLConnection(path: path, key: key)
+        defer { connection.close() }
+        try connection.exec("PRAGMA query_only = ON")
+        try connection.exec("PRAGMA trusted_schema = OFF")
+        let accepted = Schema.acceptedFTSTriggerTexts
+        let objects = try connection.prepare(
+            "SELECT type, name, sql FROM sqlite_master WHERE type IN ('view', 'trigger')")
+        defer { objects.finalize() }
+        var unexpected: [String] = []
+        while try objects.step() {
+            guard let type = objects.columnText(0), let name = objects.columnText(1) else { continue }
+            let sql = objects.columnText(2) ?? ""
+            let known = type == "trigger"
+                && (accepted[name] ?? []).contains { Schema.triggerIsExactly(sql, $0) }
+            if !known { unexpected.append("\(type) \(name)") }
+        }
+        guard unexpected.isEmpty else {
+            throw BackupError.unexpectedSchema(unexpected.joined(separator: ", "))
+        }
+    }
+
     /// Confirms the expected tables and columns exist and that no unexpected
     /// trigger or view was planted in a restored snapshot.
     func validateExpectedSchema() throws {
@@ -23,19 +51,18 @@ extension Database {
         // SQLite removes IF NOT EXISTS when it stores CREATE statements.
         // Compare the entire definition, not just the name: a trigger with an
         // otherwise familiar name can contain arbitrary destructive SQL.
-        // Every trigger the app creates is a full-text one, and the restored
+        // Every trigger the app creates is a full-text one. The restored
         // snapshot was opened through `Database(path:key:)`, which already
-        // replaced any of those six with the current text.
-        let trusted = Dictionary(uniqueKeysWithValues: Schema.ftsTriggers.map {
-            ($0.name, Schema.canonicalTriggerSQL($0.sql))
-        })
+        // replaced any of those six whose text was not exactly the current one;
+        // anything else is rejected, compared byte for byte.
+        let trusted = Dictionary(uniqueKeysWithValues: Schema.ftsTriggers.map { ($0.name, $0.sql) })
         let objects = try conn.prepare(
             "SELECT type, name, sql FROM sqlite_master WHERE type IN ('view', 'trigger')")
         var unexpected: [String] = []
         while try objects.step() {
             guard let type = objects.columnText(0), let name = objects.columnText(1) else { continue }
             let sql = objects.columnText(2) ?? ""
-            if type != "trigger" || !Schema.sameTriggerSQL(trusted[name], sql) {
+            if type != "trigger" || trusted[name].map({ !Schema.triggerIsExactly(sql, $0) }) ?? true {
                 unexpected.append("\(type) \(name)")
             }
         }
@@ -684,6 +711,7 @@ actor BackupService {
     private func validateStagedDatabase(
         at url: URL, key: Data, attachments: AttachmentStore
     ) async throws {
+        try Database.validateSnapshotFile(path: url.path, key: key)
         let staging = try Database(path: url.path, key: key)
         do {
             let integrity = try await staging.integrityCheck()

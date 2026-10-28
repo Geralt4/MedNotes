@@ -5569,6 +5569,16 @@
         }
       }
     },
+    "Search needs rebuilding: open Settings › Data › Rebuild Indexes." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η αναζήτηση χρειάζεται ανακατασκευή: ανοίξτε Ρυθμίσεις › Δεδομένα › Ανακατασκευή ευρετηρίων."
+          }
+        }
+      }
+    },
     "Search syntax" : {
       "localizations" : {
         "el" : {
