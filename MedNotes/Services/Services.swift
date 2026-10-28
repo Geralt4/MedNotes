@@ -258,10 +258,6 @@ actor PatientService {
         try await db.loadAllPatients(includeArchived: includeArchived)
     }
 
-    func page(offset: Int, limit: Int, includeArchived: Bool = false) async throws -> [Patient] {
-        try await db.loadPatients(offset: offset, limit: limit, includeArchived: includeArchived)
-    }
-
     func search(_ query: String, limit: Int = 10_000, includeArchived: Bool = false) async throws -> [Patient] {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return try await db.loadAllPatients(includeArchived: includeArchived)
@@ -287,10 +283,6 @@ actor PatientService {
         patient.lastModified = Date()
         try await db.savePatient(patient)
         try await audit.log(action: action, entityType: "patient", entityId: id.uuidString, details: details)
-    }
-
-    func notes(for patientId: UUID) async throws -> [Note] {
-        try await db.loadNotesForPatient(patientId: patientId)
     }
 }
 
@@ -468,15 +460,6 @@ actor TodoService {
         try await db.deleteTodo(id: id)
         try await audit.log(action: action, entityType: "todo", entityId: id.uuidString)
     }
-
-    func stats(todos: [TodoItem]) -> (pending: Int, completed: Int, overdue: Int, dueToday: Int) {
-        (
-            todos.filter { !$0.isCompleted }.count,
-            todos.filter(\.isCompleted).count,
-            todos.filter(\.isOverdue).count,
-            todos.filter(\.isDueToday).count
-        )
-    }
 }
 
 actor CalendarEventService {
@@ -520,10 +503,6 @@ actor CalendarEventService {
     func load(id: UUID) async throws -> CalendarEvent? { try await db.loadEvent(id: id) }
 
     func loadAll() async throws -> [CalendarEvent] { try await db.loadAllEvents() }
-
-    func events(from start: Date, to end: Date) async throws -> [CalendarEvent] {
-        try await db.loadEvents(from: start, to: end)
-    }
 
     func delete(id: UUID) async throws {
         try await remove(id: id, action: "event_delete")
@@ -617,11 +596,5 @@ enum FilePromote {
         for name in existing where !keptIDs.contains(name) {
             try? fm.removeItem(atPath: patientDir.appendingPathComponent(name).path)
         }
-    }
-}
-
-extension Database {
-    func databasePath() -> String {
-        conn.path
     }
 }

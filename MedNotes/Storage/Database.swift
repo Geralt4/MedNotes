@@ -1129,23 +1129,6 @@ actor Database {
         return out
     }
 
-    func loadPatients(offset: Int, limit: Int, includeArchived: Bool = false) throws -> [Patient] {
-        let s = try conn.prepare("""
-            \(Self.patientColumns)
-            WHERE (? = 1 OR is_archived = 0)
-            ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE
-            LIMIT ? OFFSET ?
-            """)
-        s.bind(1, includeArchived)
-        s.bind(2, limit)
-        s.bind(3, offset)
-        var out: [Patient] = []
-        while try s.step() {
-            if let p = try decodePatient(s) { out.append(p) }
-        }
-        return out
-    }
-
     func deletePatient(id: UUID) throws {
         try transaction {
             // Clear denormalized names before the FK nulls patient_id,
@@ -1365,23 +1348,6 @@ actor Database {
             FROM notes
             ORDER BY is_pinned DESC, updated_at DESC
             """)
-        var out: [Note] = []
-        while try s.step() {
-            if let n = try decodeNote(s) { out.append(n) }
-        }
-        return out
-    }
-
-    func loadNotesForPatient(patientId: UUID) throws -> [Note] {
-        let s = try conn.prepare("""
-            SELECT n.id, n.title, n.content, n.created_at, n.updated_at, n.tags_json,
-                   n.mentioned_patients_json, n.is_pinned
-            FROM notes n
-            JOIN patient_notes pn ON pn.note_id = n.id
-            WHERE pn.patient_id = ?
-            ORDER BY n.updated_at DESC
-            """)
-        s.bind(1, patientId.uuidString)
         var out: [Note] = []
         while try s.step() {
             if let n = try decodeNote(s) { out.append(n) }

@@ -848,14 +848,6 @@ actor BackupService {
 
     // MARK: - Helpers
 
-    func integrityCheck() async throws -> String {
-        try await db.integrityCheck()
-    }
-
-    func foreignKeyViolations() async throws -> Int {
-        try await db.foreignKeyCheck()
-    }
-
     nonisolated static func requireFreeSpace(bytes: Int64, at url: URL) throws {
         guard bytes > 0 else { return }
         let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
