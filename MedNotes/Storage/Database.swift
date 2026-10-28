@@ -24,8 +24,9 @@ actor Database {
     /// opened (the old ones and the old indexes are still there): the app says
     /// so and Rebuild Indexes repairs it.
     private(set) var searchIndexNeedsRebuild = false
-    /// The raw database key, kept so `reopen` and `replaceDatabaseFile` can
-    /// rebuild the connection without another Keychain round-trip.
+    /// The raw database key, kept so `replaceDatabaseFile` and
+    /// `reinstateDatabaseFile` can rebuild the connection without another
+    /// Keychain round-trip.
     private let databaseKey: Data?
     private var encoder: JSONEncoder {
         let e = JSONEncoder()
@@ -69,17 +70,6 @@ actor Database {
         searchIndexNeedsRebuild = try Self.migrate(conn)
     }
 
-    init(connection: SQLConnection) throws {
-        if case .encrypted(let key) = connection.mode {
-            self.databaseKey = key
-        } else {
-            self.databaseKey = nil
-        }
-        self.conn = connection
-        try Self.configure(connection)
-        searchIndexNeedsRebuild = try Self.migrate(connection)
-    }
-
     private nonisolated static func configure(_ conn: SQLConnection) throws {
         try conn.exec("PRAGMA busy_timeout = 5000")
         do {
@@ -105,14 +95,6 @@ actor Database {
     func close() {
         transactionDepth = 0
         conn.close()
-    }
-
-    func reopen() throws {
-        transactionDepth = 0
-        conn.close()
-        self.conn = try Self.open(path: conn.path, key: databaseKey)
-        try Self.configure(conn)
-        searchIndexNeedsRebuild = try Self.migrate(conn)
     }
 
     private nonisolated static func open(path: String, key: Data?) throws -> SQLConnection {
@@ -608,19 +590,6 @@ actor Database {
 
     func checkpoint() throws {
         try conn.exec("PRAGMA wal_checkpoint(TRUNCATE)")
-    }
-
-    /// Checkpoint, copy the live DB (and Files/ when given), and read counts
-    /// in one hop so a backup cannot pair a DB snapshot with a later Files tree.
-    func snapshotForBackup(to destPath: String, filesRoot: URL? = nil, filesDest: URL? = nil) throws -> [String: Int] {
-        try checkpoint()
-        let counts = try counts()
-        try FileManager.default.copyItem(atPath: conn.path, toPath: destPath)
-        if let filesRoot, let filesDest,
-           FileManager.default.fileExists(atPath: filesRoot.path) {
-            try FileManager.default.copyItem(at: filesRoot, to: filesDest)
-        }
-        return counts
     }
 
     func integrityCheck() throws -> String {

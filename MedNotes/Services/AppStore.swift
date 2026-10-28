@@ -38,30 +38,6 @@ actor AppStore {
         self.notes = NoteService(db: db, audit: audit, linking: linking)
     }
 
-    /// Plaintext construction for tests, the dry-run importer and the CLI.
-    /// Never called from the app target: the production initializer above is
-    /// the only one the UI can reach.
-    init(plaintextDataRoot dataRoot: DataRoot) throws {
-        self.dataRoot = dataRoot
-        self.db = try Database(path: dataRoot.databaseURL.path)
-        self.audit = AuditService(db: db)
-        self.fileStore = try EncryptedFileStore(
-            root: dataRoot.attachmentsURL,
-            key: StoreKeyContext.subkey(
-                rootKey: Data(repeating: 0x42, count: 32),
-                context: StoreKeyContext.attachments),
-            externalCopiesURL: dataRoot.externalCopiesURL)
-        self.patients = PatientService(db: db, audit: audit, filesRoot: dataRoot.filesURL)
-        self.linking = LinkingService(db: db)
-        self.templates = TemplateService(db: db, audit: audit)
-        self.todos = TodoService(db: db, audit: audit)
-        self.events = CalendarEventService(db: db, audit: audit)
-        self.backups = BackupService(
-            db: db, fileStore: nil, restorePointsRoot: dataRoot.restorePointsURL)
-        self.destinations = SyncDestinationStore(db: db)
-        self.notes = NoteService(db: db, audit: audit, linking: linking)
-    }
-
     func counts() async throws -> [String: Int] {
         try await db.counts()
     }

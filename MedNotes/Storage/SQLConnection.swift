@@ -98,10 +98,6 @@ final class Statement {
         }
     }
 
-    func bind(_ idx: Int32, _ value: Int64) {
-        sqlite3_bind_int64(handle, idx, value)
-    }
-
     func bind(_ idx: Int32, _ value: Double) {
         sqlite3_bind_double(handle, idx, value)
     }
@@ -158,10 +154,6 @@ final class Statement {
 
     func columnInt(_ i: Int32) -> Int? {
         columnInt64(i).map(Int.init)
-    }
-
-    func columnDouble(_ i: Int32) -> Double? {
-        columnIsNull(i) ? nil : sqlite3_column_double(handle, i)
     }
 
     func columnBool(_ i: Int32) -> Bool? {
@@ -273,13 +265,6 @@ final class SQLConnection {
             throw SQLiteError.exec(msg, sql: sql)
         }
     }
-
-    func errorMessage() -> String {
-        handle.map { String(cString: sqlite3_errmsg($0)) } ?? "closed"
-    }
-
-    var lastInsertRowid: Int64 { sqlite3_last_insert_rowid(handle) }
-    var changes: Int32 { sqlite3_changes(handle) }
 }
 
 /// Detects whether a file begins with a plaintext SQLite header.

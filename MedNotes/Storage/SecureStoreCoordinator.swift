@@ -103,7 +103,6 @@ final class SecureStoreCoordinator: ObservableObject {
     }
 
     nonisolated var keyManager: KeyManager { keyManagerRef }
-    nonisolated var storeRoot: DataRoot { dataRootRef }
 
     var isReady: Bool { state == .ready }
 
@@ -244,10 +243,5 @@ final class SecureStoreCoordinator: ObservableObject {
         EncryptedFileStore.purgeOrphanedTemporaries(in: dataRootRef.externalCopiesURL)
         if case .failed = state { return }
         state = .locked
-    }
-
-    func fail(_ message: String) {
-        lastError = message
-        state = .failed(message)
     }
 }

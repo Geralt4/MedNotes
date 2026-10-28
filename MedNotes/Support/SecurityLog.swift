@@ -40,12 +40,6 @@ enum SecurityLog {
         }
     }
 
-    /// Reduces an error to its kind, never its message: an interpolated
-    /// `localizedDescription` can carry a path or a record title.
-    static func recordFailure(_ event: Event, error: Error) {
-        logger.error("\(event.rawValue, privacy: .public) failed type=\(String(describing: type(of: error)), privacy: .public)")
-    }
-
     /// A short opaque label for a file name or path. Never returns the path.
     static func opaqueID(for url: URL) -> String {
         var hash: UInt64 = 0xcbf29ce484222325
