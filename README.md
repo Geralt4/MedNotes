@@ -1,8 +1,8 @@
 # MedNotes 2.0 (rebuild)
 
 Clean-room rebuild of the MedNotes backend. The original V1.1 source was lost;
-this project was reconstructed from the compiled app binary (recovery catalog in
-`Recovery/`) and the surviving iCloud data.
+this project was reconstructed from the compiled app binary and the surviving
+iCloud data.
 
 ## Status
 
@@ -213,7 +213,6 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
   `UI/Settings/` (the Settings window's panes), `UI/Sync/` (the toolbar sync
   pill shared by Todos and Calendar)
 - `MedNotesTests/Fixtures/` — real JSON from the surviving data (patient, note, todos, event)
-- `Recovery/` — symbols, field names, SQL strings extracted from the old binary
 
 ## Building
 
