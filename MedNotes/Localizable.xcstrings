@@ -5108,6 +5108,26 @@
         }
       }
     },
+    "Reconnect Apple Calendar before deleting this linked event." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδέστε ξανά το Ημερολόγιο Apple πριν διαγράψετε αυτό το συνδεδεμένο συμβάν."
+          }
+        }
+      }
+    },
+    "Reconnect Apple Reminders before deleting this linked todo." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συνδέστε ξανά τις Υπενθυμίσεις Apple πριν διαγράψετε αυτή τη συνδεδεμένη εκκρεμότητα."
+          }
+        }
+      }
+    },
     "Reconnect…" : {
       "localizations" : {
         "el" : {
