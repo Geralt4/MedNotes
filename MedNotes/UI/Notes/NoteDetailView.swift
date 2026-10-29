@@ -136,8 +136,8 @@ struct NoteDetailView: View {
         .onChange(of: draft?.content, initial: true) { bodyEditor.restyleSoon(draft) }
         .onChange(of: "\(draft?.id.uuidString ?? "")-\(isPreviewing)") { bodyEditor.restyleSoon(draft) }
         .onDisappear {
-            session.unregisterOpenEditor(lockToken)
-            guard let d = draft else { return }
+            // False when a lock or restore already saved or discarded this draft.
+            guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
                 Task {
                     if session.selectedNoteId == d.id {

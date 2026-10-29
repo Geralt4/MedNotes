@@ -36,10 +36,24 @@ extension AppSession {
     /// the view alive.
     func registerOpenEditor(_ token: UUID, draft: @escaping () -> OpenEditorDraft?) {
         openEditors[token] = draft
+        settledEditors.remove(token)
     }
 
-    func unregisterOpenEditor(_ token: UUID) {
+    /// Called by an editor as it goes away. Returns whether the editor should
+    /// still save or discard its own draft: `false` when the session already
+    /// did (see `settledEditors`).
+    @discardableResult
+    func unregisterOpenEditor(_ token: UUID) -> Bool {
         openEditors[token] = nil
+        return settledEditors.remove(token) == nil
+    }
+
+    /// The drafts of the editors on screen, as `save` would store them, with
+    /// the token each registered under.
+    func openEditorDrafts() -> [(token: UUID, draft: OpenEditorDraft)] {
+        openEditors.compactMap { token, read in
+            read().map { (token, preparedForSave($0)) }
+        }
     }
 
     /// The retired Markdown mirror's folder. Kept only so the upgrade can

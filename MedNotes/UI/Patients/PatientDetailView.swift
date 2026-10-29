@@ -53,8 +53,8 @@ struct PatientDetailView: View {
             }
         }
         .onDisappear {
-            session.unregisterOpenEditor(lockToken)
-            guard let d = draft else { return }
+            // False when a lock or restore already saved or discarded this draft.
+            guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
                 Task {
                     if session.selectedPatientId == d.id {

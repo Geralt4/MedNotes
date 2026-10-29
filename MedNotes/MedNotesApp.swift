@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MedNotesApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var session = AppSession()
 
     var body: some Scene {
@@ -9,6 +10,7 @@ struct MedNotesApp: App {
             ContentView()
                 .environmentObject(session)
                 .frame(minWidth: 1000, minHeight: 600)
+                .onAppear { appDelegate.session = session }
         }
         .defaultSize(width: 1280, height: 820)
         .windowResizability(.contentMinSize)

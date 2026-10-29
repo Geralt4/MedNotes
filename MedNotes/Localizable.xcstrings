@@ -8211,6 +8211,16 @@
           }
         }
       }
+    },
+    "%lld edit(s) could not be saved, so nothing was restored." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε επαναφορά."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
