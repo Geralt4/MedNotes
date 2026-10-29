@@ -930,7 +930,7 @@ final class LegacyImportAttachmentTests: XCTestCase {
         return (folder, folder.rootURL)
     }
 
-    func testImportStoresInlineBytesAndAReimportWithoutBytesKeepsThem() async throws {
+    func testImportStoresInlineBytesAndAReimportLeavesTheStoredFileAlone() async throws {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
@@ -954,16 +954,20 @@ final class LegacyImportAttachmentTests: XCTestCase {
         let bytes = try await store.patients.loadFileData(patientId: patient.id, fileId: patient.files[0].id)
         XCTAssertEqual(bytes, Data("FIRST".utf8))
 
-        // Re-importing different bytes replaces the object and removes the old one.
+        // A folder with different bytes for the same file does not replace what is
+        // stored: the patient is already there, so it is left exactly as it is, and
+        // no second object is written beside the first.
         var changed = patient
         changed.files[0].data = Data("SECOND".utf8)
         let (third, thirdURL) = try folder(with: [changed])
         defer { try? FileManager.default.removeItem(at: third.rootURL) }
-        _ = try await JSONImporter(directoryURL: thirdURL).importAll(into: db, fileStore: fileStore)
+        let again = try await JSONImporter(directoryURL: thirdURL).importAll(into: db, fileStore: fileStore)
+        XCTAssertEqual(again.patientsAlreadyPresent, 1)
+        XCTAssertEqual(again.patientsImported, 0)
         let objects = try FileManager.default.contentsOfDirectory(atPath: root.attachmentsURL.path)
         XCTAssertEqual(objects.count, 1)
         let latest = try await store.patients.loadFileData(patientId: patient.id, fileId: patient.files[0].id)
-        XCTAssertEqual(latest, Data("SECOND".utf8))
+        XCTAssertEqual(latest, Data("FIRST".utf8), "an attachment in the app is not replaced by the folder's copy")
         await store.close()
     }
 
@@ -971,13 +975,14 @@ final class LegacyImportAttachmentTests: XCTestCase {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
-        var occupied = Patient.newRecord()
-        occupied.profile.amka = "11111111111"
-        try await store.patients.save(occupied)
+        // Two patients in the folder share an AMKA: the batch cannot commit. (One
+        // that clashes with a stored patient is left out instead of failing.)
+        var first = Patient.newRecord()
+        first.profile.amka = "11111111111"
+        first.files = [PatientFile(name: "x.txt", type: .other, data: Data("X".utf8))]
         var clash = Patient.newRecord()
         clash.profile.amka = "11111111111"
-        clash.files = [PatientFile(name: "x.txt", type: .other, data: Data("X".utf8))]
-        let (folderRoot, url) = try folder(with: [clash])
+        let (folderRoot, url) = try folder(with: [first, clash])
         defer { try? FileManager.default.removeItem(at: folderRoot.rootURL) }
         let fileStore = await store.fileStore
         let db = await store.db

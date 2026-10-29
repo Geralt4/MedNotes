@@ -96,6 +96,11 @@ final class ImporterTests: XCTestCase {
 
         let second = try await importer.importAll(into: db)
         XCTAssertTrue(second.errors.isEmpty, "\(second.errors)")
+        XCTAssertEqual(second.totalImported, 0, "a second run adds nothing")
+        XCTAssertEqual(second.patientsAlreadyPresent, 1)
+        XCTAssertEqual(second.notesAlreadyPresent, 1)
+        XCTAssertEqual(second.todosAlreadyPresent, 2)
+        XCTAssertEqual(second.eventsAlreadyPresent, 1)
 
         let counts = try await db.counts()
         XCTAssertEqual(counts["patients"], 1, "duplicate patients imported")
@@ -105,6 +110,115 @@ final class ImporterTests: XCTestCase {
 
         let integrity = try await db.integrityCheck()
         XCTAssertEqual(integrity, "ok")
+    }
+
+    /// Importing again used to write every record over the stored one: edits
+    /// reverted, completed todos reopened, archive flags and Apple links reset.
+    func testReimportingLeavesLaterWorkAlone() async throws {
+        let db = try makeDB()
+        let importer = JSONImporter(directoryURL: sourceDir)
+        _ = try await importer.importAll(into: db)
+
+        // Work done in the app since the first import.
+        let notes = try await db.loadAllNotes()
+        var note = try XCTUnwrap(notes.first)
+        note.content = "EDITED AFTER THE IMPORT"
+        try await db.saveNote(note)
+        let openTodos = try await db.loadAllTodos().filter { !$0.isCompleted }
+        var todo = try XCTUnwrap(openTodos.first)
+        todo.isCompleted = true
+        todo.completedAt = Date()
+        try await db.saveTodo(todo)
+        let events = try await db.loadAllEvents()
+        var event = try XCTUnwrap(events.first)
+        event.ekEventIdentifier = "EK-LINKED-AFTER-IMPORT"
+        try await db.saveEvent(event)
+        let patients = try await db.loadAllPatients()
+        let patientID = try XCTUnwrap(patients.first).id
+        try await db.setPatientArchived(id: patientID, archived: true, lastModified: Date())
+
+        let again = try await importer.importAll(into: db)
+
+        XCTAssertEqual(again.totalImported, 0)
+        XCTAssertEqual(again.totalAlreadyPresent, 5)
+        let storedNote = try await db.loadAllNotes().first { $0.id == note.id }
+        XCTAssertEqual(storedNote?.content, "EDITED AFTER THE IMPORT")
+        let storedTodo = try await db.loadAllTodos().first { $0.id == todo.id }
+        XCTAssertEqual(storedTodo?.isCompleted, true, "a completed todo must stay completed")
+        let storedEvent = try await db.loadAllEvents().first { $0.id == event.id }
+        XCTAssertEqual(storedEvent?.ekEventIdentifier, "EK-LINKED-AFTER-IMPORT",
+                       "the link to Apple Calendar must survive")
+        let storedPatient = try await db.loadAllPatients().first { $0.id == patientID }
+        XCTAssertEqual(storedPatient?.isArchived, true, "an archived patient must stay archived")
+    }
+
+    /// Only what is missing is added; what is there is untouched.
+    func testReimportAddsOnlyWhatIsMissing() async throws {
+        let db = try makeDB()
+        let importer = JSONImporter(directoryURL: sourceDir)
+        _ = try await importer.importAll(into: db)
+        let todos = try await db.loadAllTodos()
+        let removed = try XCTUnwrap(todos.first)
+        try await db.deleteTodo(id: removed.id)
+
+        let again = try await importer.importAll(into: db)
+
+        XCTAssertEqual(again.todosImported, 1, "only the deleted todo comes back")
+        XCTAssertEqual(again.todosAlreadyPresent, 1)
+        XCTAssertEqual(again.totalImported, 1)
+        let counts = try await db.counts()
+        XCTAssertEqual(counts["todo_items"], 2)
+    }
+
+    /// A patient the user re-created by hand carries the same AMKA under a new
+    /// id. Importing the old one used to fail the whole import on the unique
+    /// AMKA column; it is now left out, and what referred to it is linked to the
+    /// patient that is there.
+    func testAPatientWithAStoredAMKAIsLeftOutAndItsRecordsFollowTheStoredOne() async throws {
+        let db = try makeDB()
+        let legacy = try decodeJSONData(
+            Patient.self, from: Data(contentsOf: sourceDir.appendingPathComponent("Patients/patient_full.json")))
+        var recreated = legacy
+        recreated.id = UUID()
+        recreated.files = []
+        try await db.savePatient(recreated)
+        let legacyAMKA = AMKA.normalized(legacy.profile.amka)
+        XCTAssertFalse(legacyAMKA.isEmpty, "precondition: the fixture patient has an AMKA")
+        // The fixture event names some other patient; point it at this one.
+        let eventURL = sourceDir.appendingPathComponent("CalendarEvents/event_appointment.json")
+        var eventJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: eventURL)) as? [String: Any])
+        eventJSON["patientId"] = legacy.id.uuidString
+        try JSONSerialization.data(withJSONObject: eventJSON).write(to: eventURL)
+
+        let report = try await JSONImporter(directoryURL: sourceDir).importAll(into: db)
+
+        XCTAssertTrue(report.errors.isEmpty, "\(report.errors)")
+        XCTAssertEqual(report.patientsImported, 0)
+        XCTAssertEqual(report.patientsAlreadyPresent, 1)
+        let patients = try await db.loadAllPatients()
+        XCTAssertEqual(patients.count, 1, "no second patient with that AMKA")
+        let events = try await db.loadAllEvents()
+        let event = try XCTUnwrap(events.first)
+        XCTAssertEqual(event.patientId, recreated.id,
+                       "what referred to the legacy patient now refers to the stored one")
+    }
+
+    /// The dry run imports into a scratch database but is checked against the
+    /// live store, so it reports what the real import will add.
+    func testTheDryRunReportsAgainstTheStoreItIsFor() async throws {
+        let live = try makeDB()
+        _ = try await JSONImporter(directoryURL: sourceDir).importAll(into: live)
+        let keys = try await live.storedRecordKeys()
+        let scratch = try Database.testDatabase(path: tempDir.appendingPathComponent("scratch.db").path)
+
+        let report = try await JSONImporter(directoryURL: sourceDir)
+            .importAll(into: scratch, alreadyStored: keys)
+
+        XCTAssertEqual(report.totalImported, 0)
+        XCTAssertEqual(report.totalAlreadyPresent, 5)
+        let counts = try await scratch.counts()
+        XCTAssertEqual(counts["patients"], 0, "nothing is written for what is already there")
     }
 
     func testDuplicateIdsAreSkipped() async throws {

@@ -5288,16 +5288,6 @@
         }
       }
     },
-    "Records already in MedNotes are updated, not added twice." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Οι εγγραφές που υπάρχουν ήδη στο MedNotes ενημερώνονται, δεν προστίθενται δεύτερη φορά."
-          }
-        }
-      }
-    },
     "Records stay inside the app's container, which FileVault encrypts with the rest of the disk. Backups made with File › Back Up… are encrypted with the passphrase you enter; nothing readable leaves the container without it." : {
       "localizations" : {
         "el" : {
@@ -8322,6 +8312,46 @@
         }
       }
     },
+    "%lld patient(s) share an AMKA with one already stored, and were left as they are" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασθενείς με ΑΜΚΑ που ήδη υπάρχει στο MedNotes και παραλείφθηκαν: %lld"
+          }
+        }
+      }
+    },
+    "Everything in this folder is already in MedNotes. Nothing needs importing." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ό,τι περιέχει αυτός ο φάκελος υπάρχει ήδη στο MedNotes. Δεν χρειάζεται εισαγωγή."
+          }
+        }
+      }
+    },
+    "Records already in MedNotes are left as they are, not overwritten." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι εγγραφές που υπάρχουν ήδη στο MedNotes μένουν όπως είναι και δεν αντικαθίστανται."
+          }
+        }
+      }
+    },
+    "%lld already present, left as they are" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ήδη υπάρχουν και έμειναν ως έχουν: %lld"
+          }
+        }
+      }
+    },
     "Remove" : {
       "localizations" : {
         "el" : {
@@ -8332,22 +8362,22 @@
         }
       }
     },
-    "Remove “%@”?" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Αφαίρεση «%@»;"
-          }
-        }
-      }
-    },
     "The patient record is updated when you save, or when you leave it." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Η εγγραφή του ασθενούς ενημερώνεται όταν την αποθηκεύσετε ή όταν την αφήσετε."
+          }
+        }
+      }
+    },
+    "Remove “%@”?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση «%@»;"
           }
         }
       }

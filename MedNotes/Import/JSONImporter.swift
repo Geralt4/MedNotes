@@ -23,12 +23,28 @@ struct JSONImporter {
     /// read back and checked, and removed again if the batch fails. Without
     /// one (the plaintext dry run and CLI) the bytes go to `filesRoot`, or
     /// are dropped when that is nil too.
+    ///
+    /// `alreadyStored`: the keys of the store the import is *for*, when `db` is
+    /// not that store. The dry run imports into a scratch database and passes the
+    /// live store's keys, so its report names what the real import would add.
     func importAll(
-        into db: Database, filesRoot: URL? = nil, fileStore: AttachmentStore? = nil
+        into db: Database, filesRoot: URL? = nil, fileStore: AttachmentStore? = nil,
+        alreadyStored: Database.StoredRecordKeys? = nil
     ) async throws -> ImportReport {
         var batch = try scanAndDecode()
-        let existing = Set((try await db.loadAllPatients(includeArchived: true)).map(\.id))
-        let known = existing.union(batch.patients.map(\.id))
+        // What the store already holds is left exactly as it is. Importing used to
+        // write every record over the stored one, which reverted later edits,
+        // reopened completed todos, reset archive flags and sync links, and
+        // dropped attachments that were added in the app.
+        let stored: Database.StoredRecordKeys
+        if let alreadyStored {
+            stored = alreadyStored
+        } else {
+            stored = try await db.storedRecordKeys()
+        }
+        let remapped = Self.dropAlreadyPresent(&batch, stored: stored)
+        Self.remapPatients(&batch, remapped)
+        let known = stored.patientIDs.union(batch.patients.map(\.id))
         Self.unlinkMissingPatients(&batch, knownPatients: known)
         var createdFileDirs: [URL] = []
         var stagedFiles: [(URL, URL)] = []
@@ -297,6 +313,74 @@ struct JSONImporter {
                 try? fm.removeItem(at: dir)
             }
             throw error
+        }
+    }
+
+    /// Removes from `batch` what `stored` already has, and counts it in the
+    /// report. A patient is already present when its id is stored, or when its
+    /// (normalised, non-empty) AMKA belongs to a stored patient: the AMKA column
+    /// is unique, so that import would otherwise fail as a whole. Returns, for
+    /// the patients matched by AMKA under another id, the stored patient's id,
+    /// so what refers to the folder's patient can be pointed at it.
+    private static func dropAlreadyPresent(_ batch: inout Batch, stored: Database.StoredRecordKeys) -> [UUID: UUID] {
+        var remapped: [UUID: UUID] = [:]
+        var present = 0
+        batch.patients.removeAll { patient in
+            if stored.patientIDs.contains(patient.id) {
+                present += 1
+                return true
+            }
+            let amka = AMKA.normalized(patient.profile.amka)
+            if !amka.isEmpty, let owner = stored.patientIDByAMKA[amka] {
+                remapped[patient.id] = owner
+                present += 1
+                return true
+            }
+            return false
+        }
+        batch.report.patientsAlreadyPresent = present
+        batch.report.patientsImported -= present
+
+        let notes = batch.notes.count
+        batch.notes.removeAll { stored.noteIDs.contains($0.id) }
+        batch.report.notesAlreadyPresent = notes - batch.notes.count
+        batch.report.notesImported -= notes - batch.notes.count
+
+        let todos = batch.todos.count
+        batch.todos.removeAll { stored.todoIDs.contains($0.id) }
+        batch.report.todosAlreadyPresent = todos - batch.todos.count
+        batch.report.todosImported -= todos - batch.todos.count
+
+        let events = batch.events.count
+        batch.events.removeAll { stored.eventIDs.contains($0.id) }
+        batch.report.eventsAlreadyPresent = events - batch.events.count
+        batch.report.eventsImported -= events - batch.events.count
+
+        if !remapped.isEmpty {
+            batch.report.warnings.append(
+                String(localized: "\(remapped.count) patient(s) share an AMKA with one already stored, and were left as they are"))
+        }
+        return remapped
+    }
+
+    /// Points what refers to a patient that was matched by AMKA at the stored
+    /// patient, so it is linked rather than unlinked as a missing patient.
+    private static func remapPatients(_ batch: inout Batch, _ remapped: [UUID: UUID]) {
+        guard !remapped.isEmpty else { return }
+        for i in batch.notes.indices {
+            batch.notes[i].mentionedPatients = batch.notes[i].mentionedPatients
+                .map { remapped[$0] ?? $0 }
+                .reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
+        }
+        for i in batch.todos.indices {
+            if let pid = batch.todos[i].patientId, let owner = remapped[pid] {
+                batch.todos[i].patientId = owner
+            }
+        }
+        for i in batch.events.indices {
+            if let pid = batch.events[i].patientId, let owner = remapped[pid] {
+                batch.events[i].patientId = owner
+            }
         }
     }
 
