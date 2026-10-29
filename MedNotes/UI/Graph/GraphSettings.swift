@@ -1,5 +1,14 @@
 import Foundation
 
+extension KeyedDecodingContainer {
+    /// The value stored under `key`, or `fallback` when it is missing or is not
+    /// a `T`. The graph's settings use it for every field, so a row from
+    /// another build never stops the graph from opening.
+    func decodeOrDefault<T: Decodable>(_ type: T.Type, forKey key: Key, default fallback: @autoclosure () -> T) -> T {
+        (try? decodeIfPresent(type, forKey: key)) ?? fallback()
+    }
+}
+
 /// A colour group: notes matching `query` are drawn in palette colour
 /// `colorIndex`. The first group a note matches wins.
 struct GraphGroup: Codable, Equatable, Identifiable, Sendable {
@@ -15,9 +24,9 @@ struct GraphGroup: Codable, Equatable, Identifiable, Sendable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
-        query = (try? c.decodeIfPresent(String.self, forKey: .query)) ?? ""
-        colorIndex = (try? c.decodeIfPresent(Int.self, forKey: .colorIndex)) ?? 0
+        id = c.decodeOrDefault(UUID.self, forKey: .id, default: UUID())
+        query = c.decodeOrDefault(String.self, forKey: .query, default: "")
+        colorIndex = c.decodeOrDefault(Int.self, forKey: .colorIndex, default: 0)
     }
 
     static let paletteSize = 8
@@ -51,34 +60,37 @@ struct GraphSettings: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = GraphSettings()
-        query = (try? c.decodeIfPresent(String.self, forKey: .query)) ?? d.query
-        showPatients = (try? c.decodeIfPresent(Bool.self, forKey: .showPatients)) ?? d.showPatients
-        showEvents = (try? c.decodeIfPresent(Bool.self, forKey: .showEvents)) ?? d.showEvents
-        showOrphans = (try? c.decodeIfPresent(Bool.self, forKey: .showOrphans)) ?? d.showOrphans
-        arrows = (try? c.decodeIfPresent(Bool.self, forKey: .arrows)) ?? d.arrows
-        sizeByDegree = (try? c.decodeIfPresent(Bool.self, forKey: .sizeByDegree)) ?? d.sizeByDegree
-        forces = ((try? c.decodeIfPresent(GraphLayout.Forces.self, forKey: .forces)) ?? d.forces).clamped
-        let stored = (try? c.decodeIfPresent([GraphGroup].self, forKey: .groups)) ?? []
-        groups = Array(stored.prefix(Self.maxGroups)).map {
-            var group = $0
-            group.colorIndex = min(max(0, group.colorIndex), GraphGroup.paletteSize - 1)
-            return group
-        }
-        let depth = (try? c.decodeIfPresent(Int.self, forKey: .localDepth)) ?? d.localDepth
-        localDepth = min(max(depth, Self.depthRange.lowerBound), Self.depthRange.upperBound)
+        query = c.decodeOrDefault(String.self, forKey: .query, default: d.query)
+        showPatients = c.decodeOrDefault(Bool.self, forKey: .showPatients, default: d.showPatients)
+        showEvents = c.decodeOrDefault(Bool.self, forKey: .showEvents, default: d.showEvents)
+        showOrphans = c.decodeOrDefault(Bool.self, forKey: .showOrphans, default: d.showOrphans)
+        arrows = c.decodeOrDefault(Bool.self, forKey: .arrows, default: d.arrows)
+        sizeByDegree = c.decodeOrDefault(Bool.self, forKey: .sizeByDegree, default: d.sizeByDegree)
+        forces = c.decodeOrDefault(GraphLayout.Forces.self, forKey: .forces, default: d.forces).clamped
+        groups = Self.clamped(groups: c.decodeOrDefault([GraphGroup].self, forKey: .groups, default: []))
+        localDepth = Self.clamped(depth: c.decodeOrDefault(Int.self, forKey: .localDepth, default: d.localDepth))
     }
 
     /// The same settings with every value inside its range.
     var clamped: GraphSettings {
         var copy = self
         copy.forces = forces.clamped
-        copy.localDepth = min(max(localDepth, Self.depthRange.lowerBound), Self.depthRange.upperBound)
-        copy.groups = Array(groups.prefix(Self.maxGroups)).map {
+        copy.localDepth = Self.clamped(depth: localDepth)
+        copy.groups = Self.clamped(groups: groups)
+        return copy
+    }
+
+    private static func clamped(depth: Int) -> Int {
+        min(max(depth, depthRange.lowerBound), depthRange.upperBound)
+    }
+
+    /// At most `maxGroups` groups, each colour index inside the palette.
+    private static func clamped(groups: [GraphGroup]) -> [GraphGroup] {
+        groups.prefix(maxGroups).map {
             var group = $0
             group.colorIndex = min(max(0, group.colorIndex), GraphGroup.paletteSize - 1)
             return group
         }
-        return copy
     }
 
     /// Whether anything but the layout would change what is drawn.
@@ -115,6 +127,28 @@ enum GraphFilter {
         matching: Set<String>? = nil, groupMatches: [UUID: Set<String>] = [:],
         alwaysKeep: Set<String> = []
     ) -> FilteredGraph {
+        let keep = keptIDs(data, settings: settings, matching: matching, alwaysKeep: alwaysKeep)
+        let edges = uniqueEdges(data.edges, among: keep)
+        let degree = degrees(edges)
+
+        var shown = data.nodes.filter { keep.contains($0.id) }
+        if !settings.showOrphans {
+            shown = shown.filter { degree[$0.id, default: 0] > 0 || alwaysKeep.contains($0.id) }
+        }
+        let shownIDs = Set(shown.map(\.id))
+        return FilteredGraph(
+            nodes: shown, edges: edges.filter { shownIDs.contains($0.sourceID) && shownIDs.contains($0.targetID) },
+            degree: degrees(of: shownIDs, from: degree),
+            colorIndex: groupColours(of: shown, settings: settings, groupMatches: groupMatches))
+    }
+
+    /// The ids of the nodes the filters keep, before the orphan filter. The
+    /// order matters: notes are decided first, by the query; a patient is
+    /// kept through a kept note, an event through a kept patient or event.
+    private static func keptIDs(
+        _ data: LinkingService.GraphData, settings: GraphSettings,
+        matching: Set<String>?, alwaysKeep: Set<String>
+    ) -> Set<String> {
         var neighbours: [String: Set<String>] = [:]
         for edge in data.edges where edge.sourceID != edge.targetID {
             neighbours[edge.sourceID, default: []].insert(edge.targetID)
@@ -144,21 +178,24 @@ enum GraphFilter {
                 keep.insert(node.id)
             }
         }
+        return keep
+    }
 
-        var edges: [Edge] = []
+    /// The links between kept nodes, each once, self-links dropped.
+    private static func uniqueEdges(_ edges: [Edge], among keep: Set<String>) -> [Edge] {
+        var result: [Edge] = []
         var seen = Set<Edge>()
-        for edge in data.edges where edge.sourceID != edge.targetID
+        for edge in edges where edge.sourceID != edge.targetID
             && keep.contains(edge.sourceID) && keep.contains(edge.targetID) {
-            if seen.insert(edge).inserted { edges.append(edge) }
+            if seen.insert(edge).inserted { result.append(edge) }
         }
-        let degree = degrees(edges)
+        return result
+    }
 
-        var shown = data.nodes.filter { keep.contains($0.id) }
-        if !settings.showOrphans {
-            shown = shown.filter { degree[$0.id, default: 0] > 0 || alwaysKeep.contains($0.id) }
-        }
-        let shownIDs = Set(shown.map(\.id))
-
+    /// The palette index of each note a group matches; the first group wins.
+    private static func groupColours(
+        of shown: [Node], settings: GraphSettings, groupMatches: [UUID: Set<String>]
+    ) -> [String: Int] {
         var colors: [String: Int] = [:]
         for node in shown where node.kind == .note {
             for group in settings.groups where groupMatches[group.id]?.contains(node.id) == true {
@@ -166,9 +203,7 @@ enum GraphFilter {
                 break
             }
         }
-        return FilteredGraph(
-            nodes: shown, edges: edges.filter { shownIDs.contains($0.sourceID) && shownIDs.contains($0.targetID) },
-            degree: shownIDs.reduce(into: [:]) { $0[$1] = degree[$1, default: 0] }, colorIndex: colors)
+        return colors
     }
 
     /// Distinct links per node, a link counted once whichever way it points.
@@ -183,6 +218,11 @@ enum GraphFilter {
             }
         }
         return degree
+    }
+
+    /// `degree` for exactly the nodes in `ids`, 0 for one with no links.
+    private static func degrees(of ids: Set<String>, from degree: [String: Int]) -> [String: Int] {
+        ids.reduce(into: [:]) { $0[$1] = degree[$1, default: 0] }
     }
 
     /// The ids within `depth` links of `center`, links read either way.
@@ -218,8 +258,7 @@ enum GraphFilter {
         result.nodes = whole.nodes.filter { near.contains($0.id) }
         let ids = Set(result.nodes.map(\.id))
         result.edges = whole.edges.filter { ids.contains($0.sourceID) && ids.contains($0.targetID) }
-        let degree = degrees(result.edges)
-        result.degree = ids.reduce(into: [:]) { $0[$1] = degree[$1, default: 0] }
+        result.degree = degrees(of: ids, from: degrees(result.edges))
         result.colorIndex = whole.colorIndex.filter { ids.contains($0.key) }
         return result
     }

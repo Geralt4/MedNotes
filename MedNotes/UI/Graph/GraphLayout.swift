@@ -39,11 +39,12 @@ enum GraphLayout {
         /// A stored value that is missing or not a number takes its default.
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            center = (try? c.decodeIfPresent(Double.self, forKey: .center)) ?? 0.03
-            repel = (try? c.decodeIfPresent(Double.self, forKey: .repel)) ?? 1.0
-            linkStrength = (try? c.decodeIfPresent(Double.self, forKey: .linkStrength)) ?? 1.0
-            linkDistance = (try? c.decodeIfPresent(Double.self, forKey: .linkDistance)) ?? 1.0
+            center = c.decodeOrDefault(Double.self, forKey: .center, default: Self.standard.center)
+            repel = c.decodeOrDefault(Double.self, forKey: .repel, default: Self.standard.repel)
+            linkStrength = c.decodeOrDefault(Double.self, forKey: .linkStrength, default: Self.standard.linkStrength)
+            linkDistance = c.decodeOrDefault(Double.self, forKey: .linkDistance, default: Self.standard.linkDistance)
         }
+
         static let centerRange = 0.0...0.2
         static let repelRange = 0.2...4.0
         static let linkStrengthRange = 0.2...4.0
