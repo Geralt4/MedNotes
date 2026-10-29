@@ -100,7 +100,7 @@ enum WikiLinkParser {
                 }
             case ASCII.percent:
                 if i + 1 < n, units[i + 1] == ASCII.percent, !noPercentCloser {
-                    if let end = find([ASCII.percent, ASCII.percent], in: units, from: i + 2) {
+                    if let end = units.find([ASCII.percent, ASCII.percent], from: i + 2) {
                         protected.append(NSRange(location: i, length: end + 2 - i))
                         i = end + 2
                     } else {
@@ -111,8 +111,8 @@ enum WikiLinkParser {
                     i += 1
                 }
             case ASCII.lessThan:
-                if !noCommentCloser, hasPrefix([ASCII.lessThan, ASCII.exclamation, ASCII.dash, ASCII.dash], in: units, at: i) {
-                    if let end = find([ASCII.dash, ASCII.dash, ASCII.greaterThan], in: units, from: i + 4) {
+                if !noCommentCloser, units.hasPrefix([ASCII.lessThan, ASCII.exclamation, ASCII.dash, ASCII.dash], at: i) {
+                    if let end = units.find([ASCII.dash, ASCII.dash, ASCII.greaterThan], from: i + 4) {
                         protected.append(NSRange(location: i, length: end + 3 - i))
                         i = end + 3
                     } else {
@@ -244,11 +244,8 @@ enum WikiLinkParser {
         let n = units.count
         var ranges: [NSRange] = []
         var open: (char: UInt16, length: Int, start: Int)?
-        var location = min(max(bodyStart, 0), n)
-        while location < n {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
+        for line in ns.lines(from: min(max(bodyStart, 0), n)) {
+            let location = line.start, contentsEnd = line.contentsEnd, lineEnd = line.end
             var p = location
             while p < contentsEnd, units[p] == ASCII.space, p - location < 4 { p += 1 }
             if p - location <= 3, p < contentsEnd, units[p] == ASCII.backtick || units[p] == ASCII.tilde {
@@ -268,7 +265,6 @@ enum WikiLinkParser {
                     }
                 }
             }
-            location = lineEnd
         }
         if let current = open {
             ranges.append(NSRange(location: current.start, length: n - current.start))
@@ -314,19 +310,4 @@ enum WikiLinkParser {
 
     // MARK: - Helpers
 
-    private static func hasPrefix(_ prefix: [UInt16], in units: [UInt16], at index: Int) -> Bool {
-        guard index + prefix.count <= units.count else { return false }
-        for (offset, unit) in prefix.enumerated() where units[index + offset] != unit { return false }
-        return true
-    }
-
-    private static func find(_ needle: [UInt16], in units: [UInt16], from: Int) -> Int? {
-        guard needle.count > 0, units.count >= needle.count else { return nil }
-        var p = from
-        while p + needle.count <= units.count {
-            if units[p] == needle[0], hasPrefix(needle, in: units, at: p) { return p }
-            p += 1
-        }
-        return nil
-    }
 }

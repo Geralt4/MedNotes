@@ -67,12 +67,8 @@ enum NoteMetadata {
         let linesBlocked = merged(lineBlockers)
         let tagsBlocked = merged(lineBlockers + linkScan.links.map(\.range))
 
-        var location = 0
-        while location < length {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
-            defer { location = lineEnd > location ? lineEnd : length }
+        for line in ns.lines() {
+            let location = line.start, contentsEnd = line.contentsEnd
 
             // A heading or block id is skipped when the line sits inside code,
             // a comment or the front matter that runs across lines. A code

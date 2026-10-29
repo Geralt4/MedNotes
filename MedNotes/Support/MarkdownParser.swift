@@ -92,19 +92,11 @@ enum MarkdownParser {
         }
 
         func splitLines(from start: Int) -> [Line] {
-            var lines: [Line] = []
-            var location = start
-            let n = ns.length
-            while location < n {
-                var lineEnd = 0, contentsEnd = 0
-                ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                                for: NSRange(location: location, length: 0))
-                var units = [UInt16](repeating: 0, count: contentsEnd - location)
-                if !units.isEmpty { ns.getCharacters(&units, range: NSRange(location: location, length: contentsEnd - location)) }
-                lines.append(Line(start: location, units: units))
-                location = lineEnd > location ? lineEnd : n
+            ns.lines(from: start).map { line in
+                var units = [UInt16](repeating: 0, count: line.contents.length)
+                if !units.isEmpty { ns.getCharacters(&units, range: line.contents) }
+                return Line(start: line.start, units: units)
             }
-            return lines
         }
 
         /// A very long note: paragraphs split at blank lines, no inline reading.
@@ -244,7 +236,7 @@ enum MarkdownParser {
             var searchFrom = line.units.count - trimmed.count + open.count
             while j < lines.endIndex {
                 let units = lines[j].units
-                if let hit = find(close, in: units, from: j == i ? searchFrom : 0) {
+                if let hit = units.find(close, from: j == i ? searchFrom : 0) {
                     let rest = units[(hit + close.count)...]
                     guard rest.allSatisfy(ASCII.isSpaceOrTab) else { return nil }
                     let range = NSRange(location: line.start, length: lines[j].end - line.start)
@@ -254,16 +246,6 @@ enum MarkdownParser {
                 j += 1
             }
             if isPercent { memo.noPercentCloser = true } else { memo.noHTMLCloser = true }
-            return nil
-        }
-
-        func find(_ needle: [UInt16], in units: [UInt16], from: Int) -> Int? {
-            guard needle.count > 0, units.count >= needle.count, from >= 0 else { return nil }
-            var p = from
-            while p + needle.count <= units.count {
-                if units[p] == needle[0], Array(units[p..<(p + needle.count)]) == needle { return p }
-                p += 1
-            }
             return nil
         }
 

@@ -49,30 +49,23 @@ enum FrontMatter {
         if length > 0, ns.character(at: 0) == 0xFEFF { start = 1 }
         guard start < length else { return nil }
 
-        var openEnd = 0, openContents = 0
-        ns.getLineStart(nil, end: &openEnd, contentsEnd: &openContents,
-                        for: NSRange(location: start, length: 0))
+        var lines = ns.lines(from: start)
         // A lone `---` with nothing after it has no closer.
-        guard openEnd > openContents,
-              isFence(ns, from: start, to: openContents) else { return nil }
-        let ending = ns.substring(with: NSRange(location: openContents, length: openEnd - openContents))
+        guard let open = lines.next(), open.hasBreak,
+              isFence(ns, from: open.start, to: open.contentsEnd) else { return nil }
+        let ending = ns.substring(with: NSRange(location: open.contentsEnd, length: open.end - open.contentsEnd))
 
-        var location = openEnd
-        while location < length {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
-            if isFence(ns, from: location, to: contentsEnd) {
-                let inner = NSRange(location: openEnd, length: location - openEnd)
-                return Block(
-                    range: NSRange(location: start, length: lineEnd - start),
-                    innerRange: inner,
-                    openLine: NSRange(location: start, length: openEnd - start),
-                    closeLine: NSRange(location: location, length: lineEnd - location),
-                    lineEnding: ending,
-                    isProperties: inner.length <= maxLength && readsAsProperties(ns, inner))
-            }
-            location = lineEnd
+        // `lines` carries on after the opening line; stop at the first closing fence.
+        for line in lines {
+            guard isFence(ns, from: line.start, to: line.contentsEnd) else { continue }
+            let inner = NSRange(location: open.end, length: line.start - open.end)
+            return Block(
+                range: NSRange(location: start, length: line.end - start),
+                innerRange: inner,
+                openLine: NSRange(location: start, length: open.end - start),
+                closeLine: line.range,
+                lineEnding: ending,
+                isProperties: inner.length <= maxLength && readsAsProperties(ns, inner))
         }
         return nil
     }
@@ -101,14 +94,8 @@ enum FrontMatter {
     /// Whether every line is blank, a comment, a list item, indented, or a
     /// `key:` line. `Patient stable: no complaints` is one too, as in Obsidian.
     private static func readsAsProperties(_ ns: NSString, _ inner: NSRange) -> Bool {
-        var location = inner.location
-        let end = NSMaxRange(inner)
-        while location < end {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
-            if !isPropertyLine(ns, from: location, to: min(contentsEnd, end)) { return false }
-            location = lineEnd
+        for line in ns.lines(in: inner) {
+            if !isPropertyLine(ns, from: line.start, to: line.contentsEnd) { return false }
         }
         return true
     }

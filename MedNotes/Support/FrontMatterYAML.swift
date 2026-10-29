@@ -158,22 +158,7 @@ enum FrontMatterYAML {
     private enum LineKind { case blank, comment, continuation, key }
 
     private static func readLines(_ ns: NSString, _ inner: NSRange) -> [Line] {
-        var out: [Line] = []
-        var location = inner.location
-        let end = NSMaxRange(inner)
-        while location < end {
-            var lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: location, length: 0))
-            let stop = min(lineEnd, end)
-            let contents = max(location, min(contentsEnd, end))
-            out.append(Line(
-                range: NSRange(location: location, length: stop - location),
-                content: ns.substring(with: NSRange(location: location, length: contents - location))))
-            if lineEnd <= location { break }
-            location = lineEnd
-        }
-        return out
+        ns.lines(in: inner).map { Line(range: $0.range, content: ns.substring(with: $0.contents)) }
     }
 
     private static func classify(_ content: String) -> LineKind {
@@ -669,14 +654,9 @@ enum FrontMatterEditor {
 
     /// The first line break in the text, or LF.
     private static func lineEnding(of ns: NSString) -> String {
-        guard ns.length > 0 else { return "\n" }
-        var lineEnd = 0, contentsEnd = 0
-        let start = ns.character(at: 0) == 0xFEFF ? 1 : 0
-        guard start < ns.length else { return "\n" }
-        ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
-                        for: NSRange(location: start, length: 0))
-        return lineEnd > contentsEnd
-            ? ns.substring(with: NSRange(location: contentsEnd, length: lineEnd - contentsEnd))
-            : "\n"
+        let start = ns.length > 0 && ns.character(at: 0) == 0xFEFF ? 1 : 0
+        var lines = ns.lines(from: start)
+        guard let first = lines.next(), first.hasBreak else { return "\n" }
+        return ns.substring(with: NSRange(location: first.contentsEnd, length: first.end - first.contentsEnd))
     }
 }
