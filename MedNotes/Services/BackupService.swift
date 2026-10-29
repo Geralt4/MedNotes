@@ -828,6 +828,15 @@ actor BackupService {
         beforeInstallForTesting = hook
     }
 
+    /// Test seam: runs once the database and the attachments have been swapped,
+    /// before the live store is verified, so a test can land a lock after the
+    /// point where a restore can no longer be cancelled.
+    var afterSwapForTesting: (@Sendable () async -> Void)?
+
+    func setAfterSwapForTesting(_ hook: (@Sendable () async -> Void)?) {
+        afterSwapForTesting = hook
+    }
+
     /// The last point a restore can be cancelled. Past it the swap runs to its
     /// end, or is rolled back, and is never abandoned half way.
     private func readyToInstall() async throws {
@@ -889,6 +898,7 @@ actor BackupService {
             try fm.moveItem(at: stagedAttachments, to: liveAttachments)
             try RestoreRecovery.writeJournal(.attachmentsIn, in: kept)
             try installFaultForTesting?()
+            await afterSwapForTesting?()
             try await db.suspendSyncDestinations()
             if let fileStore {
                 try await db.verifyAttachmentDigests(fileStore: fileStore)

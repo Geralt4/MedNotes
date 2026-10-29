@@ -669,7 +669,7 @@ final class AppSession: ObservableObject {
             return
         }
         // A store must not open on files a restore is still replacing.
-        await restoreRun?.value
+        _ = await restoreRun?.value
         guard isLocked, !isUnlocking, let coordinator, let dataRoot else { return }
         isUnlocking = true
         pendingLockReason = nil
@@ -827,8 +827,12 @@ final class AppSession: ObservableObject {
             // first suspension, so an unlock waits for all of it.
             let pendingRestore = restoreRun
             let flush = Task {
-                await pendingRestore?.value
-                let failures = await self.saveDrafts(drafts, into: closing)
+                // The drafts were saved before the restore began, so they are in
+                // the safety copy. Once the data has been replaced they must not
+                // be written into it: that would put the stale text back over
+                // the restored records.
+                let replaced = await pendingRestore?.value ?? false
+                let failures = replaced ? 0 : await self.saveDrafts(drafts, into: closing)
                 if failures > 0 {
                     // The alert waits for the unlock; ContentView hides it while locked.
                     self.errorMessage = String(localized: "MedNotes locked while a record was being edited, and \(failures) edit(s) could not be saved.")
@@ -1137,8 +1141,9 @@ final class AppSession: ObservableObject {
     /// The restore in progress, so a lock and an unlock can wait for it. A
     /// restore swaps the database file and the attachment folder; closing the
     /// store, or opening a new one, in the middle of that would leave a store
-    /// open on files that are being replaced. `nil` when none is running.
-    var restoreRun: Task<Void, Never>?
+    /// open on files that are being replaced. `nil` when none is running. Its
+    /// value is whether the restore got as far as replacing the data.
+    var restoreRun: Task<Bool, Never>?
 
     /// Test seam: runs as a backup or export begins writing outside the
     /// container, so a test can land a lock there. Nothing in the app sets it.

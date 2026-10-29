@@ -2597,6 +2597,12 @@ final class SecurityTests: XCTestCase {
         XCTAssertTrue(session.unregisterOpenEditor(token), "the editor keeps its draft to fix")
     }
 
+    /// Holds the lock a test lands in the middle of a restore, so the test can
+    /// wait for the lock to finish (save, audit, close) before it looks at disk.
+    private final class LockTaskBox: @unchecked Sendable {
+        var task: Task<Void, Never>?
+    }
+
     /// A crash after the restored database is in place and before the
     /// attachments are swapped used to leave a database that opens and
     /// references none of the old attachments. The sweep that runs as the store
@@ -2671,13 +2677,14 @@ final class SecurityTests: XCTestCase {
         let root = try XCTUnwrap(session.dataRoot)
 
         // The lock lands once everything is staged, as late as it can.
-        await store.backups.setBeforeInstallForTesting { [session] in
-            await MainActor.run { _ = Task { await session.lockNow(reason: "idle") } }
+        let lock = LockTaskBox()
+        await store.backups.setBeforeInstallForTesting { [session, lock] in
+            await MainActor.run { lock.task = Task { await session.lockNow(reason: "idle") } }
             while await !MainActor.run(body: { session.isLocked }) { await Task.yield() }
         }
         try await session.performRestore(from: archive, passphrase: passphrase)
+        await lock.task?.value
 
-        for _ in 0..<200 where session.store != nil { try await Task.sleep(nanoseconds: 25_000_000) }
         XCTAssertNil(session.store, "the lock closed the store")
         XCTAssertTrue(session.isLocked)
         let names = try FileManager.default.contentsOfDirectory(atPath: root.rootURL.path)
@@ -2690,6 +2697,61 @@ final class SecurityTests: XCTestCase {
         await file.close()
         XCTAssertEqual(onDisk?.content, "Edited since the backup.")
         XCTAssertNotNil(session.errorMessage, "the user is told the restore did not finish")
+    }
+
+    /// The other end of the same window: the lock lands after the point where a
+    /// restore can be cancelled, so the swap runs to its end. The edits that were
+    /// open were saved before the restore began (they are in its safety copy),
+    /// and the lock must not write them again into the data that just replaced
+    /// them.
+    @MainActor
+    func testALockAfterTheSwapDoesNotWriteTheOpenDraftsIntoTheRestoredData() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Plan"
+        note.content = "In the backup."
+        let saved = await session.save(note)
+        XCTAssertTrue(saved)
+        let store = try XCTUnwrap(session.store)
+        let archive = FileManager.default.temporaryDirectory
+            .appendingPathComponent("restore-\(UUID().uuidString).mednotesbackup")
+        defer { try? FileManager.default.removeItem(at: archive) }
+        let passphrase = "a long enough passphrase"
+        _ = try await store.backups.createEncryptedBackup(name: "before", to: archive, passphrase: passphrase)
+        let root = try XCTUnwrap(session.dataRoot)
+
+        // Typed after the backup and still open in its editor.
+        var draft = note
+        draft.content = "Unsaved draft."
+        let token = UUID()
+        session.registerOpenEditor(token) { .note(draft, edited: true) }
+
+        let lock = LockTaskBox()
+        await store.backups.setAfterSwapForTesting { [session, lock] in
+            await MainActor.run { lock.task = Task { await session.lockNow(reason: "idle") } }
+            while await !MainActor.run(body: { session.isLocked }) { await Task.yield() }
+        }
+        try await session.performRestore(from: archive, passphrase: passphrase)
+        // The lock saves, audits and closes after the restore returns.
+        await lock.task?.value
+
+        XCTAssertNil(session.store, "the lock closed the store")
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.rootURL.path)
+        XCTAssertTrue(names.allSatisfy {
+            !$0.hasPrefix(RestoreRecovery.rollbackPrefix) && !$0.hasPrefix(RestoreRecovery.discardPrefix)
+        }, "the install finished and cleaned up: \(names)")
+        let file = try Database.testDatabase(path: root.databaseURL.path, root: root)
+        let onDisk = try await file.loadAllNotes().first { $0.id == note.id }
+        let trail = try await file.recentAuditLogs(limit: 50)
+        await file.close()
+        XCTAssertEqual(onDisk?.content, "In the backup.",
+                       "the restored data must not be overwritten by the draft that was open")
+        XCTAssertTrue(trail.contains { $0.action == "backup_restore" },
+                      "a restore that finished is on the audit trail even when a lock landed during it")
+        XCTAssertFalse(session.unregisterOpenEditor(token),
+                       "the editor was settled, so it must not save its draft again either")
     }
 
     /// `open -g`, a hidden login item or a click elsewhere during startup

@@ -386,15 +386,16 @@ extension AppSession {
         // (`restoreRun`): the restore stops before it touches a live file, or
         // finishes the swap, and is never cut off in the middle of one.
         let run = Task { @MainActor () throws -> BackupManifest in
+            let restored: BackupManifest
             switch source {
             case let .restorePoint(url):
-                return try await store.backups.restore(
+                restored = try await store.backups.restore(
                     fromRestorePointAt: url,
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
             case let .archive(url, passphrase):
                 do {
-                    return try await store.backups.restore(
+                    restored = try await store.backups.restore(
                         fromEncryptedBackupAt: url, passphrase: passphrase,
                         databaseKey: databaseKey, attachmentKey: attachmentKey,
                         createRestorePoint: !withoutSafetyCopy)
@@ -402,16 +403,26 @@ extension AppSession {
                     // Only a container that is not v2 at all is tried as v1. Any
                     // other failure is about a v2 archive and must not be retried
                     // against a store that a failed install may have touched.
-                    return try await store.backups.restore(
+                    restored = try await store.backups.restore(
                         fromLegacyBackupAt: url, passphrase: passphrase,
                         databaseKey: databaseKey, attachmentKey: attachmentKey,
                         createRestorePoint: !withoutSafetyCopy)
                 }
             }
+            // Logged here, before the task ends: a lock that landed during the
+            // install waits for this task and then closes the store, so an entry
+            // written after it returned could find the store gone.
+            try? await store.audit.log(
+                action: "backup_restore", entityType: "backup", entityId: fileURL.lastPathComponent,
+                details: BackupFlowSheet.summary(of: restored))
+            return restored
         }
         let token = UUID()
         outgoing[token] = run.cancel
-        restoreRun = Task { _ = await run.result }
+        restoreRun = Task {
+            if case .success = await run.result { return true }
+            return false
+        }
         defer {
             outgoing[token] = nil
             restoreRun = nil
@@ -439,9 +450,6 @@ extension AppSession {
             errorMessage = String(localized: "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect.")
             return
         }
-        try? await store.audit.log(
-            action: "backup_restore", entityType: "backup", entityId: fileURL.lastPathComponent,
-            details: BackupFlowSheet.summary(of: manifest))
         await pruneRestorePoints()
         // Every record may have changed identity; start the UI over. Sync is
         // suspended until the user reconfirms each destination. The editors
