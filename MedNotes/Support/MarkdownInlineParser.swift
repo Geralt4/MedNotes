@@ -88,6 +88,9 @@ enum MarkdownInlineParser {
             return NSRange(location: a, length: max(0, b - a))
         }
 
+        /// Reads the paragraph left to right. Each `read...` function handles the
+        /// token at `i`, leaves `bufferStart` after it and returns where to go on;
+        /// text between tokens waits in the buffer until the next token flushes it.
         mutating func run() -> [MarkdownInline] {
             let n = units.count
             guard n > 0 else { return [] }
@@ -97,79 +100,99 @@ enum MarkdownInlineParser {
             while i < n {
                 while atomIndex < atoms.count, atoms[atomIndex].range.location < i { atomIndex += 1 }
                 if atomIndex < atoms.count, atoms[atomIndex].range.location == i {
-                    let atom = atoms[atomIndex]
-                    flushText(upTo: i)
-                    if let inline = atom.inline {
-                        items.append(.node(MarkdownInline(
-                            range: sourceRange(i, NSMaxRange(atom.range)), kind: inline.kind)))
-                    }
-                    i = NSMaxRange(atom.range)
-                    bufferStart = i
+                    i = readAtom(atoms[atomIndex], at: i)
                     atomIndex += 1
                     continue
                 }
-                let c = units[i]
-                switch c {
+                switch units[i] {
                 case ASCII.backslash:
-                    if i + 1 < n, units[i + 1] == ASCII.lineFeed {
-                        flushText(upTo: i)
-                        items.append(.node(MarkdownInline(range: sourceRange(i, i + 2), kind: .hardBreak)))
-                        i += 2
-                        bufferStart = i
-                    } else if i + 1 < n, ASCII.isPunctuation(units[i + 1]) {
-                        // The escaped character is plain text, without its backslash.
-                        flushText(upTo: i)
-                        appendText(String(decoding: [units[i + 1]], as: UTF16.self), sourceRange(i, i + 2))
-                        i += 2
-                        bufferStart = i
-                    } else {
-                        i += 1
-                    }
+                    i = readBackslash(at: i)
                 case ASCII.lineFeed:
-                    var trailing = 0
-                    var k = i - 1
-                    while k >= bufferStart, k >= 0, units[k] == ASCII.space { trailing += 1; k -= 1 }
-                    if trailing >= 2 {
-                        flushText(upTo: i - trailing)
-                        items.append(.node(MarkdownInline(range: sourceRange(i - trailing, i + 1), kind: .hardBreak)))
-                    } else {
-                        flushText(upTo: i)
-                        items.append(.node(MarkdownInline(range: sourceRange(i, i + 1), kind: .softBreak)))
-                    }
-                    i += 1
-                    bufferStart = i
-                case ASCII.asterisk, ASCII.underscore, ASCII.tilde, ASCII.equals: // * _ ~ =
-                    var run = 0
-                    while i + run < n, units[i + run] == c { run += 1 }
-                    if (c == ASCII.tilde || c == ASCII.equals) && run != 2 {
-                        i += run
-                        continue
-                    }
-                    flushText(upTo: i)
-                    let (canOpen, canClose) = flanking(at: i, run: run, char: c)
-                    if canOpen || canClose {
-                        handleDelimiter(Delim(char: c, count: run, start: i, canOpen: canOpen, canClose: canClose))
-                    } else {
-                        items.append(.text(String(decoding: [UInt16](repeating: c, count: run), as: UTF16.self),
-                                           sourceRange(i, i + run)))
-                    }
-                    i += run
-                    bufferStart = i
-                case ASCII.openBracket, ASCII.exclamation: // [ !
-                    if let parsed = linkOrImage(at: i) {
-                        flushText(upTo: i)
-                        items.append(.node(parsed.node))
-                        i = parsed.end
-                        bufferStart = i
-                    } else {
-                        i += 1
-                    }
+                    i = readLineBreak(at: i)
+                case ASCII.asterisk, ASCII.underscore, ASCII.tilde, ASCII.equals:
+                    i = readDelimiterRun(at: i)
+                case ASCII.openBracket, ASCII.exclamation:
+                    i = readLinkOrImage(at: i)
                 default:
                     i += 1
                 }
             }
             flushText(upTo: n)
-            return finish()
+            return flatten(items)
+        }
+
+        /// A code span, comment, wiki-link, embed or tag (see `readAtoms`): one
+        /// node, or none for a comment.
+        mutating func readAtom(_ atom: Atom, at i: Int) -> Int {
+            flushText(upTo: i)
+            if let inline = atom.inline {
+                items.append(.node(MarkdownInline(
+                    range: sourceRange(i, NSMaxRange(atom.range)), kind: inline.kind)))
+            }
+            let end = NSMaxRange(atom.range)
+            bufferStart = end
+            return end
+        }
+
+        /// A backslash before a line break is a hard break, before punctuation it
+        /// escapes that character, anywhere else it is ordinary text.
+        mutating func readBackslash(at i: Int) -> Int {
+            guard i + 1 < units.count else { return i + 1 }
+            if units[i + 1] == ASCII.lineFeed {
+                flushText(upTo: i)
+                items.append(.node(MarkdownInline(range: sourceRange(i, i + 2), kind: .hardBreak)))
+            } else if ASCII.isPunctuation(units[i + 1]) {
+                // The escaped character is plain text, without its backslash.
+                flushText(upTo: i)
+                appendText(String(decoding: [units[i + 1]], as: UTF16.self), sourceRange(i, i + 2))
+            } else {
+                return i + 1
+            }
+            bufferStart = i + 2
+            return i + 2
+        }
+
+        /// A line feed after two or more spaces is a hard break, otherwise a soft one.
+        mutating func readLineBreak(at i: Int) -> Int {
+            var trailing = 0
+            var k = i - 1
+            while k >= bufferStart, k >= 0, units[k] == ASCII.space { trailing += 1; k -= 1 }
+            if trailing >= 2 {
+                flushText(upTo: i - trailing)
+                items.append(.node(MarkdownInline(range: sourceRange(i - trailing, i + 1), kind: .hardBreak)))
+            } else {
+                flushText(upTo: i)
+                items.append(.node(MarkdownInline(range: sourceRange(i, i + 1), kind: .softBreak)))
+            }
+            bufferStart = i + 1
+            return i + 1
+        }
+
+        /// A run of `*`, `_`, `~` or `=`. Strikethrough and highlight need exactly
+        /// two characters; any other run of those stays in the text buffer.
+        mutating func readDelimiterRun(at i: Int) -> Int {
+            let c = units[i]
+            var run = 0
+            while i + run < units.count, units[i + run] == c { run += 1 }
+            if (c == ASCII.tilde || c == ASCII.equals) && run != 2 { return i + run }
+            flushText(upTo: i)
+            let (canOpen, canClose) = flanking(at: i, run: run, char: c)
+            if canOpen || canClose {
+                handleDelimiter(Delim(char: c, count: run, start: i, canOpen: canOpen, canClose: canClose))
+            } else {
+                items.append(.text(repeated(c, run), sourceRange(i, i + run)))
+            }
+            bufferStart = i + run
+            return i + run
+        }
+
+        /// `[label](dest)` or `![alt](src)`; when it is not one, the `[` or `!` is text.
+        mutating func readLinkOrImage(at i: Int) -> Int {
+            guard let parsed = linkOrImage(at: i) else { return i + 1 }
+            flushText(upTo: i)
+            items.append(.node(parsed.node))
+            bufferStart = parsed.end
+            return parsed.end
         }
 
         // MARK: Text
@@ -187,6 +210,10 @@ enum MarkdownInlineParser {
             } else {
                 items.append(.text(string, range))
             }
+        }
+
+        func repeated(_ unit: UInt16, _ count: Int) -> String {
+            String(decoding: [UInt16](repeating: unit, count: count), as: UTF16.self)
         }
 
         // MARK: Delimiters
@@ -274,7 +301,7 @@ enum MarkdownInlineParser {
                     items.append(.delim(closer))
                     stacks[closer.char, default: []].append(items.count - 1)
                 } else {
-                    items.append(.text(String(decoding: [UInt16](repeating: closer.char, count: closer.count), as: UTF16.self),
+                    items.append(.text(repeated(closer.char, closer.count),
                                        sourceRange(closer.start, closer.start + closer.count)))
                 }
             }
@@ -297,15 +324,10 @@ enum MarkdownInlineParser {
                 case .text(let s, let r): addText(s, r)
                 case .node(let inline): out.append(inline)
                 case .delim(let d):
-                    addText(String(decoding: [UInt16](repeating: d.char, count: d.count), as: UTF16.self),
-                            sourceRange(d.start, d.start + d.count))
+                    addText(repeated(d.char, d.count), sourceRange(d.start, d.start + d.count))
                 }
             }
             return out
-        }
-
-        mutating func finish() -> [MarkdownInline] {
-            flatten(items)
         }
 
         // MARK: Atoms: code spans, comments, wiki-links, embeds, tags
