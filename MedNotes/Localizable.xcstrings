@@ -8312,16 +8312,6 @@
         }
       }
     },
-    "%lld patient(s) share an AMKA with one already stored, and were left as they are" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ασθενείς με ΑΜΚΑ που ήδη υπάρχει στο MedNotes και παραλείφθηκαν: %lld"
-          }
-        }
-      }
-    },
     "Everything in this folder is already in MedNotes. Nothing needs importing." : {
       "localizations" : {
         "el" : {
@@ -8378,6 +8368,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αφαίρεση «%@»;"
+          }
+        }
+      }
+    },
+    "%lld patient(s) have the same AMKA as one already stored and were left out. Their notes, todos and events are imported without a patient." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασθενείς με ίδιο ΑΜΚΑ με αποθηκευμένο ασθενή που παραλείφθηκαν: %lld. Οι σημειώσεις, οι εκκρεμότητες και τα συμβάντα τους εισάγονται χωρίς ασθενή."
           }
         }
       }

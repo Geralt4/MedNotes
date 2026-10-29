@@ -172,9 +172,10 @@ final class ImporterTests: XCTestCase {
 
     /// A patient the user re-created by hand carries the same AMKA under a new
     /// id. Importing the old one used to fail the whole import on the unique
-    /// AMKA column; it is now left out, and what referred to it is linked to the
-    /// patient that is there.
-    func testAPatientWithAStoredAMKAIsLeftOutAndItsRecordsFollowTheStoredOne() async throws {
+    /// AMKA column; it is now left out. Its records are not attached to the
+    /// stored patient (the match could be a mistyped number): they come in
+    /// unlinked, with a warning.
+    func testAPatientWithAStoredAMKAIsLeftOutAndItsRecordsComeInUnlinked() async throws {
         let db = try makeDB()
         let legacy = try decodeJSONData(
             Patient.self, from: Data(contentsOf: sourceDir.appendingPathComponent("Patients/patient_full.json")))
@@ -182,8 +183,7 @@ final class ImporterTests: XCTestCase {
         recreated.id = UUID()
         recreated.files = []
         try await db.savePatient(recreated)
-        let legacyAMKA = AMKA.normalized(legacy.profile.amka)
-        XCTAssertFalse(legacyAMKA.isEmpty, "precondition: the fixture patient has an AMKA")
+        XCTAssertFalse(AMKA.normalized(legacy.profile.amka).isEmpty, "precondition: the fixture patient has an AMKA")
         // The fixture event names some other patient; point it at this one.
         let eventURL = sourceDir.appendingPathComponent("CalendarEvents/event_appointment.json")
         var eventJSON = try XCTUnwrap(
@@ -200,8 +200,10 @@ final class ImporterTests: XCTestCase {
         XCTAssertEqual(patients.count, 1, "no second patient with that AMKA")
         let events = try await db.loadAllEvents()
         let event = try XCTUnwrap(events.first)
-        XCTAssertEqual(event.patientId, recreated.id,
-                       "what referred to the legacy patient now refers to the stored one")
+        XCTAssertNil(event.patientId, "it must not be attached to a patient it may not belong to")
+        XCTAssertTrue(report.warnings.contains { $0.contains("without a patient") },
+                      "the user is told: \(report.warnings)")
+        XCTAssertTrue(report.warnings.contains { $0.contains("references missing patient") })
     }
 
     /// The dry run imports into a scratch database but is checked against the
@@ -219,6 +221,48 @@ final class ImporterTests: XCTestCase {
         XCTAssertEqual(report.totalAlreadyPresent, 5)
         let counts = try await scratch.counts()
         XCTAssertEqual(counts["patients"], 0, "nothing is written for what is already there")
+    }
+
+    /// New records in the folder that belong to a patient the store already has.
+    /// The dry run writes them into a scratch database that does not hold that
+    /// patient, where a todo or event linked to it would break the foreign key.
+    func testTheDryRunHandlesNewRecordsOfAPatientTheStoreAlreadyHas() async throws {
+        let live = try makeDB()
+        var patient = try decodeJSONData(
+            Patient.self, from: Data(contentsOf: sourceDir.appendingPathComponent("Patients/patient_full.json")))
+        patient.files = []
+        try await live.savePatient(patient)
+
+        // The folder: that patient, and a todo, an event and a note that are new
+        // to the store but point at it.
+        let todoURL = sourceDir.appendingPathComponent("Todos/todo_high.json")
+        var todoJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: todoURL)) as? [String: Any])
+        todoJSON["patientId"] = patient.id.uuidString
+        try JSONSerialization.data(withJSONObject: todoJSON).write(to: todoURL)
+        let eventURL = sourceDir.appendingPathComponent("CalendarEvents/event_appointment.json")
+        var eventJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: eventURL)) as? [String: Any])
+        eventJSON["patientId"] = patient.id.uuidString
+        try JSONSerialization.data(withJSONObject: eventJSON).write(to: eventURL)
+        let noteURL = sourceDir.appendingPathComponent("Notes/note_simple.json")
+        var noteJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: noteURL)) as? [String: Any])
+        noteJSON["mentionedPatients"] = [patient.id.uuidString]
+        try JSONSerialization.data(withJSONObject: noteJSON).write(to: noteURL)
+
+        let keys = try await live.storedRecordKeys()
+        let scratch = try Database.testDatabase(path: tempDir.appendingPathComponent("scratch.db").path)
+        let report = try await JSONImporter(directoryURL: sourceDir)
+            .importAll(into: scratch, alreadyStored: keys)
+
+        XCTAssertTrue(report.errors.isEmpty, "\(report.errors)")
+        XCTAssertEqual(report.patientsAlreadyPresent, 1)
+        XCTAssertEqual(report.todosImported, 2)
+        XCTAssertEqual(report.eventsImported, 1)
+        XCTAssertEqual(report.notesImported, 1)
+        XCTAssertFalse(report.warnings.contains { $0.contains("missing patient") },
+                       "the patient is in the store, so nothing refers to a missing one: \(report.warnings)")
     }
 
     func testDuplicateIdsAreSkipped() async throws {

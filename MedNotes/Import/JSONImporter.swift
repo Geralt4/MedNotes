@@ -42,10 +42,19 @@ struct JSONImporter {
         } else {
             stored = try await db.storedRecordKeys()
         }
-        let remapped = Self.dropAlreadyPresent(&batch, stored: stored)
-        Self.remapPatients(&batch, remapped)
-        let known = stored.patientIDs.union(batch.patients.map(\.id))
-        Self.unlinkMissingPatients(&batch, knownPatients: known)
+        Self.dropAlreadyPresent(&batch, stored: stored)
+        // Records are linked to the patients the database they are written to
+        // holds. For the dry run that is a scratch database, which has only the
+        // folder's own patients: a link to one that is in the real store would break
+        // the foreign key there, so it is dropped for that write, without the
+        // warning a genuinely missing patient gets.
+        let writesToTheStore = alreadyStored == nil
+        let known = writesToTheStore
+            ? stored.patientIDs.union(batch.patients.map(\.id))
+            : Set(batch.patients.map(\.id))
+        Self.unlinkMissingPatients(
+            &batch, knownPatients: known,
+            existingElsewhere: writesToTheStore ? [] : stored.patientIDs)
         var createdFileDirs: [URL] = []
         var stagedFiles: [(URL, URL)] = []
         var promoted: FilePromote.Transaction?
@@ -319,21 +328,25 @@ struct JSONImporter {
     /// Removes from `batch` what `stored` already has, and counts it in the
     /// report. A patient is already present when its id is stored, or when its
     /// (normalised, non-empty) AMKA belongs to a stored patient: the AMKA column
-    /// is unique, so that import would otherwise fail as a whole. Returns, for
-    /// the patients matched by AMKA under another id, the stored patient's id,
-    /// so what refers to the folder's patient can be pointed at it.
-    private static func dropAlreadyPresent(_ batch: inout Batch, stored: Database.StoredRecordKeys) -> [UUID: UUID] {
-        var remapped: [UUID: UUID] = [:]
+    /// is unique, so that import would otherwise fail as a whole.
+    ///
+    /// The notes, todos and events of a patient that was left out for its AMKA are
+    /// not moved onto the stored patient: the match may be a mistyped or reused
+    /// number, and records must not land on another person. They are imported
+    /// without a patient (`unlinkMissingPatients` warns for each), to be linked
+    /// by hand.
+    private static func dropAlreadyPresent(_ batch: inout Batch, stored: Database.StoredRecordKeys) {
         var present = 0
+        var sharedAMKA = 0
         batch.patients.removeAll { patient in
             if stored.patientIDs.contains(patient.id) {
                 present += 1
                 return true
             }
             let amka = AMKA.normalized(patient.profile.amka)
-            if !amka.isEmpty, let owner = stored.patientIDByAMKA[amka] {
-                remapped[patient.id] = owner
+            if !amka.isEmpty, stored.patientIDByAMKA[amka] != nil {
                 present += 1
+                sharedAMKA += 1
                 return true
             }
             return false
@@ -356,40 +369,23 @@ struct JSONImporter {
         batch.report.eventsAlreadyPresent = events - batch.events.count
         batch.report.eventsImported -= events - batch.events.count
 
-        if !remapped.isEmpty {
+        if sharedAMKA > 0 {
             batch.report.warnings.append(
-                String(localized: "\(remapped.count) patient(s) share an AMKA with one already stored, and were left as they are"))
-        }
-        return remapped
-    }
-
-    /// Points what refers to a patient that was matched by AMKA at the stored
-    /// patient, so it is linked rather than unlinked as a missing patient.
-    private static func remapPatients(_ batch: inout Batch, _ remapped: [UUID: UUID]) {
-        guard !remapped.isEmpty else { return }
-        for i in batch.notes.indices {
-            batch.notes[i].mentionedPatients = batch.notes[i].mentionedPatients
-                .map { remapped[$0] ?? $0 }
-                .reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
-        }
-        for i in batch.todos.indices {
-            if let pid = batch.todos[i].patientId, let owner = remapped[pid] {
-                batch.todos[i].patientId = owner
-            }
-        }
-        for i in batch.events.indices {
-            if let pid = batch.events[i].patientId, let owner = remapped[pid] {
-                batch.events[i].patientId = owner
-            }
+                String(localized: "\(sharedAMKA) patient(s) have the same AMKA as one already stored and were left out. Their notes, todos and events are imported without a patient."))
         }
     }
 
-    private static func unlinkMissingPatients(_ batch: inout Batch, knownPatients: Set<UUID>) {
+    /// Drops links to patients that are not in `knownPatients`, and warns about
+    /// each, except for those in `existingElsewhere`: patients that exist in the
+    /// real store though not in the database being written to (the dry run).
+    private static func unlinkMissingPatients(
+        _ batch: inout Batch, knownPatients: Set<UUID>, existingElsewhere: Set<UUID> = []
+    ) {
         for i in batch.notes.indices {
             let missing = batch.notes[i].mentionedPatients.filter { !knownPatients.contains($0) }
             if !missing.isEmpty {
                 batch.notes[i].mentionedPatients.removeAll { !knownPatients.contains($0) }
-                for pid in missing {
+                for pid in missing where !existingElsewhere.contains(pid) {
                     batch.report.warnings.append(
                         String(localized: "note \(batch.notes[i].id.uuidString.prefix(8)) references missing patient \(pid.uuidString.prefix(8)), unlinked"))
                 }
@@ -399,15 +395,19 @@ struct JSONImporter {
             if let pid = batch.todos[i].patientId, !knownPatients.contains(pid) {
                 batch.todos[i].patientId = nil
                 batch.todos[i].patientName = nil
-                batch.report.warnings.append(
-                    String(localized: "todo \(batch.todos[i].id.uuidString.prefix(8)) references missing patient \(pid.uuidString.prefix(8)), unlinked"))
+                if !existingElsewhere.contains(pid) {
+                    batch.report.warnings.append(
+                        String(localized: "todo \(batch.todos[i].id.uuidString.prefix(8)) references missing patient \(pid.uuidString.prefix(8)), unlinked"))
+                }
             }
         }
         for i in batch.events.indices {
             if let pid = batch.events[i].patientId, !knownPatients.contains(pid) {
                 batch.events[i].patientId = nil
-                batch.report.warnings.append(
-                    String(localized: "event \(batch.events[i].id.uuidString.prefix(8)) references missing patient \(pid.uuidString.prefix(8)), unlinked"))
+                if !existingElsewhere.contains(pid) {
+                    batch.report.warnings.append(
+                        String(localized: "event \(batch.events[i].id.uuidString.prefix(8)) references missing patient \(pid.uuidString.prefix(8)), unlinked"))
+                }
             }
         }
     }
