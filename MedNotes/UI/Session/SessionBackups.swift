@@ -341,9 +341,12 @@ extension AppSession {
         guard canUseStore, self.store === store else { return }
         let locksAtStart = lockRequests
         let manifest: BackupManifest
-        do {
+        // A task of its own that a lock cancels (`outgoing`) and then waits for
+        // (`restoreRun`): the restore stops before it touches a live file, or
+        // finishes the swap, and is never cut off in the middle of one.
+        let run = Task { @MainActor () throws -> BackupManifest in
             do {
-                manifest = try await store.backups.restore(
+                return try await store.backups.restore(
                     fromEncryptedBackupAt: fileURL, passphrase: passphrase,
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
@@ -351,11 +354,21 @@ extension AppSession {
                 // Only a container that is not v2 at all is tried as v1. Any
                 // other failure is about a v2 archive and must not be retried
                 // against a store that a failed install may have touched.
-                manifest = try await store.backups.restore(
+                return try await store.backups.restore(
                     fromLegacyBackupAt: fileURL, passphrase: passphrase,
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
             }
+        }
+        let token = UUID()
+        outgoing[token] = run.cancel
+        restoreRun = Task { _ = await run.result }
+        defer {
+            outgoing[token] = nil
+            restoreRun = nil
+        }
+        do {
+            manifest = try await run.value
         } catch where lockRequests != locksAtStart && !Self.isRollbackFailure(error) {
             // The lock took the restore sheet, and the error it would show,
             // with it; ContentView holds this alert until the unlock.
@@ -370,6 +383,12 @@ extension AppSession {
                 errorMessage = error.localizedDescription
             }
             throw error
+        }
+        // The swap finished, but a lock landed meanwhile: the store is closed and
+        // the lists are empty. Unlock reloads everything from the restored files.
+        guard lockRequests == locksAtStart else {
+            errorMessage = String(localized: "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect.")
+            return
         }
         try? await store.audit.log(
             action: "backup_restore", entityType: "backup", entityId: fileURL.lastPathComponent,

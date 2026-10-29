@@ -259,6 +259,192 @@ final class CriticalFixTests: XCTestCase {
         await target.close()
     }
 
+    // MARK: - Recovering an install that a crash cut off
+
+    /// Moves the live database aside the way the install does, and writes the
+    /// journal for `phase` (none for a folder an older build left).
+    private func stageRollbackFolder(
+        in root: DataRoot, phase: RestoreRecovery.Phase?, movingAttachments: Bool = false
+    ) throws -> URL {
+        let fm = FileManager.default
+        let folder = root.rootURL.appendingPathComponent(
+            "RestoreRollback-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let phase { try RestoreRecovery.writeJournal(phase, in: folder) }
+        for suffix in ["", "-wal", "-shm"] where fm.fileExists(atPath: root.databaseURL.path + suffix) {
+            try fm.moveItem(
+                atPath: root.databaseURL.path + suffix,
+                toPath: folder.appendingPathComponent("mednotes.db" + suffix).path)
+        }
+        if movingAttachments {
+            try fm.moveItem(at: root.attachmentsURL, to: folder.appendingPathComponent("Attachments"))
+        }
+        return folder
+    }
+
+    /// Puts what a restore brings in at the live paths: a valid, empty database
+    /// under the store's key (it opens, and references nothing), and optionally
+    /// an attachment folder holding one file the original store never had.
+    private func installIncoming(in root: DataRoot, attachments: Bool) async throws {
+        let incoming = try Database(
+            path: root.databaseURL.path, key: TestKeys.database(for: root))
+        await incoming.close()
+        if attachments {
+            try FileManager.default.createDirectory(at: root.attachmentsURL, withIntermediateDirectories: true)
+            try Data("INCOMING".utf8).write(
+                to: root.attachmentsURL.appendingPathComponent(UUID().uuidString.lowercased()))
+        }
+    }
+
+    private func assertNoRestoreFolders(in root: DataRoot, file: StaticString = #filePath, line: UInt = #line) throws {
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.rootURL.path)
+        XCTAssertTrue(names.allSatisfy {
+            !$0.hasPrefix(RestoreRecovery.rollbackPrefix) && !$0.hasPrefix(RestoreRecovery.discardPrefix)
+        }, "no rollback or discard folder may be left: \(names)", file: file, line: line)
+    }
+
+    func testRecoveryPutsTheOriginalBackWhenTheDatabaseWasMovedButNotCopied() async throws {
+        let (target, root, original, keeper) = try await populatedTarget()
+        await target.close()
+        _ = try stageRollbackFolder(in: root, phase: .started)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path))
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 1)
+
+        let reopened = try AppStore.testStore(dataRoot: root)
+        try await assertOriginalIntact(reopened, original, keeper)
+        try assertNoRestoreFolders(in: root)
+        await reopened.close()
+    }
+
+    func testRecoveryDiscardsAHalfRekeyedIncomingDatabaseAndItsJournal() async throws {
+        let (target, root, original, keeper) = try await populatedTarget()
+        await target.close()
+        _ = try stageRollbackFolder(in: root, phase: .databaseReplaced)
+        // What a rekey cut off leaves: unreadable bytes and a hot journal.
+        try Data(repeating: 0xA5, count: 8192).write(to: root.databaseURL)
+        try Data(repeating: 0x5A, count: 512).write(
+            to: URL(fileURLWithPath: root.databaseURL.path + "-journal"))
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 1)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path + "-journal"),
+                       "a leftover journal would be replayed into the original")
+        let reopened = try AppStore.testStore(dataRoot: root)
+        try await assertOriginalIntact(reopened, original, keeper)
+        try assertNoRestoreFolders(in: root)
+        await reopened.close()
+    }
+
+    func testRecoveryRestoresTheAttachmentsOnceTheyHaveBeenSwapped() async throws {
+        let (target, root, original, keeper) = try await populatedTarget()
+        await target.close()
+        _ = try stageRollbackFolder(in: root, phase: .attachmentsIn, movingAttachments: true)
+        try await installIncoming(in: root, attachments: true)
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 1)
+
+        let reopened = try AppStore.testStore(dataRoot: root)
+        try await assertOriginalIntact(reopened, original, keeper)
+        try assertNoRestoreFolders(in: root)
+        await reopened.close()
+    }
+
+    /// The cut between the two attachment moves: the folder is gone and the
+    /// next launch has already made an empty one.
+    func testRecoveryReplacesTheEmptyAttachmentFolderTheAppRecreated() async throws {
+        let (target, root, original, keeper) = try await populatedTarget()
+        await target.close()
+        _ = try stageRollbackFolder(in: root, phase: .attachmentsAside, movingAttachments: true)
+        try await installIncoming(in: root, attachments: false)
+        try FileManager.default.createDirectory(at: root.attachmentsURL, withIntermediateDirectories: true)
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 1)
+
+        let reopened = try AppStore.testStore(dataRoot: root)
+        try await assertOriginalIntact(reopened, original, keeper)
+        try assertNoRestoreFolders(in: root)
+        await reopened.close()
+    }
+
+    func testRecoveryLeavesAVerifiedRestoreAlone() async throws {
+        let (target, root, _, _) = try await populatedTarget()
+        await target.close()
+        let folder = try stageRollbackFolder(in: root, phase: .verified)
+        try await installIncoming(in: root, attachments: false)
+        let liveBefore = try Data(contentsOf: root.databaseURL)
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 0)
+
+        XCTAssertEqual(try Data(contentsOf: root.databaseURL), liveBefore,
+                       "a restore that held must not be undone")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+
+    func testRecoveryTreatsAFolderWithNoJournalAsBrokenOnlyWhenTheDatabaseIsMissing() async throws {
+        // An older build's folder beside a working store: possibly a finished
+        // restore, so it is left alone.
+        let (target, root, _, _) = try await populatedTarget()
+        await target.close()
+        let folder = try stageRollbackFolder(in: root, phase: nil)
+        try await installIncoming(in: root, attachments: false)
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.databaseURL.path))
+
+        // The same folder with no database to run on is reinstated.
+        let (second, secondRoot, original, keeper) = try await populatedTarget()
+        await second.close()
+        _ = try stageRollbackFolder(in: secondRoot, phase: nil)
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: secondRoot.rootURL), 1)
+        let reopened = try AppStore.testStore(dataRoot: secondRoot)
+        try await assertOriginalIntact(reopened, original, keeper)
+        await reopened.close()
+    }
+
+    func testRecoveryReinstatesOnlyTheNewestUnverifiedFolder() async throws {
+        let (target, root, original, keeper) = try await populatedTarget()
+        await target.close()
+        let older = try stageRollbackFolder(in: root, phase: .started)
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        // The original of the newer install is what the live paths held when it began.
+        let newer = root.rootURL.appendingPathComponent(
+            "RestoreRollback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: newer, withIntermediateDirectories: true)
+        try RestoreRecovery.writeJournal(.started, in: newer)
+        try FileManager.default.moveItem(at: older.appendingPathComponent("mednotes.db"),
+                                         to: newer.appendingPathComponent("mednotes.db"))
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 1)
+
+        let reopened = try AppStore.testStore(dataRoot: root)
+        try await assertOriginalIntact(reopened, original, keeper)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: older.path),
+                      "an older folder must not be put back over the newer state")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: newer.path))
+        await reopened.close()
+    }
+
+    func testASuccessfulRestoreLeavesNoRollbackOrDiscardFolder() async throws {
+        let sourceRoot = try makeRoot()
+        let source = try AppStore.testStore(dataRoot: sourceRoot)
+        var incoming = Patient.newRecord()
+        incoming.files = [PatientFile(name: "incoming.txt", type: .other, data: Data("INCOMING".utf8))]
+        try await source.patients.save(incoming)
+        let archive = sourceRoot.rootURL.appendingPathComponent("incoming.mednotesbackup")
+        _ = try await source.backups.createEncryptedBackup(to: archive, passphrase: passphrase)
+        let (target, targetRoot, _, _) = try await populatedTarget()
+
+        _ = try await target.backups.restore(
+            fromEncryptedBackupAt: archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot))
+
+        try assertNoRestoreFolders(in: targetRoot)
+        await source.close()
+        await target.close()
+    }
+
     func testRestoreOfArchiveWithWrongDigestIsRejectedBeforeAnythingChanges() async throws {
         let sourceRoot = try makeRoot()
         let source = try AppStore.testStore(dataRoot: sourceRoot)

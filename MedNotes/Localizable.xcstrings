@@ -8221,6 +8221,26 @@
           }
         }
       }
+    },
+    "An interrupted restore could not be undone automatically. Your original data is in the folder “%@” inside the MedNotes data folder, and nothing was deleted. %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μια διακοπείσα επαναφορά δεν μπόρεσε να αναιρεθεί αυτόματα. Τα αρχικά σας δεδομένα βρίσκονται στον φάκελο «%@» μέσα στον φάκελο δεδομένων του MedNotes και δεν διαγράφηκε τίποτα. %@"
+          }
+        }
+      }
+    },
+    "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε ενώ ολοκληρωνόταν η επαναφορά. Το αντίγραφο ασφαλείας επαναφέρθηκε· ξεκλειδώστε και ελέγξτε ότι οι εγγραφές σας είναι όπως τις περιμένετε."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

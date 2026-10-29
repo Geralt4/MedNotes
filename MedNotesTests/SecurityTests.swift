@@ -2597,6 +2597,101 @@ final class SecurityTests: XCTestCase {
         XCTAssertTrue(session.unregisterOpenEditor(token), "the editor keeps its draft to fix")
     }
 
+    /// A crash after the restored database is in place and before the
+    /// attachments are swapped used to leave a database that opens and
+    /// references none of the old attachments. The sweep that runs as the store
+    /// opens then deleted every one of them. The launch now undoes the install
+    /// first.
+    @MainActor
+    func testALaunchAfterACutOffInstallKeepsTheOriginalAttachments() async throws {
+        let root = try makeRoot()
+        let seeded = try AppStore.testStore(dataRoot: root)
+        var patient = Patient.newRecord()
+        patient.files = [PatientFile(name: "scan.txt", type: .other, data: Data("KEEP ME".utf8))]
+        try await seeded.patients.save(patient)
+        await seeded.close()
+        // Old enough for the sweep to take, as a real store's files are.
+        let longAgo = Date().addingTimeInterval(-7200)
+        let objects = try FileManager.default.contentsOfDirectory(atPath: root.attachmentsURL.path)
+        XCTAssertFalse(objects.isEmpty, "precondition: the store holds an attachment")
+        for name in objects {
+            try FileManager.default.setAttributes(
+                [.modificationDate: longAgo],
+                ofItemAtPath: root.attachmentsURL.appendingPathComponent(name).path)
+        }
+        // The install's state at the cut: the original database is in the
+        // rollback folder, and an empty database that opens fine is live.
+        let folder = root.rootURL.appendingPathComponent(
+            "\(RestoreRecovery.rollbackPrefix)\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try RestoreRecovery.writeJournal(.databaseReplaced, in: folder)
+        for suffix in ["", "-wal", "-shm"] where FileManager.default.fileExists(atPath: root.databaseURL.path + suffix) {
+            try FileManager.default.moveItem(
+                atPath: root.databaseURL.path + suffix,
+                toPath: folder.appendingPathComponent("mednotes.db" + suffix).path)
+        }
+        let incoming = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))
+        await incoming.close()
+
+        let session = try await readySession(root)
+
+        let store = try XCTUnwrap(session.store)
+        let loaded = try await store.patients.load(id: patient.id)
+        XCTAssertNotNil(loaded, "the original database is back")
+        let file = try XCTUnwrap(loaded?.files.first)
+        let bytes = try await store.patients.loadFileData(patientId: patient.id, fileId: file.id)
+        XCTAssertEqual(bytes, Data("KEEP ME".utf8), "the sweep must not have taken the attachment")
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.rootURL.path)
+        XCTAssertTrue(names.allSatisfy { !$0.hasPrefix(RestoreRecovery.rollbackPrefix) })
+    }
+
+    /// An idle lock can land during a long restore. The restore stops at the
+    /// last point it can, before any live file moves; the lock waits for it,
+    /// then saves and closes. Nothing is left half installed and no connection
+    /// is reopened after the lock.
+    @MainActor
+    func testALockDuringARestoreStopsItBeforeAnyLiveFileMoves() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Plan"
+        note.content = "In the backup."
+        let saved = await session.save(note)
+        XCTAssertTrue(saved)
+        let store = try XCTUnwrap(session.store)
+        let archive = FileManager.default.temporaryDirectory
+            .appendingPathComponent("restore-\(UUID().uuidString).mednotesbackup")
+        defer { try? FileManager.default.removeItem(at: archive) }
+        let passphrase = "a long enough passphrase"
+        _ = try await store.backups.createEncryptedBackup(name: "before", to: archive, passphrase: passphrase)
+        note.content = "Edited since the backup."
+        let edited = await session.save(note)
+        XCTAssertTrue(edited)
+        let root = try XCTUnwrap(session.dataRoot)
+
+        // The lock lands once everything is staged, as late as it can.
+        await store.backups.setBeforeInstallForTesting { [session] in
+            await MainActor.run { _ = Task { await session.lockNow(reason: "idle") } }
+            while await !MainActor.run(body: { session.isLocked }) { await Task.yield() }
+        }
+        try await session.performRestore(from: archive, passphrase: passphrase)
+
+        for _ in 0..<200 where session.store != nil { try await Task.sleep(nanoseconds: 25_000_000) }
+        XCTAssertNil(session.store, "the lock closed the store")
+        XCTAssertTrue(session.isLocked)
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.rootURL.path)
+        XCTAssertTrue(names.allSatisfy {
+            !$0.hasPrefix(RestoreRecovery.rollbackPrefix) && !$0.hasPrefix(RestoreRecovery.discardPrefix)
+        }, "no install was started: \(names)")
+        // Wholly the old state: the restore did not run.
+        let file = try Database.testDatabase(path: root.databaseURL.path, root: root)
+        let onDisk = try await file.loadAllNotes().first { $0.id == note.id }
+        await file.close()
+        XCTAssertEqual(onDisk?.content, "Edited since the backup.")
+        XCTAssertNotNil(session.errorMessage, "the user is told the restore did not finish")
+    }
+
     /// `open -g`, a hidden login item or a click elsewhere during startup
     /// never resigns active, so the curtain has to start from the window.
     @MainActor

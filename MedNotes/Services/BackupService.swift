@@ -398,9 +398,12 @@ actor BackupService {
         try await validateStagedDatabase(
             at: snapshotURL, key: opened.archiveKey, attachments: stagingStore)
 
+        // A lock cancels the restore; it stops here, before a live file moves.
+        try Task.checkCancellation()
         if createRestorePoint {
             try await takePreRestorePoint()
         }
+        try await readyToInstall()
         try await installStaged(
             databaseAt: snapshotURL, sourceKey: opened.archiveKey,
             attachmentsAt: stagingAttachments)
@@ -477,6 +480,7 @@ actor BackupService {
         guard FileManager.default.fileExists(atPath: snapshotURL.path) else {
             throw BackupError.missingDatabase(fileURL)
         }
+        try Task.checkCancellation()
         if createRestorePoint {
             try await takePreRestorePoint()
         }
@@ -488,6 +492,7 @@ actor BackupService {
         let stagedDatabase = built.appendingPathComponent("mednotes.db")
         try await validateStagedDatabase(
             at: stagedDatabase, key: databaseKey, attachments: stagingStore)
+        try await readyToInstall()
         try await installStaged(
             databaseAt: stagedDatabase, sourceKey: nil,
             attachmentsAt: built.appendingPathComponent("Attachments", isDirectory: true))
@@ -767,6 +772,21 @@ actor BackupService {
         }
     }
 
+    /// Test seam: runs once everything is staged and checked, just before the
+    /// install, so a test can land a lock at the last point a restore can stop.
+    var beforeInstallForTesting: (@Sendable () async -> Void)?
+
+    func setBeforeInstallForTesting(_ hook: (@Sendable () async -> Void)?) {
+        beforeInstallForTesting = hook
+    }
+
+    /// The last point a restore can be cancelled. Past it the swap runs to its
+    /// end, or is rolled back, and is never abandoned half way.
+    private func readyToInstall() async throws {
+        await beforeInstallForTesting?()
+        try Task.checkCancellation()
+    }
+
     /// Test seam: runs after the database swap and the attachment swap, before
     /// the live store is verified, so a test can fail the install late.
     var installFaultForTesting: (() throws -> Void)?
@@ -786,8 +806,19 @@ actor BackupService {
         let fm = FileManager.default
         let root = restorePointsRoot.deletingLastPathComponent()
         let liveAttachments = root.appendingPathComponent("Attachments", isDirectory: true)
-        let kept = root.appendingPathComponent("RestoreRollback-\(UUID().uuidString)", isDirectory: true)
+        let kept = root.appendingPathComponent(
+            "\(RestoreRecovery.rollbackPrefix)\(UUID().uuidString)", isDirectory: true)
         let keptAttachments = kept.appendingPathComponent("Attachments", isDirectory: true)
+
+        // The journal is what lets a launch undo an install that a crash cut
+        // off (`RestoreRecovery`): it exists before anything live moves.
+        do {
+            try fm.createDirectory(at: kept, withIntermediateDirectories: true)
+            try RestoreRecovery.writeJournal(.started, in: kept)
+        } catch {
+            try? fm.removeItem(at: kept)
+            throw BackupError.restoreFailed("install: \(error.localizedDescription)")
+        }
 
         do {
             try await db.replaceDatabaseFile(
@@ -801,16 +832,20 @@ actor BackupService {
 
         var attachmentsMoved = false
         do {
+            try RestoreRecovery.writeJournal(.databaseReplaced, in: kept)
             if fm.fileExists(atPath: liveAttachments.path) {
                 try fm.moveItem(at: liveAttachments, to: keptAttachments)
                 attachmentsMoved = true
+                try RestoreRecovery.writeJournal(.attachmentsAside, in: kept)
             }
             try fm.moveItem(at: stagedAttachments, to: liveAttachments)
+            try RestoreRecovery.writeJournal(.attachmentsIn, in: kept)
             try installFaultForTesting?()
             try await db.suspendSyncDestinations()
             if let fileStore {
                 try await db.verifyAttachmentDigests(fileStore: fileStore)
             }
+            try RestoreRecovery.writeJournal(.verified, in: kept)
         } catch {
             do {
                 try await db.reinstateDatabaseFile(from: kept)
@@ -824,7 +859,16 @@ actor BackupService {
             try? fm.removeItem(at: kept)
             throw BackupError.restoreFailed("install: \(error.localizedDescription)")
         }
-        try? fm.removeItem(at: kept)
+        // Renamed first, so the delete cannot be half applied to a folder that
+        // still looks like a rollback: a crash during it leaves a discard folder
+        // that the next launch simply deletes.
+        let discard = root.appendingPathComponent(
+            "\(RestoreRecovery.discardPrefix)\(UUID().uuidString)", isDirectory: true)
+        if (try? fm.moveItem(at: kept, to: discard)) != nil {
+            try? fm.removeItem(at: discard)
+        } else {
+            try? fm.removeItem(at: kept)
+        }
     }
 
     /// Builds, beside nothing live, an encrypted database and attachment store
