@@ -218,6 +218,17 @@ func decodeLossyArray<T: Decodable, K: CodingKey>(_ type: T.Type, _ c: KeyedDeco
     return raw.compactMap(\.value)
 }
 
+extension KeyedDecodingContainer {
+    /// The value stored under `key`, or `fallback` when it is missing or is not
+    /// a `T`. Strict about the type, unlike the `decodeLossy` functions above,
+    /// which read a number or string stored in a neighbouring shape. The graph's
+    /// settings use it for every field, so a row from another build never stops
+    /// the graph from opening.
+    func decodeOrDefault<T: Decodable>(_ type: T.Type, forKey key: Key, default fallback: @autoclosure () -> T) -> T {
+        (try? decodeIfPresent(type, forKey: key)) ?? fallback()
+    }
+}
+
 func decodeLossyStrings(from data: Data) -> [String] {
     guard let raw = try? JSONDecoder().decode([LossyString].self, from: data) else { return [] }
     return raw.compactMap(\.value)

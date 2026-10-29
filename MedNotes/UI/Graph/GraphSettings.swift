@@ -1,14 +1,5 @@
 import Foundation
 
-extension KeyedDecodingContainer {
-    /// The value stored under `key`, or `fallback` when it is missing or is not
-    /// a `T`. The graph's settings use it for every field, so a row from
-    /// another build never stops the graph from opening.
-    func decodeOrDefault<T: Decodable>(_ type: T.Type, forKey key: Key, default fallback: @autoclosure () -> T) -> T {
-        (try? decodeIfPresent(type, forKey: key)) ?? fallback()
-    }
-}
-
 /// A colour group: notes matching `query` are drawn in palette colour
 /// `colorIndex`. The first group a note matches wins.
 struct GraphGroup: Codable, Equatable, Identifiable, Sendable {
