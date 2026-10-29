@@ -148,11 +148,6 @@ extension AppSession {
         }
     }
 
-    func deleteSelectedPatient() async {
-        guard let id = selectedPatientId else { return }
-        await deletePatient(id: id)
-    }
-
     /// Hides the patient from the active list and pickers; the row and its
     /// links stay, and `unarchivePatient` brings it back. Every Delete
     /// affordance for an active patient does this; permanent deletion is
@@ -185,11 +180,6 @@ extension AppSession {
         patientEpoch += 1
         await reloadPatients()
         await reloadPatientDirectory()
-    }
-
-    func archiveSelectedPatient() async {
-        guard let id = selectedPatientId else { return }
-        await archivePatient(id: id)
     }
 
     func loadSelectedPatient() async -> Patient? {
