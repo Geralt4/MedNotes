@@ -253,6 +253,52 @@ final class SecurityTests: XCTestCase {
         }
     }
 
+    func testPreflightRefusesAMissingDatabaseBesideStoredData() async throws {
+        let manager = InMemoryKeyManager()
+
+        // An attachment object with no database to account for it.
+        let withAttachment = try makeRoot("attachment-only")
+        let files = try EncryptedFileStore.testStore(at: withAttachment.attachmentsURL)
+        _ = try await files.store(Data("report".utf8))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: withAttachment, keyManager: manager),
+            .databaseMissing)
+
+        // So is a restore point.
+        let withRestorePoint = try makeRoot("restore-point-only")
+        try Data("sealed".utf8).write(
+            to: withRestorePoint.restorePointsURL.appendingPathComponent("restore_1.mnrp"))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: withRestorePoint, keyManager: manager),
+            .databaseMissing)
+
+        // Files that are not storage IDs or restore points do not count.
+        let strangers = try makeRoot("strangers")
+        try Data("x".utf8).write(to: strangers.attachmentsURL.appendingPathComponent(".DS_Store"))
+        try Data("x".utf8).write(to: strangers.restorePointsURL.appendingPathComponent("notes.txt"))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: strangers, keyManager: manager), .empty)
+    }
+
+    @MainActor
+    func testAuthenticateLeavesAMissingDatabaseAndItsFilesAlone() async throws {
+        let root = try makeRoot("missing-db")
+        let files = try EncryptedFileStore.testStore(at: root.attachmentsURL)
+        let storageID = try await files.store(Data("report".utf8))
+        let manager = InMemoryKeyManager()
+        let coordinator = SecureStoreCoordinator(keyManager: manager, dataRoot: root)
+
+        XCTAssertThrowsError(try coordinator.authenticate()) { error in
+            XCTAssertEqual(error as? SecureStoreError, .databaseMissing)
+        }
+        XCTAssertFalse(coordinator.isReady)
+        XCTAssertEqual(try manager.lookUpRootKey(), .absent, "no key may be created for it")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path),
+                       "no empty database may be created beside the attachments")
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: root.attachmentsURL.appendingPathComponent(storageID).path))
+    }
+
     @MainActor
     func testAuthenticateRefusesAnEncryptedStoreWhoseKeyIsMissing() throws {
         let root = try makeRoot()

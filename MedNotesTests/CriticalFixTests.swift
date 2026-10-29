@@ -517,6 +517,29 @@ final class AttachmentVersionTests: XCTestCase {
         await store.close()
     }
 
+    func testOrphanSweepKeepsEveryObjectWhenNothingIsReferenced() async throws {
+        let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
+        // A database that was lost and recreated empty references nothing.
+        let store = try AppStore.testStore(dataRoot: root)
+        let kept = try await store.fileStore.store(Data("KEEP".utf8))
+        let staging = root.attachmentsURL.appendingPathComponent("\(UUID().uuidString.lowercased()).staging-x")
+        try Data("partial".utf8).write(to: staging)
+        let longAgo = Date().addingTimeInterval(-7200)
+        for url in [root.attachmentsURL.appendingPathComponent(kept), staging] {
+            try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: url.path)
+        }
+
+        let removed = await store.sweepOrphanedAttachments()
+
+        XCTAssertEqual(removed, 1, "only the half-written staging file goes")
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: root.attachmentsURL.appendingPathComponent(kept).path),
+                      "an old object must survive a database that references nothing")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        await store.close()
+    }
+
     func testOrphanSweepRemovesOnlyUnreferencedObjects() async throws {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }

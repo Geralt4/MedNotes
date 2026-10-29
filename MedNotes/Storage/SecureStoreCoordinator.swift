@@ -29,9 +29,15 @@ enum SecureStoreError: Error, LocalizedError, Equatable {
     case keyUnavailable(Int32)
     case plaintextStoreRequiresMigration
     case migrationFailed(String)
+    /// Attachments or restore points exist but the database file does not.
+    /// Opening a new empty store beside them would let the next orphan sweep
+    /// treat every attachment as unreferenced.
+    case databaseMissing
 
     var errorDescription: String? {
         switch self {
+        case .databaseMissing:
+            return String(localized: "The MedNotes database file is missing, although attachments or restore points are still stored. Nothing was changed and no new database was created. Quit MedNotes and put the mednotes.db file back from a Time Machine copy before opening it again.")
         case .locked:
             return String(localized: "MedNotes is locked.")
         case .missingKeyForExistingStore:
@@ -108,12 +114,24 @@ final class SecureStoreCoordinator: ObservableObject {
 
     /// The store directory must be inspected before unlocking: plaintext data
     /// that has no key yet forces the migration wizard, and encrypted data
-    /// with no key is a recovery case, never a fresh empty database.
+    /// with no key is a recovery case, never a fresh empty database. So is a
+    /// folder that still holds attachments or restore points but no database.
     enum Preflight: Equatable {
         case empty
         case plaintextStore
         case encryptedStore
         case encryptedWithoutKey
+        case databaseMissing
+    }
+
+    /// Whether the folder holds data that only a database can account for: an
+    /// encrypted attachment object, or a restore point.
+    private nonisolated static func holdsStoredData(_ dataRoot: DataRoot) -> Bool {
+        let fm = FileManager.default
+        let attachments = (try? fm.contentsOfDirectory(atPath: dataRoot.attachmentsURL.path)) ?? []
+        if attachments.contains(where: EncryptedFileStore.isSafeStorageID) { return true }
+        let restorePoints = (try? fm.contentsOfDirectory(atPath: dataRoot.restorePointsURL.path)) ?? []
+        return restorePoints.contains { $0.hasSuffix(".mnrp") }
     }
 
     /// Classifies the store. Only encrypted data reads the key; a read that
@@ -129,7 +147,9 @@ final class SecureStoreCoordinator: ObservableObject {
         dataRoot: DataRoot, keyManager: KeyManager
     ) throws -> (preflight: Preflight, key: Data?) {
         let dbURL = dataRoot.databaseURL
-        guard FileManager.default.fileExists(atPath: dbURL.path) else { return (.empty, nil) }
+        guard FileManager.default.fileExists(atPath: dbURL.path) else {
+            return (holdsStoredData(dataRoot) ? .databaseMissing : .empty, nil)
+        }
         if SQLiteHeaderInspection.isPlaintextSQLite(at: dbURL) { return (.plaintextStore, nil) }
         guard case .present(let key) = try keyManager.lookUpRootKey() else {
             return (.encryptedWithoutKey, nil)
@@ -160,6 +180,14 @@ final class SecureStoreCoordinator: ObservableObject {
                 state = .failed(message)
                 lastError = message
                 throw SecureStoreError.missingKeyForExistingStore
+
+            case .databaseMissing:
+                // No key is created and no database is opened: the files that
+                // are left stay exactly as they are.
+                let message = SecureStoreError.databaseMissing.localizedDescription
+                state = .failed(message)
+                lastError = message
+                throw SecureStoreError.databaseMissing
 
             case .encryptedStore:
                 guard let key else { throw SecureStoreError.missingKeyForExistingStore }
