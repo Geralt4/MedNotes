@@ -52,91 +52,14 @@ enum WikiLinkParser {
 
     static func scan(_ text: String) -> Scan {
         let units = Array(text.utf16)
-        let n = units.count
-        guard n > 0 else { return Scan() }
+        guard !units.isEmpty else { return Scan() }
         let ns = text as NSString
 
         // A ``` line inside the front matter is a value, not a fence; fences
         // are looked for in the body only.
         let bodyStart = FrontMatter.properties(in: ns).map { NSMaxRange($0.range) } ?? 0
-        let fences = fenceRanges(units, ns, from: bodyStart)
-        var protected = fences
-        var links: [ParsedLink] = []
-        // A search that found no closer once will find none later in the same
-        // stretch, so a text full of unclosed openers is still read in linear
-        // time (a hostile note took seconds without this).
-        let fenceStarts = Set(fences.map(\.location))
-        var backtickFailedUntil: [Int: Int] = [:]
-        var noCommentCloser = false
-        var noPercentCloser = false
-        var fenceIndex = 0
-        // The index of the last character a backslash escaped.
-        var escaped = -1
-        var i = 0
-
-        while i < n {
-            while fenceIndex < fences.count, NSMaxRange(fences[fenceIndex]) <= i { fenceIndex += 1 }
-            if fenceIndex < fences.count, fences[fenceIndex].location <= i {
-                i = NSMaxRange(fences[fenceIndex])
-                continue
-            }
-            switch units[i] {
-            case ASCII.backslash:
-                if i + 1 < n, ASCII.isPunctuation(units[i + 1]) {
-                    escaped = i + 1
-                    i += 2
-                } else {
-                    i += 1
-                }
-            case ASCII.backtick:
-                var run = 0
-                while i + run < n, units[i + run] == ASCII.backtick { run += 1 }
-                if let end = closingBackticks(
-                    units, from: i + run, length: run, fenceStarts: fenceStarts, failedUntil: &backtickFailedUntil) {
-                    protected.append(NSRange(location: i, length: end - i))
-                    i = end
-                } else {
-                    i += run
-                }
-            case ASCII.percent:
-                if i + 1 < n, units[i + 1] == ASCII.percent, !noPercentCloser {
-                    if let end = units.find([ASCII.percent, ASCII.percent], from: i + 2) {
-                        protected.append(NSRange(location: i, length: end + 2 - i))
-                        i = end + 2
-                    } else {
-                        noPercentCloser = true
-                        i += 1
-                    }
-                } else {
-                    i += 1
-                }
-            case ASCII.lessThan:
-                if !noCommentCloser, units.hasPrefix([ASCII.lessThan, ASCII.exclamation, ASCII.dash, ASCII.dash], at: i) {
-                    if let end = units.find([ASCII.dash, ASCII.dash, ASCII.greaterThan], from: i + 4) {
-                        protected.append(NSRange(location: i, length: end + 3 - i))
-                        i = end + 3
-                    } else {
-                        noCommentCloser = true
-                        i += 1
-                    }
-                } else {
-                    i += 1
-                }
-            case ASCII.openBracket:
-                guard i + 1 < n, units[i + 1] == ASCII.openBracket,
-                      let parsed = parseLink(units, ns, at: i, escapedIndex: escaped) else {
-                    i += 1
-                    continue
-                }
-                links.append(parsed.link)
-                i = parsed.end
-            default:
-                i += 1
-            }
-        }
-
-        protected.sort { $0.location < $1.location }
-        return Scan(links: links, protectedRanges: protected)
+        var scanner = Scanner(units: units, ns: ns, fences: fenceRanges(units, ns, from: bodyStart))
+        return scanner.run()
     }
 
     /// The fenced code blocks of a note's body (front matter excluded) exactly
@@ -160,6 +83,114 @@ enum WikiLinkParser {
         return folded
             .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
             .joined(separator: " ")
+    }
+
+    // MARK: - Scanner
+
+    /// Walks the text once, left to right. Fenced code is jumped over; at every
+    /// other character the matching `skip...` or `readLink` function looks for
+    /// a code span, a comment or a link and returns where to go on.
+    private struct Scanner {
+        let units: [UInt16]
+        let ns: NSString
+        let fences: [NSRange]
+        let fenceStarts: Set<Int>
+        /// Code and comments found so far, fences included.
+        var protectedRanges: [NSRange]
+        var links: [ParsedLink] = []
+        /// The index of the last character a backslash escaped (`\!` is not an embed marker).
+        var escaped = -1
+
+        // A search that found no closer once will find none later in the same
+        // stretch, so a text full of unclosed openers is still read in linear
+        // time (a hostile note took seconds without this).
+        /// Code-span run length -> where the failed search stopped.
+        var backtickSearchFailedUntil: [Int: Int] = [:]
+        var noPercentCloser = false
+        var noHTMLCloser = false
+
+        static let percentMarks: [UInt16] = [ASCII.percent, ASCII.percent]
+        static let htmlOpen = Array("<!--".utf16)
+        static let htmlClose = Array("-->".utf16)
+
+        init(units: [UInt16], ns: NSString, fences: [NSRange]) {
+            self.units = units
+            self.ns = ns
+            self.fences = fences
+            self.fenceStarts = Set(fences.map(\.location))
+            self.protectedRanges = fences
+        }
+
+        mutating func run() -> Scan {
+            var fenceIndex = 0
+            var i = 0
+            while i < units.count {
+                // Fenced code is jumped over whole.
+                while fenceIndex < fences.count, NSMaxRange(fences[fenceIndex]) <= i { fenceIndex += 1 }
+                if fenceIndex < fences.count, fences[fenceIndex].location <= i {
+                    i = NSMaxRange(fences[fenceIndex])
+                    continue
+                }
+                switch units[i] {
+                case ASCII.backslash: i = skipEscape(at: i)
+                case ASCII.backtick: i = skipCodeSpan(at: i)
+                case ASCII.percent: i = skipPercentComment(at: i)
+                case ASCII.lessThan: i = skipHTMLComment(at: i)
+                case ASCII.openBracket: i = readLink(at: i)
+                default: i += 1
+                }
+            }
+            protectedRanges.sort { $0.location < $1.location }
+            return Scan(links: links, protectedRanges: protectedRanges)
+        }
+
+        /// A backslash before punctuation escapes it.
+        mutating func skipEscape(at i: Int) -> Int {
+            guard i + 1 < units.count, ASCII.isPunctuation(units[i + 1]) else { return i + 1 }
+            escaped = i + 1
+            return i + 2
+        }
+
+        /// A run of backticks and the run of the same length that closes it.
+        mutating func skipCodeSpan(at i: Int) -> Int {
+            var run = 0
+            while i + run < units.count, units[i + run] == ASCII.backtick { run += 1 }
+            guard let end = WikiLinkParser.closingBackticks(
+                units, from: i + run, length: run, fenceStarts: fenceStarts,
+                failedUntil: &backtickSearchFailedUntil) else { return i + run }
+            protectedRanges.append(NSRange(location: i, length: end - i))
+            return end
+        }
+
+        /// `%% ... %%`; an unterminated `%%` is not a comment.
+        mutating func skipPercentComment(at i: Int) -> Int {
+            guard !noPercentCloser, units.hasPrefix(Scanner.percentMarks, at: i) else { return i + 1 }
+            guard let end = units.find(Scanner.percentMarks, from: i + 2) else {
+                noPercentCloser = true
+                return i + 1
+            }
+            protectedRanges.append(NSRange(location: i, length: end + 2 - i))
+            return end + 2
+        }
+
+        /// `<!-- ... -->`; an unterminated `<!--` is not a comment.
+        mutating func skipHTMLComment(at i: Int) -> Int {
+            guard !noHTMLCloser, units.hasPrefix(Scanner.htmlOpen, at: i) else { return i + 1 }
+            guard let end = units.find(Scanner.htmlClose, from: i + Scanner.htmlOpen.count) else {
+                noHTMLCloser = true
+                return i + 1
+            }
+            protectedRanges.append(NSRange(location: i, length: end + Scanner.htmlClose.count - i))
+            return end + Scanner.htmlClose.count
+        }
+
+        /// `[[...]]`; when it is not a link the `[` is ordinary text.
+        mutating func readLink(at i: Int) -> Int {
+            guard i + 1 < units.count, units[i + 1] == ASCII.openBracket,
+                  let parsed = WikiLinkParser.parseLink(units, ns, at: i, escapedIndex: escaped) else { return i + 1 }
+            links.append(parsed.link)
+            return parsed.end
+        }
     }
 
     // MARK: - Links
@@ -191,33 +222,8 @@ enum WikiLinkParser {
         let whole = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !whole.isEmpty else { return nil }
 
-        let chars = Array(raw.utf16)
-        var targetPart = raw
-        var alias: String?
-        if let bar = chars.firstIndex(of: ASCII.pipe) {
-            let escapedBar = bar > 0 && chars[bar - 1] == ASCII.backslash
-            let head = Array(chars[0..<(escapedBar ? bar - 1 : bar)])
-            targetPart = String(decoding: head, as: UTF16.self)
-            let tail = String(decoding: Array(chars[(bar + 1)...]), as: UTF16.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            alias = tail.isEmpty ? nil : tail
-        }
-
-        var heading: String?
-        var blockID: String?
-        var target = targetPart
-        if let hash = targetPart.firstIndex(of: "#") {
-            target = String(targetPart[..<hash])
-            let after = String(targetPart[targetPart.index(after: hash)...])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if after.hasPrefix("^") {
-                let id = String(after.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
-                blockID = id.isEmpty ? nil : id
-            } else if !after.isEmpty {
-                heading = after
-            }
-        }
-        target = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        let (targetPart, alias) = splitAlias(raw)
+        let (target, heading, blockID) = splitHeading(targetPart)
         guard !target.isEmpty || heading != nil || blockID != nil else { return nil }
 
         let isEmbed = start > 0 && units[start - 1] == ASCII.exclamation && escapedIndex != start - 1
@@ -232,6 +238,37 @@ enum WikiLinkParser {
             blockID: blockID,
             alias: alias)
         return (link, close + 2)
+    }
+
+    /// Splits `Note#Heading|alias` at the first `|`. A backslash in front of it
+    /// (the way a table cell needs it written) is dropped. An empty alias is none.
+    private static func splitAlias(_ raw: String) -> (targetPart: String, alias: String?) {
+        let chars = Array(raw.utf16)
+        guard let bar = chars.firstIndex(of: ASCII.pipe) else { return (raw, nil) }
+        let escapedBar = bar > 0 && chars[bar - 1] == ASCII.backslash
+        let head = String(decoding: chars[0..<(escapedBar ? bar - 1 : bar)], as: UTF16.self)
+        let tail = String(decoding: chars[(bar + 1)...], as: UTF16.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (head, tail.isEmpty ? nil : tail)
+    }
+
+    /// Splits `Note#Heading` or `Note#^block` at the first `#`.
+    private static func splitHeading(_ targetPart: String) -> (target: String, heading: String?, blockID: String?) {
+        var heading: String?
+        var blockID: String?
+        var target = targetPart
+        if let hash = targetPart.firstIndex(of: "#") {
+            target = String(targetPart[..<hash])
+            let after = String(targetPart[targetPart.index(after: hash)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if after.hasPrefix("^") {
+                let id = String(after.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+                blockID = id.isEmpty ? nil : id
+            } else if !after.isEmpty {
+                heading = after
+            }
+        }
+        return (target.trimmingCharacters(in: .whitespacesAndNewlines), heading, blockID)
     }
 
     // MARK: - Code and comments
