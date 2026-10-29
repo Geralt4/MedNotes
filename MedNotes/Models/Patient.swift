@@ -304,6 +304,16 @@ struct Medication: Codable, Hashable, Sendable, Identifiable {
     var isActive: Bool
     var reasonForStopping: String?
 
+    /// The end date has passed, whatever the stored flag says.
+    var hasLapsed: Bool {
+        guard let end = endDate else { return false }
+        return dateIsBeforeToday(end)
+    }
+
+    /// Flagged stopped, or past its end date. What the record shows; the stored
+    /// `isActive` is only ever changed by the user (`stop`, `resume`).
+    var isStopped: Bool { !isActive || hasLapsed }
+
     var isCurrentlyActive: Bool {
         guard isActive else { return false }
         if let end = endDate, dateIsBeforeToday(end) { return false }
@@ -337,10 +347,11 @@ struct Medication: Codable, Hashable, Sendable, Identifiable {
         endDate = try? c.decodeIfPresent(Date.self, forKey: .endDate)
         prescribedBy = decodeLossyString(c, forKey: .prescribedBy) ?? ""
         notes = decodeLossyString(c, forKey: .notes) ?? ""
+        // Stored as it was written. A regimen whose end date has passed is
+        // shown as stopped (`isStopped`); rewriting the flag here would save it
+        // back as stopped, and an end date that is later extended would leave
+        // the medication stopped.
         isActive = decodeLossyBool(c, forKey: .isActive) ?? true
-        if let end = endDate, dateIsBeforeToday(end) {
-            isActive = false
-        }
         reasonForStopping = decodeLossyString(c, forKey: .reasonForStopping)
     }
 }
@@ -517,12 +528,10 @@ struct HospitalMedication: Codable, Hashable, Sendable, Identifiable {
         sideEffects = decodeLossyStrings(c, forKey: .sideEffects)
         isActive = decodeLossyBool(c, forKey: .isActive) ?? true
         discontinued = decodeLossyBool(c, forKey: .discontinued) ?? false
+        // A course whose end date has passed is finished, not discontinued: the
+        // two mean different things in the record, so the date never sets the flag.
         if discontinued {
             isActive = false
-        }
-        if let end = endDate, dateIsBeforeToday(end) {
-            isActive = false
-            discontinued = true
         }
         discontinuationReason = decodeLossyString(c, forKey: .discontinuationReason)
     }
@@ -711,13 +720,10 @@ struct Hospitalization: Codable, Hashable, Sendable, Identifiable {
         attachments = decodeLossyStrings(c, forKey: .attachments)
         status = (try? c.decodeIfPresent(HospitalizationStatus.self, forKey: .status)) ?? .admitted
         urgencyLevel = (try? c.decodeIfPresent(UrgencyLevel.self, forKey: .urgencyLevel)) ?? .routine
+        // Stored as written. Whether the patient is still in hospital is
+        // `isCurrentlyAdmitted`, which reads the discharge date; the status the
+        // user recorded is never changed by loading the record.
         isActive = decodeLossyBool(c, forKey: .isActive) ?? true
-        if dischargeDate != nil || status == .discharged {
-            isActive = false
-            if status == .admitted {
-                status = .discharged
-            }
-        }
         createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
         lastModified = (try? c.decodeIfPresent(Date.self, forKey: .lastModified)) ?? createdAt
     }

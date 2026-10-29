@@ -5288,16 +5288,6 @@
         }
       }
     },
-    "Records already in MedNotes are updated, not added twice." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Οι εγγραφές που υπάρχουν ήδη στο MedNotes ενημερώνονται, δεν προστίθενται δεύτερη φορά."
-          }
-        }
-      }
-    },
     "Records stay inside the app's container, which FileVault encrypts with the rest of the disk. Backups made with File › Back Up… are encrypted with the passphrase you enter; nothing readable leaves the container without it." : {
       "localizations" : {
         "el" : {
@@ -8218,6 +8208,246 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε επαναφορά."
+          }
+        }
+      }
+    },
+    "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το σημείο επαναφοράς δημιουργήθηκε από παλαιότερη έκδοση και δεν έχει μετατραπεί ακόμη. Κλειδώστε και ξεκλειδώστε το MedNotes και δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "An interrupted restore could not be undone automatically. Your original data is in the folder “%@” inside the MedNotes data folder, and nothing was deleted. %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μια διακοπείσα επαναφορά δεν μπόρεσε να αναιρεθεί αυτόματα. Τα αρχικά σας δεδομένα βρίσκονται στον φάκελο «%@» μέσα στον φάκελο δεδομένων του MedNotes και δεν διαγράφηκε τίποτα. %@"
+          }
+        }
+      }
+    },
+    "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε ενώ ολοκληρωνόταν η επαναφορά. Το αντίγραφο ασφαλείας επαναφέρθηκε· ξεκλειδώστε και ελέγξτε ότι οι εγγραφές σας είναι όπως τις περιμένετε."
+          }
+        }
+      }
+    },
+    "Restore from this restore point?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αυτό το σημείο επαναφοράς;"
+          }
+        }
+      }
+    },
+    "Your current data is replaced by what this restore point holds. A restore point of the current data is made first." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα τρέχοντα δεδομένα σας αντικαθίστανται από όσα περιέχει αυτό το σημείο επαναφοράς. Πρώτα δημιουργείται ένα σημείο επαναφοράς των τρεχόντων δεδομένων."
+          }
+        }
+      }
+    },
+    "Replace the database versions with the mirror versions?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατάσταση των εκδόσεων της βάσης δεδομένων με τις εκδόσεις του αντικατοπτρισμού;"
+          }
+        }
+      }
+    },
+    "Replace" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατάσταση"
+          }
+        }
+      }
+    },
+    "%lld note(s) in the database are overwritten by the older text in the mirror. A restore point of the current data is made first." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις της βάσης δεδομένων που αντικαθίστανται από το παλαιότερο κείμενο του αντικατοπτρισμού: %lld. Πρώτα δημιουργείται ένα σημείο επαναφοράς των τρεχόντων δεδομένων."
+          }
+        }
+      }
+    },
+    "Restore from this restore point" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αυτό το σημείο επαναφοράς"
+          }
+        }
+      }
+    },
+    "Pre-mirror snapshot" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στιγμιότυπο πριν από την αντικατάσταση από τον αντικατοπτρισμό"
+          }
+        }
+      }
+    },
+    "Everything in this folder is already in MedNotes. Nothing needs importing." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ό,τι περιέχει αυτός ο φάκελος υπάρχει ήδη στο MedNotes. Δεν χρειάζεται εισαγωγή."
+          }
+        }
+      }
+    },
+    "Records already in MedNotes are left as they are, not overwritten." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι εγγραφές που υπάρχουν ήδη στο MedNotes μένουν όπως είναι και δεν αντικαθίστανται."
+          }
+        }
+      }
+    },
+    "%lld already present, left as they are" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ήδη υπάρχουν και έμειναν ως έχουν: %lld"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση"
+          }
+        }
+      }
+    },
+    "The patient record is updated when you save, or when you leave it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εγγραφή του ασθενούς ενημερώνεται όταν την αποθηκεύσετε ή όταν την αφήσετε."
+          }
+        }
+      }
+    },
+    "Remove “%@”?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση «%@»;"
+          }
+        }
+      }
+    },
+    "%lld patient(s) have the same AMKA as one already stored and were left out. Their notes, todos and events are imported without a patient." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ασθενείς με ίδιο ΑΜΚΑ με αποθηκευμένο ασθενή που παραλείφθηκαν: %lld. Οι σημειώσεις, οι εκκρεμότητες και τα συμβάντα τους εισάγονται χωρίς ασθενή."
+          }
+        }
+      }
+    },
+    "Add or clear it first" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθέστε το ή καθαρίστε το πρώτα"
+          }
+        }
+      }
+    },
+    "“%@” is typed in an Add row but has not been added. Press Add, or clear the field, then save." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το «%@» έχει πληκτρολογηθεί σε γραμμή προσθήκης αλλά δεν έχει προστεθεί. Πατήστε Προσθήκη ή καθαρίστε το πεδίο και μετά αποθηκεύστε."
+          }
+        }
+      }
+    },
+    "%lld deleted here, left in Apple" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld διαγράφηκαν εδώ και παραμένουν στο Apple"
+          }
+        }
+      }
+    },
+    "%lld backup(s) from an earlier version are in a folder that is not encrypted. Make an encrypted backup with File › Back Up…, then delete them." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφα ασφαλείας από παλαιότερη έκδοση που βρίσκονται σε φάκελο χωρίς κρυπτογράφηση: %lld. Δημιουργήστε κρυπτογραφημένο αντίγραφο με Αρχείο › Δημιουργία αντιγράφου ασφαλείας… και μετά διαγράψτε τα."
+          }
+        }
+      }
+    },
+    "Show Old Backups in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση παλαιών αντιγράφων στο Finder"
+          }
+        }
+      }
+    },
+    "Old format: readable by anyone with the file until it is converted. Lock and unlock to convert it, or delete it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παλαιά μορφή: μπορεί να διαβαστεί από όποιον έχει το αρχείο, μέχρι να μετατραπεί. Κλειδώστε και ξεκλειδώστε για να μετατραπεί, ή διαγράψτε το."
+          }
+        }
+      }
+    },
+    "The properties at the top of this note can't be edited here. Edit them in the text." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι ιδιότητες στην αρχή αυτής της σημείωσης δεν μπορούν να επεξεργαστούν εδώ. Επεξεργαστείτε τες μέσα στο κείμενο."
           }
         }
       }

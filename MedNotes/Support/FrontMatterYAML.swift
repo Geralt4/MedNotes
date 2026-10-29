@@ -542,8 +542,31 @@ enum FrontMatterYAML {
         if s.contains(": ") || s.contains(" #") || s.hasSuffix(":") { return true }
         if s.unicodeScalars.contains(where: isLineOrControl) { return true }
         if ["yes", "no", "on", "off", "y", "n"].contains(s.lowercased()) { return true }
+        if readsAsNonStringElsewhere(s) { return true }
         return classifyPlain(s) != .text(s)
     }
+
+    /// Whether another YAML parser would not read the plain text `s` as a string:
+    /// a number in any of YAML's spellings (a leading zero, a sign, a trailing
+    /// zero, an exponent, hex, octal, binary, `_` separators, `.inf`), a
+    /// colon-separated time such as 12:30, or `~`, `null`, `true`, `false`. This
+    /// app reads such a value back as the text it was, so it does not need the
+    /// quotes, but the notes leave the app as Markdown files, and an AMKA written
+    /// as 01018012345 is the integer 1018012345 to anything else.
+    static func readsAsNonStringElsewhere(_ s: String) -> Bool {
+        let lower = s.lowercased()
+        if ["~", "null", "true", "false"].contains(lower) { return true }
+        let range = NSRange(location: 0, length: (s as NSString).length)
+        return nonStringPatterns.contains { $0.firstMatch(in: s, range: range) != nil }
+    }
+
+    private static let nonStringPatterns: [NSRegularExpression] = [
+        #"^[-+]?\d[\d_]*(\.\d*)?([eE][-+]?\d+)?$"#,        // 1018, 01018, 1.50, 1e5, 1_000, +3021
+        #"^[-+]?\.\d+([eE][-+]?\d+)?$"#,                    // .5
+        #"^[-+]?0x[0-9a-fA-F_]+$"#, #"^[-+]?0o[0-7_]+$"#, #"^[-+]?0b[01_]+$"#,
+        #"^[-+]?\.(inf|Inf|INF)$"#, #"^\.(nan|NaN|NAN)$"#,
+        #"^[-+]?\d[\d_]*(:[0-5]?\d)+(\.\d*)?$"#            // 12:30, 1:02:03
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
 
     static func quoted(_ s: String) -> String {
         var out = "\""

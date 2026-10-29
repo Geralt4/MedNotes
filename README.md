@@ -15,7 +15,9 @@ Reminders require an explicit destination before any write.
 
 - Models decode the original JSON store byte-for-byte (fixtures taken from real data)
 - SQLCipher store with all V1.1 bugs fixed; key from the Keychain, no plaintext DB
-- One-shot JSON importer (idempotent, tested against real fixtures)
+- JSON importer that adds only what the store lacks: records whose id (or a patient's AMKA)
+  is already stored are left as they are, so running it again never reverts later work
+  (tested against real fixtures)
 - Services: patients, notes, todos, calendar events, audit, backups
 - `DataRoot` (Application Support layout) + `SecureStoreCoordinator` (lock/unlock/migrate)
 - Portable backups (`mednotesbackup` v2) and encrypted restore points; restore

@@ -119,13 +119,23 @@ extension AppSession {
         guard let store else { return }
         // Snapshot before deletion so a linked Apple Calendar copy can go too.
         do {
-            if let snapshot = try await store.events.load(id: id), snapshot.ekEventIdentifier != nil {
-                guard appleCalendar.state == .granted,
-                      let destination = try await store.destinations.destination(for: .calendar),
-                      SyncDestinationCore.mayWrite(destination) else {
-                    throw LinkedDeletionError.calendar
+            if let snapshot = try await store.events.load(id: id) {
+                // A lookup that fails must not stop an unlinked row being deleted.
+                let destination = try? await store.destinations.destination(for: .calendar)
+                let canReach = appleCalendar.state == .granted && SyncDestinationCore.mayWrite(destination)
+                if snapshot.ekEventIdentifier != nil {
+                    // Linked: the delete waits until the Apple copy can be removed.
+                    guard canReach, let destination else { throw LinkedDeletionError.calendar }
+                    try await appleCalendar.deleteRemote(snapshot, from: destination)
+                } else if canReach, let destination, !snapshot.isUntouchedNewRecord {
+                    // No identifier stored (a push's result was never saved), but
+                    // an Apple copy may exist under its marker. Best effort: the
+                    // tombstone written by the delete keeps it from coming back
+                    // either way, and a delete that works today must still work.
+                    // An untouched placeholder is never pushed, so it has no copy
+                    // to look for.
+                    try? await appleCalendar.deleteRemote(snapshot, from: destination)
                 }
-                try await appleCalendar.deleteRemote(snapshot, from: destination)
             }
             if discarding {
                 try await store.events.discard(id: id)

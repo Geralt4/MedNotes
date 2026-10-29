@@ -28,6 +28,10 @@ actor Database {
     /// `reinstateDatabaseFile` can rebuild the connection without another
     /// Keychain round-trip.
     private let databaseKey: Data?
+    /// `close()` was called. A restore that is still moving files then puts them
+    /// where they belong but does not reopen the store: the session that owned
+    /// it has locked, and a connection opened now would outlive the lock.
+    private var isClosed = false
     private var encoder: JSONEncoder {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .custom { date, enc in
@@ -95,6 +99,7 @@ actor Database {
     func markSearchIndexRebuilt() { searchIndexNeedsRebuild = false }
 
     func close() {
+        isClosed = true
         transactionDepth = 0
         conn.close()
     }
@@ -204,6 +209,10 @@ actor Database {
             if let sourceKey, let targetKey, sourceKey != targetKey {
                 try Self.rekey(path: dest, from: sourceKey, to: targetKey)
             }
+            // Closed meanwhile (a lock): the swap holds, but nothing reopens it,
+            // and the checks that follow fail on the closed connection, which
+            // rolls the install back.
+            guard !isClosed else { return }
             conn = try Self.open(path: dest, key: targetKey)
             try Self.configure(conn)
             searchIndexNeedsRebuild = try Self.migrate(conn)
@@ -227,16 +236,20 @@ actor Database {
         let kept = folder.appendingPathComponent("mednotes.db")
         guard fm.fileExists(atPath: kept.path) else {
             // Nothing was moved aside yet: the live file is still the original.
+            guard !isClosed else { return }
             conn = try Self.open(path: dest, key: databaseKey)
             try Self.configure(conn)
             return
         }
-        for suffix in ["", "-wal", "-shm"] {
+        // A `-journal` is what an interrupted rekey leaves; replayed into the
+        // original it would damage it.
+        for suffix in ["", "-wal", "-shm", "-journal"] {
             try? fm.removeItem(atPath: dest + suffix)
         }
         for suffix in ["", "-wal", "-shm"] where fm.fileExists(atPath: kept.path + suffix) {
             try fm.moveItem(atPath: kept.path + suffix, toPath: dest + suffix)
         }
+        guard !isClosed else { return }
         conn = try Self.open(path: dest, key: databaseKey)
         try Self.configure(conn)
     }
@@ -322,6 +335,7 @@ actor Database {
         try migrateV5(conn)
         try migrateV6(conn)
         try migrateV7(conn)
+        try migrateV9(conn)
         // The plaintext store being read for a migration keeps its full-text
         // triggers and indexes as they are (they are never searched).
         var foldingFailed = false
@@ -397,6 +411,21 @@ actor Database {
             "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
         marker.bind(1, "7.0-app-state")
         marker.bind(2, "app_state: small named values kept by the app")
+        marker.bind(3, 0.0)
+        _ = try marker.step()
+        marker.finalize()
+    }
+
+    /// Schema v9: the `sync_tombstones` table. Additive: a v8 database opens
+    /// unchanged.
+    private nonisolated static func migrateV9(_ conn: SQLConnection) throws {
+        for statement in Schema.v9 {
+            try conn.exec(statement)
+        }
+        let marker = try conn.prepare(
+            "INSERT OR IGNORE INTO migrations(version, description, execution_time) VALUES (?, ?, ?)")
+        marker.bind(1, "9.0-sync-tombstones")
+        marker.bind(2, "sync_tombstones: records deleted here whose Apple copy may remain")
         marker.bind(3, 0.0)
         _ = try marker.step()
         marker.finalize()
@@ -876,6 +905,41 @@ actor Database {
         s.bind(2, fileId.uuidString)
         guard try s.step(), let raw = s.columnText(0), !raw.isEmpty else { return nil }
         return raw
+    }
+
+    /// The ids of the records already stored, and each patient's normalised AMKA.
+    /// What the legacy import checks a batch against, so it adds what is missing
+    /// and leaves everything that is there exactly as it is.
+    struct StoredRecordKeys: Sendable {
+        var patientIDs: Set<UUID> = []
+        /// Normalised AMKA of every patient that has one, to that patient's id.
+        var patientIDByAMKA: [String: UUID] = [:]
+        var noteIDs: Set<UUID> = []
+        var todoIDs: Set<UUID> = []
+        var eventIDs: Set<UUID> = []
+    }
+
+    func storedRecordKeys() throws -> StoredRecordKeys {
+        func ids(_ table: String) throws -> Set<UUID> {
+            let s = try conn.prepare("SELECT id FROM \(table)")
+            var out = Set<UUID>()
+            while try s.step() {
+                if let raw = s.columnText(0), let id = UUID(uuidString: raw) { out.insert(id) }
+            }
+            return out
+        }
+        var keys = StoredRecordKeys()
+        let patients = try conn.prepare("SELECT id, amka FROM patients")
+        while try patients.step() {
+            guard let raw = patients.columnText(0), let id = UUID(uuidString: raw) else { continue }
+            keys.patientIDs.insert(id)
+            let amka = AMKA.normalized(patients.columnText(1) ?? "")
+            if !amka.isEmpty { keys.patientIDByAMKA[amka] = id }
+        }
+        keys.noteIDs = try ids("notes")
+        keys.todoIDs = try ids("todo_items")
+        keys.eventIDs = try ids("calendar_events")
+        return keys
     }
 
     /// Every storage ID any attachment row points at, lowercased.
@@ -1540,9 +1604,12 @@ actor Database {
     }
 
     func deleteTodo(id: UUID) throws {
-        let s = try conn.prepare("DELETE FROM todo_items WHERE id = ?")
-        s.bind(1, id.uuidString)
-        _ = try s.step()
+        try transaction {
+            try addSyncTombstone(domain: Schema.tombstoneRemindersDomain, id: id)
+            let s = try conn.prepare("DELETE FROM todo_items WHERE id = ?")
+            s.bind(1, id.uuidString)
+            _ = try s.step()
+        }
     }
 
     func toggleTodoCompleted(id: UUID) throws {
@@ -1682,9 +1749,37 @@ actor Database {
     }
 
     func deleteEvent(id: UUID) throws {
-        let s = try conn.prepare("DELETE FROM calendar_events WHERE id = ?")
-        s.bind(1, id.uuidString)
+        try transaction {
+            try addSyncTombstone(domain: Schema.tombstoneCalendarDomain, id: id)
+            let s = try conn.prepare("DELETE FROM calendar_events WHERE id = ?")
+            s.bind(1, id.uuidString)
+            _ = try s.step()
+        }
+    }
+
+    /// Notes that the record `id` was deleted here, for every delete: a push
+    /// whose result was never stored leaves a row with no Apple identifier and
+    /// no sign of having synced, yet an Apple object made from it exists. The
+    /// table is a few bytes per deleted record.
+    private func addSyncTombstone(domain: String, id: UUID) throws {
+        let s = try conn.prepare(
+            "INSERT OR REPLACE INTO sync_tombstones(domain, local_id, deleted_at) VALUES (?, ?, ?)")
+        s.bind(1, domain)
+        s.bind(2, id.uuidString)
+        s.bind(3, LenientDate.encodeSQL(Date()))
         _ = try s.step()
+        s.finalize()
+    }
+
+    /// The records of `domain` deleted here; see `Schema.v9`.
+    func syncTombstones(domain: String) throws -> Set<UUID> {
+        let s = try conn.prepare("SELECT local_id FROM sync_tombstones WHERE domain = ?")
+        s.bind(1, domain)
+        var out = Set<UUID>()
+        while try s.step() {
+            if let raw = s.columnText(0), let id = UUID(uuidString: raw) { out.insert(id) }
+        }
+        return out
     }
 
     func patientExists(id: UUID) throws -> Bool {

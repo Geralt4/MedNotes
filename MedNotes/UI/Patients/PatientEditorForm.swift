@@ -23,6 +23,8 @@ struct PatientEditorForm: View {
     var duplicateAMKA: (String) -> Patient? = { _ in nil }
     /// Medical rows shown disclosed from the start; for review renders only.
     var expandedMedicalRows: Set<UUID> = []
+    /// Text in the medical add rows, when the owner wants to add it on leaving.
+    var pendingEntries: Binding<PendingMedicalEntries>?
 
     @FocusState private var isFirstNameFocused: Bool
 
@@ -62,7 +64,8 @@ struct PatientEditorForm: View {
             } header: {
                 DetailSectionHeader(title: "Medical", systemImage: "heart.text.square")
             }
-            PatientMedicalSections(medical: $draft.medical, initiallyExpanded: expandedMedicalRows)
+            PatientMedicalSections(medical: $draft.medical, initiallyExpanded: expandedMedicalRows,
+                                   pending: pendingEntries)
             Section { footer }
                 .listRowBackground(Color.clear)
         }

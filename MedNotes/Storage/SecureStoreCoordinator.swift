@@ -131,7 +131,9 @@ final class SecureStoreCoordinator: ObservableObject {
         let attachments = (try? fm.contentsOfDirectory(atPath: dataRoot.attachmentsURL.path)) ?? []
         if attachments.contains(where: EncryptedFileStore.isSafeStorageID) { return true }
         let restorePoints = (try? fm.contentsOfDirectory(atPath: dataRoot.restorePointsURL.path)) ?? []
-        return restorePoints.contains { $0.hasSuffix(".mnrp") }
+        if restorePoints.contains(where: { $0.hasSuffix(".mnrp") }) { return true }
+        // The originals of a restore that was cut off and could not be undone.
+        return !RestoreRecovery.rollbackFolders(in: dataRoot.rootURL).isEmpty
     }
 
     /// Classifies the store. Only encrypted data reads the key; a read that

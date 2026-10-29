@@ -28,6 +28,8 @@ struct MarkdownPreview: View {
         case heading(level: Int, text: String)
         case paragraph(String)
         case bullet(text: String)
+        /// `1. text` or `1) text`. `number` is as written; it is shown, not renumbered.
+        case numbered(number: String, text: String)
         case checklist(text: String, checked: Bool)
         case codeLine(String)
         case divider
@@ -38,7 +40,8 @@ struct MarkdownPreview: View {
     static func parseBlocks(_ source: String) -> [Block] {
         var out: [Block] = []
         var paragraph: [String] = []
-        var inFence = false
+        /// The open fence's character and length, while one is open.
+        var fence: (character: Character, length: Int)?
         var body = source
         // Front matter, as the styler and the list read it (`FrontMatter`): a
         // `---` first line through the next `---` line, when what is between
@@ -66,14 +69,19 @@ struct MarkdownPreview: View {
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if trimmed.hasPrefix("```") {
-                inFence.toggle()
-                flushParagraph()
+            if let open = fence {
+                if isFenceCloser(trimmed, of: open) {
+                    fence = nil
+                    flushParagraph()
+                } else {
+                    flushParagraph()
+                    out.append(.codeLine(line))
+                }
                 continue
             }
-            if inFence {
+            if let opened = fenceOpener(trimmed) {
+                fence = opened
                 flushParagraph()
-                out.append(.codeLine(line))
                 continue
             }
             if trimmed.isEmpty {
@@ -101,15 +109,49 @@ struct MarkdownPreview: View {
                 out.append(.checklist(text: trailing(trimmed, marker: "[x]"), checked: true))
                 continue
             }
-            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
                 flushParagraph()
                 out.append(.bullet(text: String(trimmed.dropFirst(2))))
+                continue
+            }
+            if let item = numberedItem(trimmed) {
+                flushParagraph()
+                out.append(.numbered(number: item.number, text: item.text))
                 continue
             }
             paragraph.append(trimmed)
         }
         flushParagraph()
         return out
+    }
+
+    /// A line that opens a code fence: three or more backticks or tildes, then an
+    /// info string. For backticks the info string may not contain one, so a line
+    /// such as "```ls``` output was normal" is text, not a fence that hides it and
+    /// turns everything after it into code.
+    static func fenceOpener(_ trimmed: String) -> (character: Character, length: Int)? {
+        guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
+        let run = trimmed.prefix(while: { $0 == first })
+        guard run.count >= 3 else { return nil }
+        if first == "`", trimmed.dropFirst(run.count).contains("`") { return nil }
+        return (first, run.count)
+    }
+
+    /// A line that closes `open`: the same character, at least as many of it,
+    /// and nothing else.
+    static func isFenceCloser(_ trimmed: String, of open: (character: Character, length: Int)) -> Bool {
+        trimmed.count >= open.length && trimmed.allSatisfy { $0 == open.character }
+    }
+
+    /// `1. text` or `1) text`: up to nine digits, a `.` or `)`, a space.
+    static func numberedItem(_ trimmed: String) -> (number: String, text: String)? {
+        let digits = trimmed.prefix(while: { $0.isASCII && $0.isNumber })
+        guard (1...9).contains(digits.count) else { return nil }
+        let rest = trimmed.dropFirst(digits.count)
+        guard let marker = rest.first, marker == "." || marker == ")" else { return nil }
+        let afterMarker = rest.dropFirst()
+        guard afterMarker.first == " " else { return nil }
+        return (String(digits) + String(marker), afterMarker.trimmingCharacters(in: .whitespaces))
     }
 
     private static func headingLevel(of line: String) -> (level: Int, text: String)? {
@@ -154,6 +196,15 @@ struct MarkdownPreview: View {
         case .bullet(let text):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Circle().frame(width: 4, height: 4).foregroundStyle(.secondary)
+                Text(inline(text))
+                    .font(.body)
+            }
+            .padding(.leading, 14)
+        case .numbered(let number, let text):
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(verbatim: number)
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 Text(inline(text))
                     .font(.body)
             }

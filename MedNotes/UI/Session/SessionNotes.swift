@@ -78,6 +78,16 @@ extension AppSession {
         }
         do {
             try await store.notes.save(note)
+            await newNoteDidSave()
+            // A lock that landed during the save has already torn the session
+            // down: opening an editor now would mount one under the curtain,
+            // and nothing would ever discard the untouched row just saved.
+            guard canUseStore, self.store === store else {
+                // The store is closing, so it cannot be asked to delete the row
+                // now: it goes when the store next opens.
+                notesAbandonedAtLock.insert(note.id)
+                return
+            }
             selectedNoteId = note.id
             pendingFocusRecordId = note.id
             noteEpoch += 1
@@ -94,6 +104,26 @@ extension AppSession {
                 if !searchText.isEmpty { searchText = "" }
                 searchTask?.cancel()
             }
+            noteEpoch += 1
+            await reload()
+        }
+    }
+
+    /// Removes the untouched "New Note" rows that a lock left behind: a note
+    /// saved at the moment the session locked is never opened, so no editor will
+    /// discard it. Runs when the store opens again.
+    func discardNotesAbandonedAtLock() async {
+        let ids = notesAbandonedAtLock
+        notesAbandonedAtLock = []
+        guard let store, !ids.isEmpty else { return }
+        var removed = false
+        for id in ids {
+            guard let note = try? await store.notes.load(id: id), isUntouchedNewNote(note) else { continue }
+            try? await store.notes.discard(id: id)
+            seededNoteContent[id] = nil
+            removed = true
+        }
+        if removed {
             noteEpoch += 1
             await reload()
         }

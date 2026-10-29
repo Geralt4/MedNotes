@@ -38,7 +38,7 @@ struct ParsedLink: Equatable, Sendable {
 enum WikiLinkParser {
     /// Bump when the parsing rules change; stored link rows with an older
     /// version are derived again on the next open.
-    static let version = 2
+    static let version = 3
 
     /// A link longer than this between its brackets is stray text.
     static let maxInnerLength = 500
@@ -56,9 +56,13 @@ enum WikiLinkParser {
         let ns = text as NSString
 
         // A ``` line inside the front matter is a value, not a fence; fences
-        // are looked for in the body only.
+        // are looked for in the body only. For the same reason a backtick, a `%%` or
+        // a `<!--` there opens nothing: a lone one paired with a closer in the body
+        // and hid its links, tags and headings from the index. `[[links]]` in a
+        // value are still read.
         let bodyStart = FrontMatter.properties(in: ns).map { NSMaxRange($0.range) } ?? 0
-        var scanner = Scanner(units: units, ns: ns, fences: fenceRanges(units, ns, from: bodyStart))
+        var scanner = Scanner(units: units, ns: ns, fences: fenceRanges(units, ns, from: bodyStart),
+                              bodyStart: bodyStart)
         return scanner.run()
     }
 
@@ -95,6 +99,9 @@ enum WikiLinkParser {
         let ns: NSString
         let fences: [NSRange]
         let fenceStarts: Set<Int>
+        /// Where the note's body begins. A code span or comment cannot open
+        /// before it, in the front matter.
+        let bodyStart: Int
         /// Code and comments found so far, fences included.
         var protectedRanges: [NSRange]
         var links: [ParsedLink] = []
@@ -113,10 +120,11 @@ enum WikiLinkParser {
         static let htmlOpen = Array("<!--".utf16)
         static let htmlClose = Array("-->".utf16)
 
-        init(units: [UInt16], ns: NSString, fences: [NSRange]) {
+        init(units: [UInt16], ns: NSString, fences: [NSRange], bodyStart: Int) {
             self.units = units
             self.ns = ns
             self.fences = fences
+            self.bodyStart = bodyStart
             self.fenceStarts = Set(fences.map(\.location))
             self.protectedRanges = fences
         }
@@ -133,9 +141,9 @@ enum WikiLinkParser {
                 }
                 switch units[i] {
                 case ASCII.backslash: i = skipEscape(at: i)
-                case ASCII.backtick: i = skipCodeSpan(at: i)
-                case ASCII.percent: i = skipPercentComment(at: i)
-                case ASCII.lessThan: i = skipHTMLComment(at: i)
+                case ASCII.backtick where i >= bodyStart: i = skipCodeSpan(at: i)
+                case ASCII.percent where i >= bodyStart: i = skipPercentComment(at: i)
+                case ASCII.lessThan where i >= bodyStart: i = skipHTMLComment(at: i)
                 case ASCII.openBracket: i = readLink(at: i)
                 default: i += 1
                 }
