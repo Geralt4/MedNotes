@@ -12,6 +12,17 @@ struct EventFields: Hashable, Sendable {
 }
 
 enum CalendarSyncCore {
+    /// Whether the row has anything to send. A new event nobody has typed into
+    /// is a placeholder: the editor discards it when it closes, so pushing it
+    /// would only put a "New Event" into the user's calendar for that to remove,
+    /// and a lock would leave it there. It is first pushed once it is edited.
+    static func shouldPush(_ event: CalendarEvent) -> Bool {
+        if event.ekEventIdentifier == nil { return !event.isUntouchedNewRecord }
+        guard event.syncStatus != .localOnly else { return true }
+        guard let synced = event.lastSyncDate else { return true }
+        return event.updatedAt > synced
+    }
+
     enum PullDecision: Equatable {
         case same
         case update(conflict: Bool)

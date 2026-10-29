@@ -192,10 +192,7 @@ extension AppSession {
     }
 
     private func needsPush(_ event: CalendarEvent) -> Bool {
-        if event.ekEventIdentifier == nil { return true }
-        guard event.syncStatus != .localOnly else { return true }
-        guard let synced = event.lastSyncDate else { return true }
-        return event.updatedAt > synced
+        CalendarSyncCore.shouldPush(event)
     }
 
     /// Full two-way pass: push dirty rows, then pull remote drift. Manual via
@@ -349,10 +346,7 @@ extension AppSession {
     }
 
     private func needsPush(_ todo: TodoItem) -> Bool {
-        if todo.reminderIdentifier == nil { return true }
-        guard todo.syncStatus != .localOnly else { return true }
-        guard let synced = todo.lastSyncDate else { return true }
-        return todo.updatedAt > synced
+        ReminderSyncCore.shouldPush(todo)
     }
 
     /// Full two-way pass: push dirty rows, then pull remote drift. Manual via

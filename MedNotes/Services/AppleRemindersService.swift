@@ -56,6 +56,16 @@ struct ReminderFields: Hashable, Sendable {
 }
 
 enum ReminderSyncCore {
+    /// Whether the todo has anything to send. A new todo nobody has typed into is
+    /// a placeholder the editor discards when it closes; see
+    /// `CalendarSyncCore.shouldPush`.
+    static func shouldPush(_ todo: TodoItem) -> Bool {
+        if todo.reminderIdentifier == nil { return !todo.isUntouchedNewRecord }
+        guard todo.syncStatus != .localOnly else { return true }
+        guard let synced = todo.lastSyncDate else { return true }
+        return todo.updatedAt > synced
+    }
+
     enum PullDecision: Equatable {
         case same
         case update(conflict: Bool)
