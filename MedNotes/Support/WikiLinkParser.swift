@@ -81,16 +81,16 @@ enum WikiLinkParser {
                 continue
             }
             switch units[i] {
-            case 0x5C: // backslash
-                if i + 1 < n, isASCIIPunctuation(units[i + 1]) {
+            case ASCII.backslash:
+                if i + 1 < n, ASCII.isPunctuation(units[i + 1]) {
                     escaped = i + 1
                     i += 2
                 } else {
                     i += 1
                 }
-            case 0x60: // `
+            case ASCII.backtick:
                 var run = 0
-                while i + run < n, units[i + run] == 0x60 { run += 1 }
+                while i + run < n, units[i + run] == ASCII.backtick { run += 1 }
                 if let end = closingBackticks(
                     units, from: i + run, length: run, fenceStarts: fenceStarts, failedUntil: &backtickFailedUntil) {
                     protected.append(NSRange(location: i, length: end - i))
@@ -98,9 +98,9 @@ enum WikiLinkParser {
                 } else {
                     i += run
                 }
-            case 0x25: // %
-                if i + 1 < n, units[i + 1] == 0x25, !noPercentCloser {
-                    if let end = find([0x25, 0x25], in: units, from: i + 2) {
+            case ASCII.percent:
+                if i + 1 < n, units[i + 1] == ASCII.percent, !noPercentCloser {
+                    if let end = find([ASCII.percent, ASCII.percent], in: units, from: i + 2) {
                         protected.append(NSRange(location: i, length: end + 2 - i))
                         i = end + 2
                     } else {
@@ -110,9 +110,9 @@ enum WikiLinkParser {
                 } else {
                     i += 1
                 }
-            case 0x3C: // <
-                if !noCommentCloser, hasPrefix([0x3C, 0x21, 0x2D, 0x2D], in: units, at: i) {
-                    if let end = find([0x2D, 0x2D, 0x3E], in: units, from: i + 4) {
+            case ASCII.lessThan:
+                if !noCommentCloser, hasPrefix([ASCII.lessThan, ASCII.exclamation, ASCII.dash, ASCII.dash], in: units, at: i) {
+                    if let end = find([ASCII.dash, ASCII.dash, ASCII.greaterThan], in: units, from: i + 4) {
                         protected.append(NSRange(location: i, length: end + 3 - i))
                         i = end + 3
                     } else {
@@ -122,8 +122,8 @@ enum WikiLinkParser {
                 } else {
                     i += 1
                 }
-            case 0x5B: // [
-                guard i + 1 < n, units[i + 1] == 0x5B,
+            case ASCII.openBracket:
+                guard i + 1 < n, units[i + 1] == ASCII.openBracket,
                       let parsed = parseLink(units, ns, at: i, escapedIndex: escaped) else {
                     i += 1
                     continue
@@ -172,10 +172,10 @@ enum WikiLinkParser {
         let limit = min(n, start + 2 + maxInnerLength + 1)
         while j < limit {
             switch units[j] {
-            case 0x5D: // ]
-                guard j + 1 < n, units[j + 1] == 0x5D else { return nil }
+            case ASCII.closeBracket:
+                guard j + 1 < n, units[j + 1] == ASCII.closeBracket else { return nil }
                 return finishLink(units, ns, start: start, close: j, escapedIndex: escapedIndex)
-            case 0x5B, 0x0A, 0x0D, 0x60: // [ \n \r `
+            case ASCII.openBracket, ASCII.lineFeed, ASCII.carriageReturn, ASCII.backtick: // [ \n \r `
                 return nil
             default:
                 j += 1
@@ -194,8 +194,8 @@ enum WikiLinkParser {
         let chars = Array(raw.utf16)
         var targetPart = raw
         var alias: String?
-        if let bar = chars.firstIndex(of: 0x7C) {
-            let escapedBar = bar > 0 && chars[bar - 1] == 0x5C
+        if let bar = chars.firstIndex(of: ASCII.pipe) {
+            let escapedBar = bar > 0 && chars[bar - 1] == ASCII.backslash
             let head = Array(chars[0..<(escapedBar ? bar - 1 : bar)])
             targetPart = String(decoding: head, as: UTF16.self)
             let tail = String(decoding: Array(chars[(bar + 1)...]), as: UTF16.self)
@@ -220,7 +220,7 @@ enum WikiLinkParser {
         target = target.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !target.isEmpty || heading != nil || blockID != nil else { return nil }
 
-        let isEmbed = start > 0 && units[start - 1] == 0x21 && escapedIndex != start - 1
+        let isEmbed = start > 0 && units[start - 1] == ASCII.exclamation && escapedIndex != start - 1
         let first = isEmbed ? start - 1 : start
         let link = ParsedLink(
             range: NSRange(location: first, length: close + 2 - first),
@@ -250,8 +250,8 @@ enum WikiLinkParser {
             ns.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd,
                             for: NSRange(location: location, length: 0))
             var p = location
-            while p < contentsEnd, units[p] == 0x20, p - location < 4 { p += 1 }
-            if p - location <= 3, p < contentsEnd, units[p] == 0x60 || units[p] == 0x7E {
+            while p < contentsEnd, units[p] == ASCII.space, p - location < 4 { p += 1 }
+            if p - location <= 3, p < contentsEnd, units[p] == ASCII.backtick || units[p] == ASCII.tilde {
                 let char = units[p]
                 var q = p
                 while q < contentsEnd, units[q] == char { q += 1 }
@@ -259,11 +259,11 @@ enum WikiLinkParser {
                 if run >= 3 {
                     if let current = open {
                         if char == current.char, run >= current.length,
-                           units[q..<contentsEnd].allSatisfy({ $0 == 0x20 || $0 == 0x09 }) {
+                           units[q..<contentsEnd].allSatisfy(ASCII.isSpaceOrTab) {
                             ranges.append(NSRange(location: current.start, length: lineEnd - current.start))
                             open = nil
                         }
-                    } else if char != 0x60 || !units[q..<contentsEnd].contains(0x60) {
+                    } else if char != ASCII.backtick || !units[q..<contentsEnd].contains(ASCII.backtick) {
                         open = (char, run, location)
                     }
                 }
@@ -289,11 +289,11 @@ enum WikiLinkParser {
         var p = from
         while p < n {
             let c = units[p]
-            if c == 0x0A || c == 0x0D, isParagraphBreak(units, at: p) { break }
+            if c == ASCII.lineFeed || c == ASCII.carriageReturn, isParagraphBreak(units, at: p) { break }
             if fenceStarts.contains(p) { break }
-            if c == 0x60 {
+            if c == ASCII.backtick {
                 var run = 0
-                while p + run < n, units[p + run] == 0x60 { run += 1 }
+                while p + run < n, units[p + run] == ASCII.backtick { run += 1 }
                 if run == length { return p + run }
                 p += run
             } else {
@@ -307,17 +307,12 @@ enum WikiLinkParser {
     private static func isParagraphBreak(_ units: [UInt16], at p: Int) -> Bool {
         let n = units.count
         var q = p + 1
-        if units[p] == 0x0D, q < n, units[q] == 0x0A { q += 1 }
-        while q < n, units[q] == 0x20 || units[q] == 0x09 { q += 1 }
-        return q < n && (units[q] == 0x0A || units[q] == 0x0D)
+        if units[p] == ASCII.carriageReturn, q < n, units[q] == ASCII.lineFeed { q += 1 }
+        while q < n, ASCII.isSpaceOrTab(units[q]) { q += 1 }
+        return q < n && (units[q] == ASCII.lineFeed || units[q] == ASCII.carriageReturn)
     }
 
     // MARK: - Helpers
-
-    private static func isASCIIPunctuation(_ unit: UInt16) -> Bool {
-        (0x21...0x2F).contains(unit) || (0x3A...0x40).contains(unit)
-            || (0x5B...0x60).contains(unit) || (0x7B...0x7E).contains(unit)
-    }
 
     private static func hasPrefix(_ prefix: [UInt16], in units: [UInt16], at index: Int) -> Bool {
         guard index + prefix.count <= units.count else { return false }

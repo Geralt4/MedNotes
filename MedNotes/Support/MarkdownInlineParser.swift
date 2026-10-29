@@ -110,13 +110,13 @@ enum MarkdownInlineParser {
                 }
                 let c = units[i]
                 switch c {
-                case 0x5C: // backslash
-                    if i + 1 < n, units[i + 1] == 0x0A {
+                case ASCII.backslash:
+                    if i + 1 < n, units[i + 1] == ASCII.lineFeed {
                         flushText(upTo: i)
                         items.append(.node(MarkdownInline(range: sourceRange(i, i + 2), kind: .hardBreak)))
                         i += 2
                         bufferStart = i
-                    } else if i + 1 < n, isASCIIPunctuation(units[i + 1]) {
+                    } else if i + 1 < n, ASCII.isPunctuation(units[i + 1]) {
                         // The escaped character is plain text, without its backslash.
                         flushText(upTo: i)
                         appendText(String(decoding: [units[i + 1]], as: UTF16.self), sourceRange(i, i + 2))
@@ -125,10 +125,10 @@ enum MarkdownInlineParser {
                     } else {
                         i += 1
                     }
-                case 0x0A:
+                case ASCII.lineFeed:
                     var trailing = 0
                     var k = i - 1
-                    while k >= bufferStart, k >= 0, units[k] == 0x20 { trailing += 1; k -= 1 }
+                    while k >= bufferStart, k >= 0, units[k] == ASCII.space { trailing += 1; k -= 1 }
                     if trailing >= 2 {
                         flushText(upTo: i - trailing)
                         items.append(.node(MarkdownInline(range: sourceRange(i - trailing, i + 1), kind: .hardBreak)))
@@ -138,10 +138,10 @@ enum MarkdownInlineParser {
                     }
                     i += 1
                     bufferStart = i
-                case 0x2A, 0x5F, 0x7E, 0x3D: // * _ ~ =
+                case ASCII.asterisk, ASCII.underscore, ASCII.tilde, ASCII.equals: // * _ ~ =
                     var run = 0
                     while i + run < n, units[i + run] == c { run += 1 }
-                    if (c == 0x7E || c == 0x3D) && run != 2 {
+                    if (c == ASCII.tilde || c == ASCII.equals) && run != 2 {
                         i += run
                         continue
                     }
@@ -155,7 +155,7 @@ enum MarkdownInlineParser {
                     }
                     i += run
                     bufferStart = i
-                case 0x5B, 0x21: // [ !
+                case ASCII.openBracket, ASCII.exclamation: // [ !
                     if let parsed = linkOrImage(at: i) {
                         flushText(upTo: i)
                         items.append(.node(parsed.node))
@@ -225,7 +225,7 @@ enum MarkdownInlineParser {
             let before = scalar(before: start), after = scalar(at: start + run)
             let left = !isSpace(after) && (!isPunctuation(after) || isSpace(before) || isPunctuation(before))
             let right = !isSpace(before) && (!isPunctuation(before) || isSpace(after) || isPunctuation(after))
-            if char == 0x5F {
+            if char == ASCII.underscore {
                 return (left && (!right || isPunctuation(before)), right && (!left || isPunctuation(after)))
             }
             return (left, right)
@@ -238,7 +238,7 @@ enum MarkdownInlineParser {
                   let openerIndex = stacks[closer.char]?.last,
                   case .delim(var opener) = items[openerIndex] {
                 let use: Int
-                if closer.char == 0x7E || closer.char == 0x3D {
+                if closer.char == ASCII.tilde || closer.char == ASCII.equals {
                     use = 2
                 } else {
                     use = (opener.count >= 2 && closer.count >= 2) ? 2 : 1
@@ -250,9 +250,9 @@ enum MarkdownInlineParser {
                 let range = sourceRange(markerStart, closer.start + use)
                 let kind: MarkdownInline.Kind
                 switch closer.char {
-                case 0x7E: kind = .strikethrough(content)
-                case 0x3D: kind = .highlight(content)
-                case 0x5F, 0x2A: kind = use == 2 ? .strong(content, markerWidth: use) : .emphasis(content, markerWidth: use)
+                case ASCII.tilde: kind = .strikethrough(content)
+                case ASCII.equals: kind = .highlight(content)
+                case ASCII.underscore, ASCII.asterisk: kind = use == 2 ? .strong(content, markerWidth: use) : .emphasis(content, markerWidth: use)
                 default: kind = .emphasis(content, markerWidth: use)
                 }
                 opener.count -= use
@@ -320,7 +320,7 @@ enum MarkdownInlineParser {
             }
             for range in scan.protectedRanges {
                 guard range.location >= 0, NSMaxRange(range) <= units.count else { continue }
-                if units[range.location] == 0x60 {
+                if units[range.location] == ASCII.backtick {
                     found.append(Atom(range: range, inline: MarkdownInline(range: range, kind: .code(codeContent(range)))))
                 } else {
                     found.append(Atom(range: range, inline: nil))   // a comment
@@ -345,24 +345,19 @@ enum MarkdownInlineParser {
         func codeContent(_ range: NSRange) -> String {
             var a = range.location, b = NSMaxRange(range)
             var run = 0
-            while a + run < b, units[a + run] == 0x60 { run += 1 }
+            while a + run < b, units[a + run] == ASCII.backtick { run += 1 }
             a += run
             b -= run
             guard b > a else { return "" }
             var content = Array(units[a..<b])
-            if content.count >= 2, content.first == 0x20, content.last == 0x20, content.contains(where: { $0 != 0x20 }) {
+            if content.count >= 2, content.first == ASCII.space, content.last == ASCII.space, content.contains(where: { $0 != ASCII.space }) {
                 content.removeFirst()
                 content.removeLast()
             }
-            return String(decoding: content.map { $0 == 0x0A ? 0x20 : $0 }, as: UTF16.self)
+            return String(decoding: content.map { $0 == ASCII.lineFeed ? ASCII.space : $0 }, as: UTF16.self)
         }
 
         // MARK: Links and images
-
-        func isASCIIPunctuation(_ unit: UInt16) -> Bool {
-            (0x21...0x2F).contains(unit) || (0x3A...0x40).contains(unit)
-                || (0x5B...0x60).contains(unit) || (0x7B...0x7E).contains(unit)
-        }
 
         /// The index of the `]` that closes the `[` at `open`, skipping escapes
         /// and atoms.
@@ -378,9 +373,9 @@ enum MarkdownInlineParser {
                     continue
                 }
                 switch units[i] {
-                case 0x5C: i += 2; continue
-                case 0x5B: depth += 1
-                case 0x5D:
+                case ASCII.backslash: i += 2; continue
+                case ASCII.openBracket: depth += 1
+                case ASCII.closeBracket:
                     depth -= 1
                     if depth == 0 { return i }
                 default: break
@@ -391,14 +386,14 @@ enum MarkdownInlineParser {
         }
 
         func linkOrImage(at start: Int) -> (node: MarkdownInline, end: Int)? {
-            let isImage = units[start] == 0x21
+            let isImage = units[start] == ASCII.exclamation
             let open = isImage ? start + 1 : start
-            guard open < units.count, units[open] == 0x5B else { return nil }
+            guard open < units.count, units[open] == ASCII.openBracket else { return nil }
             // `[[` is a wiki-link when it is one; otherwise it is not a Markdown link either.
-            if open + 1 < units.count, units[open + 1] == 0x5B { return nil }
+            if open + 1 < units.count, units[open + 1] == ASCII.openBracket { return nil }
             guard depth < MarkdownInlineParser.maxDepth,
                   let close = closingBracket(from: open),
-                  close + 1 < units.count, units[close + 1] == 0x28 else { return nil }
+                  close + 1 < units.count, units[close + 1] == ASCII.openParen else { return nil }
             guard let (destination, end) = destination(from: close + 2) else { return nil }
             let labelStart = open + 1
             let labelUnits = Array(units[labelStart..<close])
@@ -419,38 +414,38 @@ enum MarkdownInlineParser {
             let n = units.count
             let limit = min(n, start + 2_000)
             var i = start
-            while i < limit, units[i] == 0x20 || units[i] == 0x09 { i += 1 }
+            while i < limit, ASCII.isSpaceOrTab(units[i]) { i += 1 }
             var dest: [UInt16] = []
-            if i < limit, units[i] == 0x3C { // <…>
+            if i < limit, units[i] == ASCII.lessThan { // <…>
                 i += 1
-                while i < limit, units[i] != 0x3E, units[i] != 0x0A { dest.append(units[i]); i += 1 }
-                guard i < limit, units[i] == 0x3E else { return nil }
+                while i < limit, units[i] != ASCII.greaterThan, units[i] != ASCII.lineFeed { dest.append(units[i]); i += 1 }
+                guard i < limit, units[i] == ASCII.greaterThan else { return nil }
                 i += 1
             } else {
                 var parens = 0
                 while i < limit {
                     let c = units[i]
-                    if c == 0x20 || c == 0x09 || c == 0x0A { break }
-                    if c == 0x28 { parens += 1 }
-                    if c == 0x29 {
+                    if ASCII.isSpaceOrTab(c) || c == ASCII.lineFeed { break }
+                    if c == ASCII.openParen { parens += 1 }
+                    if c == ASCII.closeParen {
                         if parens == 0 { break }
                         parens -= 1
                     }
-                    if c == 0x5C, i + 1 < limit { i += 1 }
+                    if c == ASCII.backslash, i + 1 < limit { i += 1 }
                     dest.append(units[i])
                     i += 1
                 }
             }
-            while i < limit, units[i] == 0x20 || units[i] == 0x09 || units[i] == 0x0A { i += 1 }
-            if i < limit, units[i] == 0x22 || units[i] == 0x27 { // "title" or 'title'
+            while i < limit, ASCII.isSpaceOrTab(units[i]) || units[i] == ASCII.lineFeed { i += 1 }
+            if i < limit, units[i] == ASCII.doubleQuote || units[i] == ASCII.singleQuote { // "title" or 'title'
                 let quote = units[i]
                 i += 1
                 while i < limit, units[i] != quote { i += 1 }
                 guard i < limit else { return nil }
                 i += 1
-                while i < limit, units[i] == 0x20 || units[i] == 0x09 || units[i] == 0x0A { i += 1 }
+                while i < limit, ASCII.isSpaceOrTab(units[i]) || units[i] == ASCII.lineFeed { i += 1 }
             }
-            guard i < limit, units[i] == 0x29 else { return nil }
+            guard i < limit, units[i] == ASCII.closeParen else { return nil }
             return (String(decoding: dest, as: UTF16.self), i + 1)
         }
     }

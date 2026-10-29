@@ -36,12 +36,12 @@ enum MarkdownParser {
         var units: [UInt16]
         var end: Int { start + units.count }
 
-        var isBlank: Bool { units.allSatisfy { $0 == 0x20 || $0 == 0x09 } }
+        var isBlank: Bool { units.allSatisfy(ASCII.isSpaceOrTab) }
 
         var indent: Int {
             var width = 0
             for unit in units {
-                if unit == 0x20 { width += 1 } else if unit == 0x09 { width += 4 - width % 4 } else { break }
+                if unit == ASCII.space { width += 1 } else if unit == ASCII.tab { width += 4 - width % 4 } else { break }
             }
             return width
         }
@@ -87,7 +87,7 @@ enum MarkdownParser {
 
         func trimmedLineBreak(_ range: NSRange) -> NSRange {
             var length = range.length
-            while length > 0, [0x0A, 0x0D].contains(ns.character(at: range.location + length - 1)) { length -= 1 }
+            while length > 0, [ASCII.lineFeed, ASCII.carriageReturn].contains(ns.character(at: range.location + length - 1)) { length -= 1 }
             return NSRange(location: range.location, length: length)
         }
 
@@ -186,14 +186,14 @@ enum MarkdownParser {
         func fenceOpener(_ line: Line) -> (char: UInt16, length: Int, after: Int)? {
             guard line.indent <= 3 else { return nil }
             var p = 0
-            while p < line.units.count, line.units[p] == 0x20 { p += 1 }
-            guard p < line.units.count, line.units[p] == 0x60 || line.units[p] == 0x7E else { return nil }
+            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
+            guard p < line.units.count, line.units[p] == ASCII.backtick || line.units[p] == ASCII.tilde else { return nil }
             let char = line.units[p]
             var q = p
             while q < line.units.count, line.units[q] == char { q += 1 }
             guard q - p >= 3 else { return nil }
             // A backtick fence's info string has no backtick: that is an inline span.
-            if char == 0x60, line.units[q...].contains(0x60) { return nil }
+            if char == ASCII.backtick, line.units[q...].contains(ASCII.backtick) { return nil }
             return (char, q - p, q)
         }
 
@@ -205,9 +205,9 @@ enum MarkdownParser {
             while j < lines.endIndex {
                 let candidate = lines[j]
                 if candidate.indent <= 3 {
-                    let trimmed = candidate.units.drop(while: { $0 == 0x20 })
+                    let trimmed = candidate.units.drop(while: { $0 == ASCII.space })
                     let run = trimmed.prefix(while: { $0 == opener.char }).count
-                    if run >= opener.length, trimmed.dropFirst(run).allSatisfy({ $0 == 0x20 || $0 == 0x09 }) {
+                    if run >= opener.length, trimmed.dropFirst(run).allSatisfy(ASCII.isSpaceOrTab) {
                         close = j
                         break
                     }
@@ -233,10 +233,10 @@ enum MarkdownParser {
 
         func commentBlock(_ lines: ArraySlice<Line>, from i: Int, memo: CommentMemo) -> (MarkdownBlock, Int)? {
             let line = lines[i]
-            let trimmed = line.units.drop(while: { $0 == 0x20 || $0 == 0x09 })
+            let trimmed = line.units.drop(while: ASCII.isSpaceOrTab)
             let (open, close): ([UInt16], [UInt16])
             let isPercent: Bool
-            if trimmed.starts(with: [0x25, 0x25]) { (open, close) = ([0x25, 0x25], [0x25, 0x25]); isPercent = true }
+            if trimmed.starts(with: [ASCII.percent, ASCII.percent]) { (open, close) = ([ASCII.percent, ASCII.percent], [ASCII.percent, ASCII.percent]); isPercent = true }
             else if trimmed.starts(with: Array("<!--".utf16)) { (open, close) = (Array("<!--".utf16), Array("-->".utf16)); isPercent = false }
             else { return nil }
             if isPercent ? memo.noPercentCloser : memo.noHTMLCloser { return nil }
@@ -246,7 +246,7 @@ enum MarkdownParser {
                 let units = lines[j].units
                 if let hit = find(close, in: units, from: j == i ? searchFrom : 0) {
                     let rest = units[(hit + close.count)...]
-                    guard rest.allSatisfy({ $0 == 0x20 || $0 == 0x09 }) else { return nil }
+                    guard rest.allSatisfy(ASCII.isSpaceOrTab) else { return nil }
                     let range = NSRange(location: line.start, length: lines[j].end - line.start)
                     return (MarkdownBlock(range: range, kind: .comment), j + 1)
                 }
@@ -271,23 +271,23 @@ enum MarkdownParser {
 
         func heading(_ line: Line, depth: Int) -> MarkdownBlock? {
             var p = 0
-            while p < line.units.count, line.units[p] == 0x20, p < 4 { p += 1 }
+            while p < line.units.count, line.units[p] == ASCII.space, p < 4 { p += 1 }
             guard p <= 3 else { return nil }
             var hashes = 0
-            while p < line.units.count, line.units[p] == 0x23 { hashes += 1; p += 1 }
-            guard (1...6).contains(hashes), p < line.units.count, line.units[p] == 0x20 || line.units[p] == 0x09 else { return nil }
+            while p < line.units.count, line.units[p] == ASCII.hash { hashes += 1; p += 1 }
+            guard (1...6).contains(hashes), p < line.units.count, ASCII.isSpaceOrTab(line.units[p]) else { return nil }
             let markerEnd = p + 1
             // Text runs to the end, minus an optional closing run of `#` set off by a space.
             var end = line.units.count
-            while end > markerEnd, line.units[end - 1] == 0x20 || line.units[end - 1] == 0x09 { end -= 1 }
+            while end > markerEnd, ASCII.isSpaceOrTab(line.units[end - 1]) { end -= 1 }
             var q = end
-            while q > markerEnd, line.units[q - 1] == 0x23 { q -= 1 }
-            if q < end, q == markerEnd || line.units[q - 1] == 0x20 || line.units[q - 1] == 0x09 {
+            while q > markerEnd, line.units[q - 1] == ASCII.hash { q -= 1 }
+            if q < end, q == markerEnd || ASCII.isSpaceOrTab(line.units[q - 1]) {
                 end = q
-                while end > markerEnd, line.units[end - 1] == 0x20 || line.units[end - 1] == 0x09 { end -= 1 }
+                while end > markerEnd, ASCII.isSpaceOrTab(line.units[end - 1]) { end -= 1 }
             }
             var start = markerEnd
-            while start < end, line.units[start] == 0x20 || line.units[start] == 0x09 { start += 1 }
+            while start < end, ASCII.isSpaceOrTab(line.units[start]) { start += 1 }
             guard end > start else { return nil }   // an empty heading is not one (as in NoteMetadata)
             // A `^id` ends the heading's text, as for any line.
             var blockID: String?
@@ -307,8 +307,8 @@ enum MarkdownParser {
 
         func isRule(_ line: Line) -> Bool {
             guard line.indent <= 3 else { return false }
-            let marks = line.units.filter { $0 != 0x20 && $0 != 0x09 }
-            guard marks.count >= 3, let first = marks.first, [0x2D, 0x2A, 0x5F].contains(first) else { return false }
+            let marks = line.units.filter { !ASCII.isSpaceOrTab($0) }
+            guard marks.count >= 3, let first = marks.first, [ASCII.dash, ASCII.asterisk, ASCII.underscore].contains(first) else { return false }
             return marks.allSatisfy { $0 == first }
         }
 
@@ -316,15 +316,15 @@ enum MarkdownParser {
 
         func isQuoteLine(_ line: Line) -> Bool {
             guard line.indent <= 3 else { return false }
-            return line.units.first(where: { $0 != 0x20 }) == 0x3E
+            return line.units.first(where: { $0 != ASCII.space }) == ASCII.greaterThan
         }
 
         /// A quote line without its `>` and the one space after it.
         func unquoted(_ line: Line) -> Line {
             var p = 0
-            while p < line.units.count, line.units[p] == 0x20 { p += 1 }
+            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
             p += 1   // the >
-            if p < line.units.count, line.units[p] == 0x20 { p += 1 }
+            if p < line.units.count, line.units[p] == ASCII.space { p += 1 }
             return line.dropping(min(p, line.units.count))
         }
 
@@ -347,18 +347,18 @@ enum MarkdownParser {
         /// `[!type]`, `[!type]+`, `[!type]-`, then an optional title.
         func calloutHeader(_ line: Line, headerLine: Line, depth: Int) -> MarkdownCallout? {
             let u = line.units
-            guard u.count >= 4, u[0] == 0x5B, u[1] == 0x21 else { return nil }
+            guard u.count >= 4, u[0] == ASCII.openBracket, u[1] == ASCII.exclamation else { return nil }
             var p = 2
             while p < u.count, isTypeChar(u[p]) { p += 1 }
-            guard p > 2, p < u.count, u[p] == 0x5D else { return nil }
+            guard p > 2, p < u.count, u[p] == ASCII.closeBracket else { return nil }
             let type = String(decoding: u[2..<p], as: UTF16.self).lowercased()
             p += 1
             var fold = MarkdownCallout.Fold.none
-            if p < u.count, u[p] == 0x2B { fold = .open; p += 1 } else if p < u.count, u[p] == 0x2D { fold = .closed; p += 1 }
-            guard p == u.count || u[p] == 0x20 || u[p] == 0x09 else { return nil }
-            while p < u.count, u[p] == 0x20 || u[p] == 0x09 { p += 1 }
+            if p < u.count, u[p] == ASCII.plus { fold = .open; p += 1 } else if p < u.count, u[p] == ASCII.dash { fold = .closed; p += 1 }
+            guard p == u.count || ASCII.isSpaceOrTab(u[p]) else { return nil }
+            while p < u.count, ASCII.isSpaceOrTab(u[p]) { p += 1 }
             var end = u.count
-            while end > p, u[end - 1] == 0x20 || u[end - 1] == 0x09 { end -= 1 }
+            while end > p, ASCII.isSpaceOrTab(u[end - 1]) { end -= 1 }
             let title = end > p
                 ? inlines(units: Array(u[p..<end]), sources: (p..<end).map { line.start + $0 }, end: line.start + end, depth: depth)
                 : []
@@ -368,8 +368,7 @@ enum MarkdownParser {
         }
 
         func isTypeChar(_ unit: UInt16) -> Bool {
-            (0x30...0x39).contains(unit) || (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit)
-                || unit == 0x2D || unit == 0x5F
+            ASCII.isLetterOrDigit(unit) || unit == ASCII.dash || unit == ASCII.underscore
         }
 
         // MARK: Lists
@@ -386,20 +385,20 @@ enum MarkdownParser {
         func listMarker(_ line: Line) -> Marker? {
             guard line.indent <= 3 else { return nil }
             var p = 0
-            while p < line.units.count, line.units[p] == 0x20 { p += 1 }
+            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
             guard p < line.units.count else { return nil }
             let indent = p
             var number = 0, ordered = false, char: UInt16 = line.units[p]
             var markerEnd = p
-            if [0x2D, 0x2A, 0x2B].contains(char) {
+            if [ASCII.dash, ASCII.asterisk, ASCII.plus].contains(char) {
                 markerEnd = p + 1
-            } else if (0x30...0x39).contains(char) {
+            } else if ASCII.isDigit(char) {
                 var q = p
-                while q < line.units.count, (0x30...0x39).contains(line.units[q]), q - p < 9 {
-                    number = number * 10 + Int(line.units[q] - 0x30)
+                while q < line.units.count, ASCII.isDigit(line.units[q]), q - p < 9 {
+                    number = number * 10 + Int(line.units[q] - ASCII.zero)
                     q += 1
                 }
-                guard q < line.units.count, line.units[q] == 0x2E || line.units[q] == 0x29 else { return nil }
+                guard q < line.units.count, line.units[q] == ASCII.period || line.units[q] == ASCII.closeParen else { return nil }
                 ordered = true
                 char = line.units[q]
                 markerEnd = q + 1
@@ -407,10 +406,10 @@ enum MarkdownParser {
                 return nil
             }
             // A marker needs a space (or the end of the line) after it.
-            guard markerEnd == line.units.count || line.units[markerEnd] == 0x20 || line.units[markerEnd] == 0x09 else { return nil }
-            if char == 0x2D || char == 0x2A, isRule(line) { return nil }
+            guard markerEnd == line.units.count || ASCII.isSpaceOrTab(line.units[markerEnd]) else { return nil }
+            if char == ASCII.dash || char == ASCII.asterisk, isRule(line) { return nil }
             var spaces = 0
-            while markerEnd + spaces < line.units.count, line.units[markerEnd + spaces] == 0x20 { spaces += 1 }
+            while markerEnd + spaces < line.units.count, line.units[markerEnd + spaces] == ASCII.space { spaces += 1 }
             // Five or more spaces: the text is indented code, the marker keeps one.
             let used = (spaces == 0 || spaces > 4) ? 1 : spaces
             let contentOffset = markerEnd + used
@@ -448,7 +447,7 @@ enum MarkdownParser {
                     }
                     // Lazy continuation: text that continues the item's last paragraph.
                     if blanks == 0, listMarker(candidate) == nil, !startsBlock(candidate), itemLines.last?.isBlank == false {
-                        itemLines.append(candidate.dropping(candidate.units.prefix(while: { $0 == 0x20 || $0 == 0x09 }).count))
+                        itemLines.append(candidate.dropping(candidate.units.prefix(while: ASCII.isSpaceOrTab).count))
                         k += 1
                         continue
                     }
@@ -459,10 +458,10 @@ enum MarkdownParser {
                 var content = itemLines
                 // A task box: `[ ]` or `[x]` followed by a space or the end of the line.
                 var task: MarkdownTask?
-                if var head = content.first, head.units.count >= 3, head.units[0] == 0x5B, head.units[2] == 0x5D,
-                   [0x20, 0x78, 0x58].contains(head.units[1]),
-                   head.units.count == 3 || head.units[3] == 0x20 || head.units[3] == 0x09 {
-                    task = MarkdownTask(box: NSRange(location: head.start, length: 3), isDone: head.units[1] != 0x20)
+                if var head = content.first, head.units.count >= 3, head.units[0] == ASCII.openBracket, head.units[2] == ASCII.closeBracket,
+                   [ASCII.space, ASCII.lowerX, ASCII.upperX].contains(head.units[1]),
+                   head.units.count == 3 || ASCII.isSpaceOrTab(head.units[3]) {
+                    task = MarkdownTask(box: NSRange(location: head.start, length: 3), isDone: head.units[1] != ASCII.space)
                     let skip = head.units.count == 3 ? 3 : 4
                     head = head.dropping(skip)
                     content[0] = head
@@ -500,7 +499,7 @@ enum MarkdownParser {
             var removed = 0, columns = 0
             for unit in line.units {
                 if columns >= width { break }
-                if unit == 0x20 { columns += 1 } else if unit == 0x09 { columns += 4 - columns % 4 } else { break }
+                if unit == ASCII.space { columns += 1 } else if unit == ASCII.tab { columns += 4 - columns % 4 } else { break }
                 removed += 1
             }
             return line.dropping(removed)
@@ -520,13 +519,13 @@ enum MarkdownParser {
         // MARK: Tables
 
         func table(_ lines: ArraySlice<Line>, from i: Int, depth: Int) -> (MarkdownBlock, Int)? {
-            guard i + 1 < lines.endIndex, lines[i].units.contains(0x7C),
+            guard i + 1 < lines.endIndex, lines[i].units.contains(ASCII.pipe),
                   let alignments = delimiterRow(lines[i + 1]) else { return nil }
             let header = cells(lines[i], depth: depth)
             guard !header.isEmpty else { return nil }
             var rows: [[[MarkdownInline]]] = []
             var j = i + 2
-            while j < lines.endIndex, !lines[j].isBlank, lines[j].units.contains(0x7C), !startsBlock(lines[j]) || listMarker(lines[j]) != nil {
+            while j < lines.endIndex, !lines[j].isBlank, lines[j].units.contains(ASCII.pipe), !startsBlock(lines[j]) || listMarker(lines[j]) != nil {
                 rows.append(pad(cells(lines[j], depth: depth), to: alignments.count))
                 j += 1
             }
@@ -544,11 +543,11 @@ enum MarkdownParser {
         func delimiterRow(_ line: Line) -> [MarkdownTable.Alignment]? {
             var out: [MarkdownTable.Alignment] = []
             for range in cellRanges(line) {
-                let cell = Array(line.units[range]).filter { $0 != 0x20 && $0 != 0x09 }
+                let cell = Array(line.units[range]).filter { !ASCII.isSpaceOrTab($0) }
                 guard !cell.isEmpty else { return nil }
-                let left = cell.first == 0x3A, right = cell.last == 0x3A
+                let left = cell.first == ASCII.colon, right = cell.last == ASCII.colon
                 let dashes = cell.dropFirst(left ? 1 : 0).dropLast(right ? 1 : 0)
-                guard !dashes.isEmpty, dashes.allSatisfy({ $0 == 0x2D }) else { return nil }
+                guard !dashes.isEmpty, dashes.allSatisfy({ $0 == ASCII.dash }) else { return nil }
                 out.append(left && right ? .center : left ? .left : right ? .right : .none)
             }
             return out.isEmpty ? nil : out
@@ -563,23 +562,23 @@ enum MarkdownParser {
             var inCode = 0
             while i < u.count {
                 let c = u[i]
-                if c == 0x5C { i += 2; continue }
-                if c == 0x60 {
+                if c == ASCII.backslash { i += 2; continue }
+                if c == ASCII.backtick {
                     var run = 0
-                    while i + run < u.count, u[i + run] == 0x60 { run += 1 }
+                    while i + run < u.count, u[i + run] == ASCII.backtick { run += 1 }
                     inCode = inCode == 0 ? run : (inCode == run ? 0 : inCode)
                     i += run
                     continue
                 }
-                if c == 0x7C, inCode == 0 { cuts.append(i) }
+                if c == ASCII.pipe, inCode == 0 { cuts.append(i) }
                 i += 1
             }
             var bounds: [Int] = [-1] + cuts + [u.count]
             // Borders: a pipe before the first non-space, one after the last.
-            let firstNonSpace = u.firstIndex(where: { $0 != 0x20 && $0 != 0x09 }) ?? u.count
+            let firstNonSpace = u.firstIndex(where: { !ASCII.isSpaceOrTab($0) }) ?? u.count
             if let first = cuts.first, first == firstNonSpace { bounds.removeFirst() ; bounds[0] = first }
             if let last = cuts.last, !u.isEmpty,
-               u.lastIndex(where: { $0 != 0x20 && $0 != 0x09 }) == last, bounds.count > 1 { bounds.removeLast() }
+               u.lastIndex(where: { !ASCII.isSpaceOrTab($0) }) == last, bounds.count > 1 { bounds.removeLast() }
             var ranges: [Range<Int>] = []
             for k in 0..<(bounds.count - 1) {
                 let a = bounds[k] + 1, b = bounds[k + 1]
@@ -591,8 +590,8 @@ enum MarkdownParser {
         func cells(_ line: Line, depth: Int) -> [[MarkdownInline]] {
             cellRanges(line).map { range in
                 var a = range.lowerBound, b = range.upperBound
-                while a < b, line.units[a] == 0x20 || line.units[a] == 0x09 { a += 1 }
-                while b > a, line.units[b - 1] == 0x20 || line.units[b - 1] == 0x09 { b -= 1 }
+                while a < b, ASCII.isSpaceOrTab(line.units[a]) { a += 1 }
+                while b > a, ASCII.isSpaceOrTab(line.units[b - 1]) { b -= 1 }
                 guard b > a else { return [] }
                 return inlines(units: Array(line.units[a..<b]), sources: (a..<b).map { line.start + $0 },
                                end: line.start + b, depth: depth)
@@ -626,15 +625,15 @@ enum MarkdownParser {
             for (n, raw) in chunk.enumerated() {
                 var line = raw
                 if n > 0 {
-                    let lead = line.units.prefix(while: { $0 == 0x20 || $0 == 0x09 }).count
+                    let lead = line.units.prefix(while: ASCII.isSpaceOrTab).count
                     line = line.dropping(lead)
-                    units.append(0x0A)
+                    units.append(ASCII.lineFeed)
                     sources.append(chunk[n - 1].end)
                 }
                 for (k, unit) in line.units.enumerated() { units.append(unit); sources.append(line.start + k) }
             }
             // Trailing spaces on the last line carry no break.
-            while let last = units.last, last == 0x20 || last == 0x09 { units.removeLast(); sources.removeLast() }
+            while let last = units.last, ASCII.isSpaceOrTab(last) { units.removeLast(); sources.removeLast() }
             let endSource = (chunk.last.map { $0.start + $0.units.count }) ?? lines[i].end
             let content = inlines(units: units, sources: sources, end: endSource, depth: depth)
             let first = chunk[0]

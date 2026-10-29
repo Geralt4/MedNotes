@@ -98,12 +98,12 @@ enum NoteMetadata {
 
     private static func heading(_ ns: NSString, from start: Int, to end: Int) -> Heading? {
         var p = start
-        while p < end, ns.character(at: p) == 0x20, p - start < 4 { p += 1 }
+        while p < end, ns.character(at: p) == ASCII.space, p - start < 4 { p += 1 }
         guard p - start <= 3 else { return nil }
         var hashes = 0
-        while p < end, ns.character(at: p) == 0x23 { hashes += 1; p += 1 }
+        while p < end, ns.character(at: p) == ASCII.hash { hashes += 1; p += 1 }
         guard (1...6).contains(hashes), p < end,
-              ns.character(at: p) == 0x20 || ns.character(at: p) == 0x09 else { return nil }
+              ASCII.isSpaceOrTab(ns.character(at: p)) else { return nil }
         var text = ns.substring(with: NSRange(location: p, length: end - p))
             .trimmingCharacters(in: .whitespaces)
         // A closing run of #s, set off by a space, is not part of the text.
@@ -125,31 +125,30 @@ enum NoteMetadata {
     /// line without it (trailing blanks off), and the id.
     static func splitTrailingBlockID(_ units: [UInt16]) -> (trimmed: [UInt16], id: String)? {
         var stop = units.count
-        while stop > 0, units[stop - 1] == 0x20 || units[stop - 1] == 0x09 { stop -= 1 }
+        while stop > 0, ASCII.isSpaceOrTab(units[stop - 1]) { stop -= 1 }
         var p = stop
         while p > 0, isIDChar(units[p - 1]) { p -= 1 }
-        guard p > 0, stop - p >= 1, units[p - 1] == 0x5E else { return nil }
+        guard p > 0, stop - p >= 1, units[p - 1] == ASCII.caret else { return nil }
         let caret = p - 1
-        guard caret == 0 || units[caret - 1] == 0x20 || units[caret - 1] == 0x09 else { return nil }
+        guard caret == 0 || ASCII.isSpaceOrTab(units[caret - 1]) else { return nil }
         var keep = caret
-        while keep > 0, units[keep - 1] == 0x20 || units[keep - 1] == 0x09 { keep -= 1 }
+        while keep > 0, ASCII.isSpaceOrTab(units[keep - 1]) { keep -= 1 }
         return (Array(units[0..<keep]), String(decoding: units[p..<stop], as: UTF16.self))
     }
 
     private static func blockID(_ ns: NSString, from start: Int, to end: Int) -> BlockID? {
         var stop = end
-        while stop > start, isBlank(ns.character(at: stop - 1)) { stop -= 1 }
+        while stop > start, ASCII.isSpaceOrTab(ns.character(at: stop - 1)) { stop -= 1 }
         var p = stop
         while p > start, isIDChar(ns.character(at: p - 1)) { p -= 1 }
-        guard p > start, stop - p >= 1, ns.character(at: p - 1) == 0x5E else { return nil }   // ^
+        guard p > start, stop - p >= 1, ns.character(at: p - 1) == ASCII.caret else { return nil }   // ^
         let caret = p - 1
-        guard caret == start || isBlank(ns.character(at: caret - 1)) else { return nil }
+        guard caret == start || ASCII.isSpaceOrTab(ns.character(at: caret - 1)) else { return nil }
         return BlockID(id: ns.substring(with: NSRange(location: p, length: stop - p)), offset: start)
     }
 
     private static func isIDChar(_ unit: unichar) -> Bool {
-        (unit >= 0x30 && unit <= 0x39) || (unit >= 0x41 && unit <= 0x5A)
-            || (unit >= 0x61 && unit <= 0x7A) || unit == 0x2D
+        ASCII.isLetterOrDigit(unit) || unit == ASCII.dash
     }
 
     // MARK: - Tags
@@ -159,7 +158,7 @@ enum NoteMetadata {
     ) {
         var p = start
         while p < end {
-            guard ns.character(at: p) == 0x23 else { p += 1; continue }
+            guard ns.character(at: p) == ASCII.hash else { p += 1; continue }
             let hash = p
             p += 1
             if hash > start, !isWhitespace(ns.character(at: hash - 1)) { continue }
@@ -168,7 +167,7 @@ enum NoteMetadata {
             var hasNonDigit = false
             while q < end, isTagChar(ns.character(at: q)) {
                 let unit = ns.character(at: q)
-                if !(unit >= 0x30 && unit <= 0x39) { hasNonDigit = true }
+                if !ASCII.isDigit(unit) { hasNonDigit = true }
                 q += 1
             }
             guard q > p, hasNonDigit else { continue }
@@ -181,7 +180,7 @@ enum NoteMetadata {
     }
 
     private static func isTagChar(_ unit: unichar) -> Bool {
-        if unit == 0x5F || unit == 0x2D || unit == 0x2F { return true }   // _ - /
+        if unit == ASCII.underscore || unit == ASCII.dash || unit == ASCII.slash { return true }   // _ - /
         guard let scalar = Unicode.Scalar(UInt32(unit)) else { return false }   // not a lone surrogate
         let props = scalar.properties
         if props.isAlphabetic || props.numericType != nil { return true }
@@ -228,12 +227,8 @@ enum NoteMetadata {
         containing(ranges, location) != nil
     }
 
-    private static func isBlank(_ unit: unichar) -> Bool {
-        unit == 0x20 || unit == 0x09
-    }
-
     private static func isWhitespace(_ unit: unichar) -> Bool {
-        unit == 0x20 || unit == 0x09 || unit == 0x0A || unit == 0x0D || unit == 0xA0
+        ASCII.isSpaceOrTab(unit) || unit == ASCII.lineFeed || unit == ASCII.carriageReturn || unit == 0xA0
             || unit == 0x2028 || unit == 0x2029 || unit == 0x85
     }
 }

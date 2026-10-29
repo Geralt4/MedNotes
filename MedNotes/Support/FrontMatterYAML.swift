@@ -461,7 +461,7 @@ enum FrontMatterYAML {
         guard !chars.isEmpty else { return false }
         var intPart: [Unicode.Scalar] = []
         var index = 0
-        while index < chars.count, chars[index].value >= 0x30, chars[index].value <= 0x39 {
+        while index < chars.count, ASCII.isDigit(chars[index]) {
             intPart.append(chars[index])
             index += 1
         }
@@ -472,7 +472,7 @@ enum FrontMatterYAML {
         if index < chars.count {
             guard chars[index] == ".", index + 1 < chars.count else { return false }
             index += 1
-            while index < chars.count, chars[index].value >= 0x30, chars[index].value <= 0x39 {
+            while index < chars.count, ASCII.isDigit(chars[index]) {
                 fraction.append(chars[index])
                 index += 1
             }
@@ -484,7 +484,7 @@ enum FrontMatterYAML {
     static func isDate(_ s: String) -> Bool {
         let parts = s.split(separator: "-", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
-              parts.allSatisfy({ $0.unicodeScalars.allSatisfy { $0.value >= 0x30 && $0.value <= 0x39 } }),
+              parts.allSatisfy({ $0.unicodeScalars.allSatisfy(ASCII.isDigit) }),
               let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2]),
               (1...12).contains(m), y >= 1 else { return false }
         let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
@@ -497,7 +497,7 @@ enum FrontMatterYAML {
         guard halves.count == 2, isDate(String(halves[0])) else { return false }
         let time = halves[1].split(separator: ":", omittingEmptySubsequences: false)
         guard time.count == 2 || time.count == 3,
-              time.allSatisfy({ $0.count == 2 && $0.unicodeScalars.allSatisfy { $0.value >= 0x30 && $0.value <= 0x39 } }),
+              time.allSatisfy({ $0.count == 2 && $0.unicodeScalars.allSatisfy(ASCII.isDigit) }),
               let h = Int(time[0]), let mi = Int(time[1]), (0...23).contains(h), (0...59).contains(mi)
         else { return false }
         if time.count == 3 { guard let sec = Int(time[2]), (0...59).contains(sec) else { return false } }

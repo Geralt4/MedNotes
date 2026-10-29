@@ -92,14 +92,10 @@ enum FrontMatter {
     private static func isFence(_ ns: NSString, from start: Int, to end: Int) -> Bool {
         guard end - start >= 3 else { return false }
         var p = end
-        while p > start, isBlank(ns.character(at: p - 1)) { p -= 1 }
+        while p > start, ASCII.isSpaceOrTab(ns.character(at: p - 1)) { p -= 1 }
         return p - start == 3
-            && ns.character(at: start) == 0x2D && ns.character(at: start + 1) == 0x2D
-            && ns.character(at: start + 2) == 0x2D
-    }
-
-    private static func isBlank(_ unit: unichar) -> Bool {
-        unit == 0x20 || unit == 0x09
+            && ns.character(at: start) == ASCII.dash && ns.character(at: start + 1) == ASCII.dash
+            && ns.character(at: start + 2) == ASCII.dash
     }
 
     /// Whether every line is blank, a comment, a list item, indented, or a
@@ -119,18 +115,18 @@ enum FrontMatter {
 
     private static func isPropertyLine(_ ns: NSString, from start: Int, to end: Int) -> Bool {
         var p = start
-        while p < end, isBlank(ns.character(at: p)) { p += 1 }
+        while p < end, ASCII.isSpaceOrTab(ns.character(at: p)) { p += 1 }
         if p == end { return true }                       // blank
         if p > start { return true }                      // indented continuation
         let first = ns.character(at: p)
-        if first == 0x23 { return true }                  // # comment
-        if first == 0x2D {                                // - list item
-            return p + 1 == end || isBlank(ns.character(at: p + 1))
+        if first == ASCII.hash { return true }            // # comment
+        if first == ASCII.dash {                          // - list item
+            return p + 1 == end || ASCII.isSpaceOrTab(ns.character(at: p + 1))
         }
         // key: value  (a colon followed by a space or the end of the line)
         var q = p
         while q < end {
-            if ns.character(at: q) == 0x3A, q + 1 == end || isBlank(ns.character(at: q + 1)) {
+            if ns.character(at: q) == ASCII.colon, q + 1 == end || ASCII.isSpaceOrTab(ns.character(at: q + 1)) {
                 return q > p
             }
             q += 1
