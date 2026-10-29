@@ -428,8 +428,10 @@ private struct PropertyRowView: View {
     let noteID: UUID
     let property: Property
     let apply: (UUID, FrontMatterEditor.Operation, String?) -> Void
+    @EnvironmentObject private var session: AppSession
     @State private var text: String
     @State private var date: Date
+    @State private var pendingToken = UUID()
     @FocusState private var focused: Bool
 
     init(noteID: UUID, property: Property,
@@ -449,6 +451,12 @@ private struct PropertyRowView: View {
     }
 
     var body: some View {
+        rowContent
+            .onAppear { session.registerPendingEdit(pendingToken) { flushPendingText() } }
+            .onDisappear { session.unregisterPendingEdit(pendingToken) }
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .firstTextBaseline, spacing: Chrome.Space.sm) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: property.key)
@@ -521,6 +529,24 @@ private struct PropertyRowView: View {
 
     private func commitText() {
         if let value = PropertyCommit.value(for: property.value, text: text) { set(value) }
+    }
+
+    /// The text this row started from, which the field shows until it is edited.
+    private var shownText: String {
+        switch property.value {
+        case .text(let s), .number(let s): return s
+        default: return ""
+        }
+    }
+
+    /// Writes typed text that focus has not yet committed. A lock or restore calls
+    /// this before it reads the note.
+    private func flushPendingText() {
+        guard property.isEditable, text != shownText else { return }
+        switch property.value {
+        case .text, .number, .empty: commitText()
+        default: return
+        }
     }
 }
 

@@ -56,10 +56,14 @@ extension AppSession {
             // A cancellation only stops the debounce sleep. A lookup that was
             // already running finishes after the newer one started; its
             // results must not overwrite the query the user is typing now.
-            guard generation == switcherGeneration else { return }
+            await switcherLookupWillPublish()
+            // Also the store this lookup read from: a lock closes it, and note
+            // titles and patient names must not be put back into the session
+            // after it has cleared them.
+            guard generation == switcherGeneration, store === self.store else { return }
             switcherResults = Array(hits.prefix(12))
         } catch {
-            guard generation == switcherGeneration else { return }
+            guard generation == switcherGeneration, store === self.store else { return }
             switcherResults = []
         }
     }
@@ -90,6 +94,7 @@ extension AppSession {
             searchTask?.cancel()
         }
         await reload()
+        guard canUseStore else { return }
         selectedModule = .notes
         selectedNoteId = id
         noteEpoch += 1
@@ -104,6 +109,7 @@ extension AppSession {
             patientSearchTask?.cancel()
         }
         await reloadPatients()
+        guard canUseStore else { return }
         selectedModule = .patients
         selectedPatientId = id
         patientEpoch += 1
@@ -116,6 +122,7 @@ extension AppSession {
             todoSearchTask?.cancel()
         }
         await reloadTodos()
+        guard canUseStore else { return }
         selectedModule = .todos
         selectedTodoId = id
         todoEpoch += 1
@@ -128,6 +135,7 @@ extension AppSession {
             eventSearchTask?.cancel()
         }
         await reloadEvents()
+        guard canUseStore else { return }
         selectedModule = .calendar
         selectedEventId = id
         eventEpoch += 1
