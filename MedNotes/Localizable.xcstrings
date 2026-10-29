@@ -8201,6 +8201,26 @@
           }
         }
       }
+    },
+    "The MedNotes database file is missing, although attachments or restore points are still stored. Nothing was changed and no new database was created. Quit MedNotes and put the mednotes.db file back from a Time Machine copy before opening it again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αρχείο βάσης δεδομένων του MedNotes λείπει, ενώ εξακολουθούν να υπάρχουν αποθηκευμένα συνημμένα ή σημεία επαναφοράς. Δεν άλλαξε τίποτα και δεν δημιουργήθηκε νέα βάση δεδομένων. Κλείστε το MedNotes και επαναφέρετε το αρχείο mednotes.db από αντίγραφο του Time Machine πριν το ανοίξετε ξανά."
+          }
+        }
+      }
+    },
+    "%lld edit(s) could not be saved, so nothing was restored." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε επαναφορά."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

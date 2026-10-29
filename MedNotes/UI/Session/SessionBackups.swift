@@ -330,6 +330,15 @@ extension AppSession {
         guard let store, let coordinator else { return }
         let databaseKey = try coordinator.requireDatabaseKey()
         let attachmentKey = try coordinator.requireAttachmentKey()
+        // The edits on screen go into the store first, so the safety copy of
+        // the current data holds them and the restore replaces saved records
+        // only. Left in their editors they would be saved over the restored
+        // records when the restore unmounts the editors.
+        let editorsOnScreen = openEditorDrafts()
+        let unsaved = await saveDrafts(editorsOnScreen.map(\.draft), into: store)
+        guard unsaved == 0 else { throw EditsNotSavedError(count: unsaved) }
+        // A lock while they were saved took the store with it.
+        guard canUseStore, self.store === store else { return }
         let locksAtStart = lockRequests
         let manifest: BackupManifest
         do {
@@ -367,7 +376,9 @@ extension AppSession {
             details: BackupFlowSheet.summary(of: manifest))
         await pruneRestorePoints()
         // Every record may have changed identity; start the UI over. Sync is
-        // suspended until the user reconfirms each destination.
+        // suspended until the user reconfirms each destination. The editors
+        // that unmount saved their drafts above: they must not do it again.
+        settleEditors(editorsOnScreen.map(\.token))
         selectedNoteId = nil
         selectedPatientId = nil
         selectedTodoId = nil
@@ -489,5 +500,15 @@ extension AppSession {
         await reloadEvents()
         importFlow = nil
         notice = String(localized: "Imported \(ImportFlowSheet.summary(of: report)).")
+    }
+}
+
+/// A restore stops when an edit on screen cannot be saved first: the safety
+/// copy would not hold it, and the restore would then replace it.
+private struct EditsNotSavedError: LocalizedError {
+    let count: Int
+
+    var errorDescription: String? {
+        String(localized: "\(count) edit(s) could not be saved, so nothing was restored.")
     }
 }

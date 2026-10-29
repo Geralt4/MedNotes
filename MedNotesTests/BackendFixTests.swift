@@ -907,6 +907,43 @@ final class BackendFixTests: XCTestCase {
         XCTAssertEqual(Set(all.map(\.profile.lastName)), Set(["Live", "Archived"]))
     }
 
+    func testEditorSaveKeepsTheArchiveFlagOfAnExistingRow() async throws {
+        let db = try makeDB()
+        let draft = samplePatient(name: "Maria", amka: "33333333333")
+        try await db.savePatient(draft)
+        // The archive commits after the editor loaded its draft.
+        try await db.setPatientArchived(id: draft.id, archived: true, lastModified: Date())
+
+        var edited = draft
+        edited.profile.lastName = "Edited"
+        try await db.savePatient(edited, preservingArchiveFlag: true)
+
+        let stored = try await db.loadPatient(id: draft.id)
+        XCTAssertEqual(stored?.profile.lastName, "Edited", "the edit itself is saved")
+        XCTAssertEqual(stored?.isArchived, true, "a stale draft must not un-archive the record")
+    }
+
+    func testPreservingTheArchiveFlagStillStoresItForANewRow() async throws {
+        let db = try makeDB()
+        var archived = samplePatient(name: "Eleni", amka: "44444444444")
+        archived.isArchived = true
+        try await db.savePatient(archived, preservingArchiveFlag: true)
+        let stored = try await db.loadPatient(id: archived.id)
+        XCTAssertEqual(stored?.isArchived, true)
+    }
+
+    func testWholeRecordWritesStillReplaceTheArchiveFlag() async throws {
+        let db = try makeDB()
+        var patient = samplePatient(name: "Petros", amka: "55555555555")
+        patient.isArchived = true
+        try await db.savePatient(patient)
+        patient.isArchived = false
+        // Importers and restores write whole records: the flag comes with them.
+        try await db.savePatient(patient)
+        let stored = try await db.loadPatient(id: patient.id)
+        XCTAssertEqual(stored?.isArchived, false)
+    }
+
     func testFailedNewPatientSaveCleansOrphanFiles() async throws {
         let filesRoot = tempDir.appendingPathComponent("Files", isDirectory: true)
         try FileManager.default.createDirectory(at: filesRoot, withIntermediateDirectories: true)

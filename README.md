@@ -73,7 +73,10 @@ and hardened runtime, verifies the signature and the entitlement allowlist
 (`scripts/verify_entitlements.py`), builds and signs a DMG, notarizes with
 `notarytool`, staples and validates with `stapler`/`spctl`, and publishes a
 SHA-256 checksum. The team identifier comes from the environment
-(`MEDNOTES_TEAM_ID`) and is never committed. Dependency revisions are checked
+(`MEDNOTES_TEAM_ID`) and is never committed, and neither is the name of the
+Developer ID provisioning profile (`MEDNOTES_PROFILE_NAME`). The profile is what
+grants the app its application-identifier entitlement; the release stops if the
+signed app lacks it or names another team. Dependency revisions are checked
 by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
 
 ## Notes core & Apple sync
@@ -228,6 +231,19 @@ system CryptoKit and CommonCrypto remain for the legacy v1 reader. Revisions
 are recorded in `docs/dependencies.md` and checked by
 `scripts/scan_dependencies.py`. The CLI stays dependency-free: it typechecks
 against system modules only and never opens the encrypted store.
+
+### Signing
+
+Out of the box the app is signed ad hoc (`Config/Signing.xcconfig`). That is
+enough to build and run the tests, but an ad-hoc app cannot use the
+data-protection Keychain: every call fails with `errSecMissingEntitlement`
+(-34018), so it can only run against the preview or test key managers. To run
+the app on a real store, copy `Config/Local.xcconfig.example` to
+`Config/Local.xcconfig` (git ignores it), put your team in it, and build with
+automatic signing (`-allowProvisioningUpdates` on the command line). Xcode then
+makes the development profile that carries the application identifier.
+`KeychainEntitlementTests` is skipped on an ad-hoc build and, on a team-signed
+one, adds and removes a real Keychain item.
 
 Keep DerivedData outside `~/Documents` (Xcode's default location is fine).
 The project folder is under `~/Documents`, and the sandboxed test host

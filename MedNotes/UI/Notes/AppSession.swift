@@ -281,6 +281,13 @@ final class AppSession: ObservableObject {
     /// detaches the store; see `OpenEditorDraft`.
     var openEditors: [UUID: () -> OpenEditorDraft?] = [:]
 
+    /// Tokens whose drafts the session has already saved or discarded itself,
+    /// as a lock or a restore does just before it unmounts the editors. The
+    /// editor's own `onDisappear` autosave must then not run: it would write
+    /// the same draft again, over whatever the restore put in its place.
+    /// `unregisterOpenEditor` reports and clears the mark.
+    var settledEditors: Set<UUID> = []
+
     /// The open store's layout, once `bootstrap` has resolved it.
     private(set) var dataRoot: DataRoot?
 
@@ -759,6 +766,17 @@ final class AppSession: ObservableObject {
         await lockNow(reason: "request")
     }
 
+    /// Quitting is a lock, so the open editors' drafts are saved and the store
+    /// is closed the way a lock does it. Notes have no autosave, and an
+    /// editor's own save on the way out is a task that quitting would cut off.
+    /// Also waits for a lock already in progress to finish writing its drafts.
+    func closeForQuit() async {
+        if store != nil, !isLocked {
+            await lockNow(reason: "quit")
+        }
+        await draftFlush?.value
+    }
+
     /// The teardown behind `lockNow`, for a session that is already locked.
     ///
     /// Everything the session exposes is torn down before the first `await`:
@@ -766,8 +784,12 @@ final class AppSession: ObservableObject {
     /// a fresh store that this lock can no longer clear or unkey.
     private func closeStore(reason: String) async {
         // Read the open editors before anything unmounts them; their drafts
-        // are written below, into the store that is closing.
-        let drafts = openEditors.values.compactMap { $0() }.map(preparedForSave)
+        // are written below, into the store that is closing. They are marked
+        // settled: the editors' own autosave on the way out must not write
+        // them again into a store that an unlock may have reopened by then.
+        let open = openEditorDrafts()
+        let drafts = open.map(\.draft)
+        settledEditors.formUnion(open.map(\.token))
         // The file panel is app-modal and drawn above the curtain and the
         // sheets, and a backup or export writes outside the container: both
         // stop here. The code waiting on them finds the store gone.
@@ -797,7 +819,13 @@ final class AppSession: ObservableObject {
             SwipeDiagnostics.purge()
         }
         if let closing {
-            let flush = Task { await self.saveDrafts(drafts, into: closing) }
+            let flush = Task {
+                let failures = await self.saveDrafts(drafts, into: closing)
+                if failures > 0 {
+                    // The alert waits for the unlock; ContentView hides it while locked.
+                    self.errorMessage = String(localized: "MedNotes locked while a record was being edited, and \(failures) edit(s) could not be saved.")
+                }
+            }
             draftFlush = flush
             await flush.value
             try? await closing.audit.log(
@@ -919,7 +947,7 @@ final class AppSession: ObservableObject {
 
     /// `draft` as `save` would store it, taken while `patientDirectory` still
     /// holds the names a todo is saved with.
-    private func preparedForSave(_ draft: OpenEditorDraft) -> OpenEditorDraft {
+    func preparedForSave(_ draft: OpenEditorDraft) -> OpenEditorDraft {
         switch draft {
         case .todo(let todo, true):
             return .todo(normalizedForSave(todo), edited: true)
@@ -934,7 +962,8 @@ final class AppSession: ObservableObject {
     /// The lock's last write before the store closes: an edited draft is
     /// saved and a new record nobody touched is discarded, as leaving its
     /// editor would. Nothing is reloaded or shown; unlock reloads everything.
-    private func saveDrafts(_ drafts: [OpenEditorDraft], into store: AppStore) async {
+    /// Returns how many drafts could not be saved.
+    func saveDrafts(_ drafts: [OpenEditorDraft], into store: AppStore) async -> Int {
         var failures = 0
         for draft in drafts {
             do {
@@ -974,10 +1003,16 @@ final class AppSession: ObservableObject {
                 failures += 1
             }
         }
-        if failures > 0 {
-            // The alert waits for the unlock; ContentView hides it while locked.
-            errorMessage = String(localized: "MedNotes locked while a record was being edited, and \(failures) edit(s) could not be saved.")
-        }
+        return failures
+    }
+
+    /// Marks the editors behind `tokens` as saved by the session, so their own
+    /// autosave on the way out is skipped, and forgets the quiet pushes the
+    /// drafts' saves queued: the records they named may be gone or replaced.
+    func settleEditors(_ tokens: [UUID]) {
+        settledEditors.formUnion(tokens)
+        todosSavedAtLock = []
+        eventsSavedAtLock = []
     }
 
     /// Publishes a store that was just opened and reloads every list from it,

@@ -240,9 +240,13 @@ actor EncryptedFileStore: AttachmentStore {
     /// file write and the metadata commit). Run once when a store opens, before
     /// anything can save, with every referenced ID lowercased. Names that are
     /// not storage IDs are left alone, and so is anything younger than
-    /// `minimumAge`: a crash leftover loses nothing by waiting, while a
-    /// database that was opened empty beside a full folder must not cost the
-    /// user files that are still recoverable.
+    /// `minimumAge`, which only gives a save in flight time to commit.
+    ///
+    /// When the database references no attachment at all, only half-written
+    /// staging files go. Every stored object would otherwise count as an
+    /// orphan, and age does not protect them: a database that was lost or
+    /// opened empty beside a full folder would cost the user every file that
+    /// is still recoverable.
     func sweepOrphans(referenced: Set<String>, minimumAge: TimeInterval = 3600) -> Int {
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return 0 }
@@ -254,7 +258,8 @@ actor EncryptedFileStore: AttachmentStore {
             guard modified <= cutoff else { continue }
             let name = entry.lastPathComponent
             let isStaging = name.contains(".staging-")
-            let isOrphan = Self.isSafeStorageID(name) && !referenced.contains(name.lowercased())
+            let isOrphan = !referenced.isEmpty
+                && Self.isSafeStorageID(name) && !referenced.contains(name.lowercased())
             guard isStaging || isOrphan else { continue }
             if (try? FileManager.default.removeItem(at: entry)) != nil { removed += 1 }
         }

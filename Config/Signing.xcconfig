@@ -1,0 +1,15 @@
+// Signing settings shared by every target.
+//
+// Without a team the app is signed ad hoc. That builds, runs and passes the
+// tests, but it cannot use the data-protection Keychain (errSecMissingEntitlement,
+// -34018), so only the preview and test key managers work. To run the real app,
+// copy Local.xcconfig.example to Local.xcconfig and name your team there. The
+// team never goes into this file: the repository stays free of account details.
+//
+// Releases override these on the xcodebuild command line; see scripts/release.sh.
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

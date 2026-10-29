@@ -253,6 +253,52 @@ final class SecurityTests: XCTestCase {
         }
     }
 
+    func testPreflightRefusesAMissingDatabaseBesideStoredData() async throws {
+        let manager = InMemoryKeyManager()
+
+        // An attachment object with no database to account for it.
+        let withAttachment = try makeRoot("attachment-only")
+        let files = try EncryptedFileStore.testStore(at: withAttachment.attachmentsURL)
+        _ = try await files.store(Data("report".utf8))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: withAttachment, keyManager: manager),
+            .databaseMissing)
+
+        // So is a restore point.
+        let withRestorePoint = try makeRoot("restore-point-only")
+        try Data("sealed".utf8).write(
+            to: withRestorePoint.restorePointsURL.appendingPathComponent("restore_1.mnrp"))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: withRestorePoint, keyManager: manager),
+            .databaseMissing)
+
+        // Files that are not storage IDs or restore points do not count.
+        let strangers = try makeRoot("strangers")
+        try Data("x".utf8).write(to: strangers.attachmentsURL.appendingPathComponent(".DS_Store"))
+        try Data("x".utf8).write(to: strangers.restorePointsURL.appendingPathComponent("notes.txt"))
+        XCTAssertEqual(
+            try SecureStoreCoordinator.preflight(dataRoot: strangers, keyManager: manager), .empty)
+    }
+
+    @MainActor
+    func testAuthenticateLeavesAMissingDatabaseAndItsFilesAlone() async throws {
+        let root = try makeRoot("missing-db")
+        let files = try EncryptedFileStore.testStore(at: root.attachmentsURL)
+        let storageID = try await files.store(Data("report".utf8))
+        let manager = InMemoryKeyManager()
+        let coordinator = SecureStoreCoordinator(keyManager: manager, dataRoot: root)
+
+        XCTAssertThrowsError(try coordinator.authenticate()) { error in
+            XCTAssertEqual(error as? SecureStoreError, .databaseMissing)
+        }
+        XCTAssertFalse(coordinator.isReady)
+        XCTAssertEqual(try manager.lookUpRootKey(), .absent, "no key may be created for it")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path),
+                       "no empty database may be created beside the attachments")
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: root.attachmentsURL.appendingPathComponent(storageID).path))
+    }
+
     @MainActor
     func testAuthenticateRefusesAnEncryptedStoreWhoseKeyIsMissing() throws {
         let root = try makeRoot()
@@ -2331,6 +2377,51 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(session.selectedNoteId, note.id, "unlocking reopens the note")
     }
 
+    /// A lock marks the editors it saved so they do not save again on the way
+    /// out. The mark must not outlive that editor: the note reopened by the
+    /// unlock is a new editor, and what is typed into it has to be saved when
+    /// the user leaves it, here by switching module.
+    @MainActor
+    func testTypingAfterAnUnlockIsSavedWhenTheEditorIsLeft() async throws {
+        let root = try makeRoot()
+        let session = AppSession(dataRoot: root, defaults: defaults,
+                                 keyManager: InMemoryKeyManager(key: TestKeys.root(for: root)))
+        addTeardownBlock { @MainActor in await session.lockNow(reason: "teardown") }
+        await wait(until: { session.isReady }, seconds: 20)
+        session.selectedModule = .notes
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Ward round"
+        note.content = "Seen on the ward."
+        let saved = await session.save(note)
+        XCTAssertTrue(saved)
+
+        let window = hostWindow(ContentView().environmentObject(session))
+        let first = try await textView(in: window, showing: note.content)
+        XCTAssertTrue(window.makeFirstResponder(first))
+        first.setSelectedRange(NSRange(location: (first.string as NSString).length, length: 0))
+        first.insertText(" Before the lock.", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await session.lockNow(reason: "idle")
+        await session.unlock()
+        XCTAssertEqual(session.selectedNoteId, note.id, "precondition: the note reopened")
+
+        let afterLock = note.content + " Before the lock."
+        let second = try await textView(in: window, showing: afterLock)
+        XCTAssertTrue(window.makeFirstResponder(second))
+        second.setSelectedRange(NSRange(location: (second.string as NSString).length, length: 0))
+        second.insertText(" After the unlock.", replacementRange: NSRange(location: NSNotFound, length: 0))
+        session.selectedModule = .todos
+
+        let expected = afterLock + " After the unlock."
+        var stored: Note?
+        for _ in 0..<200 where stored?.content != expected {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            stored = try await session.store?.notes.load(id: note.id)
+        }
+        XCTAssertEqual(stored?.content, expected, "leaving the reopened editor must save what was typed in it")
+    }
+
     /// The lock applies the editors' own rule to every kind of record: edits
     /// are saved, and a new record nobody touched is dropped, not left behind
     /// as a "New Event" row.
@@ -2358,7 +2449,7 @@ final class SecurityTests: XCTestCase {
         session.registerOpenEditor(editors[2]) { .event(event, edited: false) }
         session.registerOpenEditor(editors[3]) { .note(note, edited: false) }
         await session.lockNow(reason: "test")
-        editors.forEach(session.unregisterOpenEditor)
+        editors.forEach { session.unregisterOpenEditor($0) }
         await session.unlock()
 
         let store = try XCTUnwrap(session.store)
@@ -2399,6 +2490,111 @@ final class SecurityTests: XCTestCase {
         XCTAssertTrue(saved?.files.contains { $0.id == attachment.id } == true)
         let data = try await reopened.patients.loadFileData(patientId: stale.id, fileId: attachment.id)
         XCTAssertEqual(data, Data("NEW".utf8))
+    }
+
+    @MainActor
+    func testClosingForQuitSavesTheOpenDraftAndClosesTheStore() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Ward round"
+        note.content = "Typed before the quit."
+        let token = UUID()
+        session.registerOpenEditor(token) { .note(note, edited: true) }
+
+        await session.closeForQuit()
+
+        XCTAssertNil(session.store, "quitting closes the store like a lock")
+        XCTAssertTrue(session.isLocked)
+        session.unregisterOpenEditor(token)
+        await session.unlock()
+        let reopened = try XCTUnwrap(session.store)
+        let stored = try await reopened.notes.load(id: note.id)
+        XCTAssertEqual(stored?.content, "Typed before the quit.")
+        let lock = try await reopened.audit.latest(action: "app_lock")
+        XCTAssertTrue(lock?.details.contains("reason=quit") == true)
+    }
+
+    @MainActor
+    func testClosingForQuitWithNothingOpenIsHarmless() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.lockNow(reason: "test")
+        await session.closeForQuit()
+        XCTAssertNil(session.store)
+        XCTAssertTrue(session.isLocked)
+    }
+
+    @MainActor
+    func testRestoreSavesTheOpenDraftFirstAndSettlesItsEditor() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Plan"
+        note.content = "Backed up text."
+        let saved = await session.save(note)
+        XCTAssertTrue(saved)
+        let store = try XCTUnwrap(session.store)
+        let archive = FileManager.default.temporaryDirectory
+            .appendingPathComponent("restore-\(UUID().uuidString).mednotesbackup")
+        defer { try? FileManager.default.removeItem(at: archive) }
+        let passphrase = "a long enough passphrase"
+        _ = try await store.backups.createEncryptedBackup(name: "before", to: archive, passphrase: passphrase)
+
+        // Typed after the backup, not saved: the editor still holds it.
+        var draft = note
+        draft.content = "Typed after the backup."
+        let token = UUID()
+        session.registerOpenEditor(token) { .note(draft, edited: true) }
+
+        try await session.performRestore(from: archive, passphrase: passphrase)
+
+        let restored = try await XCTUnwrap(session.store).notes.load(id: note.id)
+        XCTAssertEqual(restored?.content, "Backed up text.", "the backup's version is what the restore leaves")
+        XCTAssertFalse(session.unregisterOpenEditor(token),
+                       "the session saved this draft itself, so the editor must not save it again")
+    }
+
+    @MainActor
+    func testRestoreChangesNothingWhenAnOpenDraftCannotBeSaved() async throws {
+        let session = try await readySession(try makeRoot())
+        await session.newNote()
+        let created = await session.loadSelectedNote()
+        var note = try XCTUnwrap(created)
+        note.title = "Plan"
+        note.content = "Current text."
+        let saved = await session.save(note)
+        XCTAssertTrue(saved)
+        let store = try XCTUnwrap(session.store)
+        var existing = Patient.newRecord()
+        existing.profile.amka = "12345678901"
+        try await store.patients.save(existing)
+        let archive = FileManager.default.temporaryDirectory
+            .appendingPathComponent("restore-\(UUID().uuidString).mednotesbackup")
+        defer { try? FileManager.default.removeItem(at: archive) }
+        let passphrase = "a long enough passphrase"
+        _ = try await store.backups.createEncryptedBackup(name: "before", to: archive, passphrase: passphrase)
+        var edited = note
+        edited.content = "Edited since the backup."
+        try await store.notes.save(edited)
+
+        // A second patient with the same AMKA cannot be saved.
+        var clash = Patient.newRecord()
+        clash.profile.amka = "12345678901"
+        let token = UUID()
+        session.registerOpenEditor(token) { .patient(clash, edited: true, knownFileIDs: []) }
+
+        do {
+            try await session.performRestore(from: archive, passphrase: passphrase)
+            XCTFail("a draft that cannot be saved must stop the restore")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("could not be saved"))
+        }
+
+        let current = try await XCTUnwrap(session.store).notes.load(id: note.id)
+        XCTAssertEqual(current?.content, "Edited since the backup.", "nothing was restored")
+        XCTAssertTrue(session.unregisterOpenEditor(token), "the editor keeps its draft to fix")
     }
 
     /// `open -g`, a hidden login item or a click elsewhere during startup

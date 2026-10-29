@@ -6,6 +6,13 @@ struct PatientDetailView: View {
     @State private var original: Patient?
     @State private var isLoading = true
     @State private var showDeleteConfirm = false
+    /// The record the open delete or archive dialog is about, taken from the
+    /// editor the user pressed the button in. The dialog acts on this, never on
+    /// whatever the list has selected by the time it is confirmed.
+    @State private var confirmTarget: (id: UUID, permanent: Bool)?
+    /// Numbers the loads, so only the newest one clears the spinner; see
+    /// `LoadGeneration`.
+    @State private var loads = LoadGeneration()
     /// The record whose "First name" field takes focus when its editor appears:
     /// only ever the patient the user just created, never one they arrowed to.
     @State private var autofocusPatientId: UUID?
@@ -46,8 +53,8 @@ struct PatientDetailView: View {
             }
         }
         .onDisappear {
-            session.unregisterOpenEditor(lockToken)
-            guard let d = draft else { return }
+            // False when a lock or restore already saved or discarded this draft.
+            guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
                 Task {
                     if session.selectedPatientId == d.id {
@@ -65,28 +72,34 @@ struct PatientDetailView: View {
             }
         }
         .confirmationDialog(
-            isArchived ? "Delete this patient permanently?" : "Archive this patient?",
+            confirmTarget?.permanent ?? isArchived
+                ? "Delete this patient permanently?" : "Archive this patient?",
             isPresented: $showDeleteConfirm, titleVisibility: .visible
         ) {
-            Button(isArchived ? "Delete" : "Archive", role: isArchived ? .destructive : nil) {
-                let permanent = isArchived
+            Button(confirmTarget?.permanent ?? isArchived ? "Delete" : "Archive",
+                   role: confirmTarget?.permanent ?? isArchived ? .destructive : nil) {
+                guard let target = confirmTarget else { return }
                 Task {
-                    if permanent {
-                        await session.deleteSelectedPatient()
+                    if target.permanent {
+                        await session.deletePatient(id: target.id)
                     } else {
-                        await session.archiveSelectedPatient()
+                        await session.archivePatient(id: target.id)
                     }
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(isArchived
+            Text(confirmTarget?.permanent ?? isArchived
                 ? "This cannot be undone."
                 : "Notes, todos and appointments stay linked, and the record can be restored from the Archived list.")
         }
     }
 
     private func loadPatient() async {
+        let generation = loads.begin()
+        // Only the newest load clears the spinner, on any exit: one that was
+        // cancelled and ends late must not uncover the previous record.
+        defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedPatientId
         if let d = draft, d.id == selectedId, hasChanges {
             return
@@ -108,7 +121,6 @@ struct PatientDetailView: View {
         let switching = draft?.id != selectedId
         let showLoading = draft == nil || switching
         if showLoading { isLoading = true }
-        defer { if showLoading { isLoading = false } }
         if switching {
             autofocusPatientId = nil
             isEditing = false
@@ -190,7 +202,10 @@ struct PatientDetailView: View {
                 if patient.isArchived {
                     ArchivedPatientToolbar(
                         onRestore: { Task { await session.unarchivePatient(id: patient.id) } },
-                        onDelete: { showDeleteConfirm = true })
+                        onDelete: {
+                            confirmTarget = (patient.id, true)
+                            showDeleteConfirm = true
+                        })
                 } else {
                     PatientToolbar(
                         isEditing: isEditing,
@@ -203,7 +218,10 @@ struct PatientDetailView: View {
                         },
                         onSave: { save(thenLeaveEditing: false) },
                         onDone: { save(thenLeaveEditing: true) },
-                        onArchive: { showDeleteConfirm = true })
+                        onArchive: {
+                            confirmTarget = (patient.id, false)
+                            showDeleteConfirm = true
+                        })
                 }
             }
         }
