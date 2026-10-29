@@ -38,6 +38,12 @@ enum MarkdownParser {
 
         var isBlank: Bool { units.allSatisfy(ASCII.isSpaceOrTab) }
 
+        /// How many spaces the line starts with (tabs do not count).
+        var leadingSpaces: Int { units.prefix(while: { $0 == ASCII.space }).count }
+
+        /// How many spaces and tabs the line starts with.
+        var leadingBlanks: Int { units.prefix(while: ASCII.isSpaceOrTab).count }
+
         var indent: Int {
             var width = 0
             for unit in units {
@@ -52,6 +58,14 @@ enum MarkdownParser {
         }
 
         var text: String { String(decoding: units, as: UTF16.self) }
+    }
+
+    /// `range` of `units` with the spaces and tabs at both ends left out.
+    static func trimBlanks(_ units: [UInt16], _ range: Range<Int>) -> Range<Int> {
+        var lower = range.lowerBound, upper = range.upperBound
+        while lower < upper, ASCII.isSpaceOrTab(units[lower]) { lower += 1 }
+        while upper > lower, ASCII.isSpaceOrTab(units[upper - 1]) { upper -= 1 }
+        return lower..<upper
     }
 
     // MARK: - Builder
@@ -133,43 +147,34 @@ enum MarkdownParser {
             var blocks: [MarkdownBlock] = []
             var i = lines.startIndex
             while i < lines.endIndex {
-                let line = lines[i]
-                if line.isBlank { i += 1; continue }
-                if depth >= MarkdownParser.maxDepth {
-                    let (block, next) = paragraph(lines, from: i, depth: depth, interrupt: false, memo: memo)
-                    blocks.append(block)
-                    i = next
-                    continue
-                }
-                if let (block, next) = fencedCode(lines, from: i, topLevel: topLevel) {
-                    blocks.append(block); i = next; continue
-                }
-                if let (block, next) = commentBlock(lines, from: i, memo: memo) {
-                    blocks.append(block); i = next; continue
-                }
-                if let block = heading(line, depth: depth) {
-                    blocks.append(block); i += 1; continue
-                }
-                if isRule(line) {
-                    blocks.append(MarkdownBlock(range: NSRange(location: line.start, length: line.units.count), kind: .rule))
-                    i += 1; continue
-                }
-                if isQuoteLine(line) {
-                    let (block, next) = quote(lines, from: i, depth: depth)
-                    blocks.append(block); i = next; continue
-                }
-                if listMarker(line) != nil {
-                    let (block, next) = list(lines, from: i, depth: depth)
-                    blocks.append(block); i = next; continue
-                }
-                if let (block, next) = table(lines, from: i, depth: depth) {
-                    blocks.append(block); i = next; continue
-                }
-                let (block, next) = paragraph(lines, from: i, depth: depth, interrupt: true, memo: memo)
+                if lines[i].isBlank { i += 1; continue }
+                let (block, next) = readBlock(lines, at: i, depth: depth, topLevel: topLevel, memo: memo)
                 blocks.append(block)
                 i = next
             }
             return blocks
+        }
+
+        /// The block that starts at `lines[i]` and the index of the line after it.
+        /// The order of the checks is the precedence between block kinds; a line
+        /// nothing else claims is a paragraph.
+        func readBlock(_ lines: ArraySlice<Line>, at i: Int, depth: Int, topLevel: Bool,
+                       memo: CommentMemo) -> (MarkdownBlock, Int) {
+            let line = lines[i]
+            // Nested too deep: read everything as text.
+            if depth >= MarkdownParser.maxDepth {
+                return paragraph(lines, from: i, depth: depth, interrupt: false, memo: memo)
+            }
+            if let found = fencedCode(lines, from: i, topLevel: topLevel) { return found }
+            if let found = commentBlock(lines, from: i, memo: memo) { return found }
+            if let heading = heading(line, depth: depth) { return (heading, i + 1) }
+            if isRule(line) {
+                return (MarkdownBlock(range: NSRange(location: line.start, length: line.units.count), kind: .rule), i + 1)
+            }
+            if isQuoteLine(line) { return quote(lines, from: i, depth: depth) }
+            if listMarker(line) != nil { return list(lines, from: i, depth: depth) }
+            if let found = table(lines, from: i, depth: depth) { return found }
+            return paragraph(lines, from: i, depth: depth, interrupt: true, memo: memo)
         }
 
         // MARK: Fenced code
@@ -177,8 +182,7 @@ enum MarkdownParser {
         /// A fence run at the start of a line: `(char, length, info start)`.
         func fenceOpener(_ line: Line) -> (char: UInt16, length: Int, after: Int)? {
             guard line.indent <= 3 else { return nil }
-            var p = 0
-            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
+            let p = line.leadingSpaces
             guard p < line.units.count, line.units[p] == ASCII.backtick || line.units[p] == ASCII.tilde else { return nil }
             let char = line.units[p]
             var q = p
@@ -252,39 +256,39 @@ enum MarkdownParser {
         // MARK: Headings and rules
 
         func heading(_ line: Line, depth: Int) -> MarkdownBlock? {
-            var p = 0
-            while p < line.units.count, line.units[p] == ASCII.space, p < 4 { p += 1 }
-            guard p <= 3 else { return nil }
+            guard line.leadingSpaces <= 3 else { return nil }
+            var p = line.leadingSpaces
             var hashes = 0
             while p < line.units.count, line.units[p] == ASCII.hash { hashes += 1; p += 1 }
             guard (1...6).contains(hashes), p < line.units.count, ASCII.isSpaceOrTab(line.units[p]) else { return nil }
             let markerEnd = p + 1
-            // Text runs to the end, minus an optional closing run of `#` set off by a space.
-            var end = line.units.count
-            while end > markerEnd, ASCII.isSpaceOrTab(line.units[end - 1]) { end -= 1 }
-            var q = end
-            while q > markerEnd, line.units[q - 1] == ASCII.hash { q -= 1 }
-            if q < end, q == markerEnd || ASCII.isSpaceOrTab(line.units[q - 1]) {
-                end = q
-                while end > markerEnd, ASCII.isSpaceOrTab(line.units[end - 1]) { end -= 1 }
-            }
-            var start = markerEnd
-            while start < end, ASCII.isSpaceOrTab(line.units[start]) { start += 1 }
-            guard end > start else { return nil }   // an empty heading is not one (as in NoteMetadata)
+            let text = headingText(line.units, after: markerEnd)
+            guard !text.isEmpty else { return nil }   // an empty heading is not one (as in NoteMetadata)
             // A `^id` ends the heading's text, as for any line.
             var blockID: String?
-            var contentUnits = Array(line.units[start..<end])
+            var contentUnits = Array(line.units[text])
             if let (trimmed, id) = NoteMetadata.splitTrailingBlockID(contentUnits), !trimmed.isEmpty {
                 contentUnits = trimmed
                 blockID = id
             }
-            let content = inlines(units: contentUnits, sources: (start..<(start + contentUnits.count)).map { line.start + $0 },
-                                  end: line.start + start + contentUnits.count, depth: depth)
+            let content = inlines(in: line, range: text.lowerBound..<(text.lowerBound + contentUnits.count), depth: depth)
             return MarkdownBlock(
                 range: NSRange(location: line.start, length: line.units.count),
                 kind: .heading(level: hashes, content: content,
                                marker: NSRange(location: line.start, length: markerEnd)),
                 blockID: blockID)
+        }
+
+        /// The heading's text: after the marker, without the blanks around it and
+        /// without a closing run of `#` (`## Title ##`) set off from it by a blank.
+        func headingText(_ units: [UInt16], after markerEnd: Int) -> Range<Int> {
+            var text = MarkdownParser.trimBlanks(units, markerEnd..<units.count)
+            var runStart = text.upperBound
+            while runStart > text.lowerBound, units[runStart - 1] == ASCII.hash { runStart -= 1 }
+            let closes = runStart < text.upperBound
+                && (runStart == text.lowerBound || ASCII.isSpaceOrTab(units[runStart - 1]))
+            if closes { text = MarkdownParser.trimBlanks(units, text.lowerBound..<runStart) }
+            return text
         }
 
         func isRule(_ line: Line) -> Bool {
@@ -303,8 +307,7 @@ enum MarkdownParser {
 
         /// A quote line without its `>` and the one space after it.
         func unquoted(_ line: Line) -> Line {
-            var p = 0
-            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
+            var p = line.leadingSpaces
             p += 1   // the >
             if p < line.units.count, line.units[p] == ASCII.space { p += 1 }
             return line.dropping(min(p, line.units.count))
@@ -338,12 +341,8 @@ enum MarkdownParser {
             var fold = MarkdownCallout.Fold.none
             if p < u.count, u[p] == ASCII.plus { fold = .open; p += 1 } else if p < u.count, u[p] == ASCII.dash { fold = .closed; p += 1 }
             guard p == u.count || ASCII.isSpaceOrTab(u[p]) else { return nil }
-            while p < u.count, ASCII.isSpaceOrTab(u[p]) { p += 1 }
-            var end = u.count
-            while end > p, ASCII.isSpaceOrTab(u[end - 1]) { end -= 1 }
-            let title = end > p
-                ? inlines(units: Array(u[p..<end]), sources: (p..<end).map { line.start + $0 }, end: line.start + end, depth: depth)
-                : []
+            let titleRange = MarkdownParser.trimBlanks(u, p..<u.count)
+            let title = titleRange.isEmpty ? [] : inlines(in: line, range: titleRange, depth: depth)
             return MarkdownCallout(
                 type: type, title: title, fold: fold,
                 headerRange: NSRange(location: headerLine.start, length: line.end - headerLine.start), children: [])
@@ -366,8 +365,7 @@ enum MarkdownParser {
 
         func listMarker(_ line: Line) -> Marker? {
             guard line.indent <= 3 else { return nil }
-            var p = 0
-            while p < line.units.count, line.units[p] == ASCII.space { p += 1 }
+            let p = line.leadingSpaces
             guard p < line.units.count else { return nil }
             let indent = p
             var number = 0, ordered = false, char: UInt16 = line.units[p]
@@ -401,66 +399,15 @@ enum MarkdownParser {
 
         func list(_ lines: ArraySlice<Line>, from i: Int, depth: Int) -> (MarkdownBlock, Int) {
             guard let first = listMarker(lines[i]) else {
-                let (block, next) = paragraph(lines, from: i, depth: depth, interrupt: false)
-                return (block, next)
+                return paragraph(lines, from: i, depth: depth, interrupt: false)
             }
             var items: [MarkdownListItem] = []
             var j = i
             var marker = first
             while j < lines.endIndex {
-                let startLine = lines[j]
-                let contentIndent = marker.contentOffset   // continuation lines must reach this column
-                var itemLines: [Line] = [startLine.dropping(min(marker.contentOffset, startLine.units.count))]
-                var k = j + 1
-                var blanks = 0
-                while k < lines.endIndex {
-                    let candidate = lines[k]
-                    if candidate.isBlank {
-                        blanks += 1
-                        k += 1
-                        continue
-                    }
-                    if candidate.indent >= contentIndent {
-                        for _ in 0..<blanks { itemLines.append(Line(start: candidate.start, units: [])) }
-                        blanks = 0
-                        itemLines.append(dropIndent(candidate, upTo: contentIndent))
-                        k += 1
-                        continue
-                    }
-                    // Lazy continuation: text that continues the item's last paragraph.
-                    if blanks == 0, listMarker(candidate) == nil, !startsBlock(candidate), itemLines.last?.isBlank == false {
-                        itemLines.append(candidate.dropping(candidate.units.prefix(while: ASCII.isSpaceOrTab).count))
-                        k += 1
-                        continue
-                    }
-                    break
-                }
-                // Trailing blank lines belong to nobody.
-                let endIndex = k - blanks
-                var content = itemLines
-                // A task box: `[ ]` or `[x]` followed by a space or the end of the line.
-                var task: MarkdownTask?
-                if var head = content.first, head.units.count >= 3, head.units[0] == ASCII.openBracket, head.units[2] == ASCII.closeBracket,
-                   [ASCII.space, ASCII.lowerX, ASCII.upperX].contains(head.units[1]),
-                   head.units.count == 3 || ASCII.isSpaceOrTab(head.units[3]) {
-                    task = MarkdownTask(box: NSRange(location: head.start, length: 3), isDone: head.units[1] != ASCII.space)
-                    let skip = head.units.count == 3 ? 3 : 4
-                    head = head.dropping(skip)
-                    content[0] = head
-                }
-                let blocks = parseBlocks(content[...], depth: depth + 1, topLevel: false)
-                let last = lines[max(j, endIndex - 1)]
-                let range = NSRange(location: startLine.start + 0, length: last.end - startLine.start)
-                var item = MarkdownListItem(
-                    range: range,
-                    marker: NSRange(location: startLine.start + marker.indent, length: marker.markerLength),
-                    task: task, blocks: blocks, blockID: nil)
-                // A `^id` ending the item's own text names the whole item, children included.
-                if let firstBlock = blocks.first, case .paragraph = firstBlock.kind, let id = firstBlock.blockID {
-                    item.blockID = id
-                }
+                let (item, itemEnd) = listItem(lines, from: j, marker: marker, depth: depth)
                 items.append(item)
-                j = endIndex
+                j = itemEnd
                 // The next item: a marker of the same kind, after any blank lines
                 // (a loose list is still one list).
                 var m = j
@@ -475,6 +422,67 @@ enum MarkdownParser {
             let range = NSRange(location: lines[i].start, length: (items.last.map { NSMaxRange($0.range) } ?? lines[i].end) - lines[i].start)
             return (MarkdownBlock(range: range, kind: .list(MarkdownList(
                 isOrdered: first.isOrdered, start: first.number, items: items))), j)
+        }
+
+        /// The item that starts at `lines[start]` and the index of the line after it.
+        func listItem(_ lines: ArraySlice<Line>, from start: Int, marker: Marker,
+                      depth: Int) -> (MarkdownListItem, Int) {
+            let startLine = lines[start]
+            let contentIndent = marker.contentOffset   // continuation lines must reach this column
+            var itemLines: [Line] = [startLine.dropping(min(marker.contentOffset, startLine.units.count))]
+            var k = start + 1
+            var blanks = 0
+            while k < lines.endIndex {
+                let candidate = lines[k]
+                if candidate.isBlank {
+                    blanks += 1
+                    k += 1
+                    continue
+                }
+                if candidate.indent >= contentIndent {
+                    for _ in 0..<blanks { itemLines.append(Line(start: candidate.start, units: [])) }
+                    blanks = 0
+                    itemLines.append(dropIndent(candidate, upTo: contentIndent))
+                    k += 1
+                    continue
+                }
+                // Lazy continuation: text that continues the item's last paragraph.
+                if blanks == 0, listMarker(candidate) == nil, !startsBlock(candidate), itemLines.last?.isBlank == false {
+                    itemLines.append(candidate.dropping(candidate.leadingBlanks))
+                    k += 1
+                    continue
+                }
+                break
+            }
+            // Trailing blank lines belong to nobody.
+            let endIndex = k - blanks
+            var task: MarkdownTask?
+            if let box = taskBox(itemLines[0]) {
+                task = box.task
+                itemLines[0] = box.rest
+            }
+            let blocks = parseBlocks(itemLines[...], depth: depth + 1, topLevel: false)
+            let last = lines[max(start, endIndex - 1)]
+            var item = MarkdownListItem(
+                range: NSRange(location: startLine.start, length: last.end - startLine.start),
+                marker: NSRange(location: startLine.start + marker.indent, length: marker.markerLength),
+                task: task, blocks: blocks, blockID: nil)
+            // A `^id` ending the item's own text names the whole item, children included.
+            if let firstBlock = blocks.first, case .paragraph = firstBlock.kind, let id = firstBlock.blockID {
+                item.blockID = id
+            }
+            return (item, endIndex)
+        }
+
+        /// A leading `[ ]` or `[x]` followed by a blank or the end of the line:
+        /// the task and the line without its box.
+        func taskBox(_ line: Line) -> (task: MarkdownTask, rest: Line)? {
+            let u = line.units
+            guard u.count >= 3, u[0] == ASCII.openBracket, u[2] == ASCII.closeBracket,
+                  [ASCII.space, ASCII.lowerX, ASCII.upperX].contains(u[1]),
+                  u.count == 3 || ASCII.isSpaceOrTab(u[3]) else { return nil }
+            let task = MarkdownTask(box: NSRange(location: line.start, length: 3), isDone: u[1] != ASCII.space)
+            return (task, line.dropping(u.count == 3 ? 3 : 4))
         }
 
         func dropIndent(_ line: Line, upTo width: Int) -> Line {
@@ -571,12 +579,8 @@ enum MarkdownParser {
 
         func cells(_ line: Line, depth: Int) -> [[MarkdownInline]] {
             cellRanges(line).map { range in
-                var a = range.lowerBound, b = range.upperBound
-                while a < b, ASCII.isSpaceOrTab(line.units[a]) { a += 1 }
-                while b > a, ASCII.isSpaceOrTab(line.units[b - 1]) { b -= 1 }
-                guard b > a else { return [] }
-                return inlines(units: Array(line.units[a..<b]), sources: (a..<b).map { line.start + $0 },
-                               end: line.start + b, depth: depth)
+                let cell = MarkdownParser.trimBlanks(line.units, range)
+                return cell.isEmpty ? [] : inlines(in: line, range: cell, depth: depth)
             }
         }
 
@@ -607,8 +611,7 @@ enum MarkdownParser {
             for (n, raw) in chunk.enumerated() {
                 var line = raw
                 if n > 0 {
-                    let lead = line.units.prefix(while: ASCII.isSpaceOrTab).count
-                    line = line.dropping(lead)
+                    line = line.dropping(line.leadingBlanks)
                     units.append(ASCII.lineFeed)
                     sources.append(chunk[n - 1].end)
                 }
@@ -625,6 +628,12 @@ enum MarkdownParser {
         }
 
         // MARK: Inline reading
+
+        /// The inlines of `line.units[range]`, with their offsets in the note.
+        func inlines(in line: Line, range: Range<Int>, depth: Int) -> [MarkdownInline] {
+            inlines(units: Array(line.units[range]), sources: range.map { line.start + $0 },
+                    end: line.start + range.upperBound, depth: depth)
+        }
 
         func inlines(units: [UInt16], sources: [Int], end: Int, depth: Int) -> [MarkdownInline] {
             MarkdownInlineParser.parse(String(decoding: units, as: UTF16.self), offsets: sources + [end])
