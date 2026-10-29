@@ -641,7 +641,9 @@ enum FrontMatterEditor {
                     replacement: terminated(lines, parsed.block.lineEnding))
             }
             // No properties block: write one at the top, after a byte-order mark.
-            guard expecting == nil,
+            // Unless there is one this reader cannot follow: a second block above
+            // it would turn the real one into body text.
+            guard expecting == nil, !hasUnreadableBlock(in: ns),
                   let lines = FrontMatterYAML.render(key: key, value: value, comment: nil) else { return nil }
             let ending = lineEnding(of: ns)
             let at = ns.length > 0 && ns.character(at: 0) == 0xFEFF ? 1 : 0
@@ -649,6 +651,22 @@ enum FrontMatterEditor {
                 range: NSRange(location: at, length: 0),
                 replacement: "---" + ending + terminated(lines, ending) + "---" + ending)
         }
+    }
+
+    /// A pair of `---` lines at the top that holds a `key:` line and still did not
+    /// read as properties: YAML this editor cannot follow (a quoted value that
+    /// runs over several lines from column 0, a line separator inside a value),
+    /// so it cannot say where a property would go. Prose between two rules with no
+    /// `key:` line is ordinary text, not this.
+    static func hasUnreadableBlock(in text: String) -> Bool {
+        hasUnreadableBlock(in: text as NSString)
+    }
+
+    static func hasUnreadableBlock(in ns: NSString) -> Bool {
+        guard FrontMatterYAML.parse(ns) == nil, let block = FrontMatter.block(in: ns) else { return false }
+        return ns.range(
+            of: #"(?m)^[^\s#-][^:\n\r]*:([ \t]|$)"#, options: .regularExpression,
+            range: block.innerRange).location != NSNotFound
     }
 
     static func apply(_ edit: Edit, to text: String) -> String {

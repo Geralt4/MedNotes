@@ -269,6 +269,9 @@ struct NotePropertiesSection: View {
 
     var body: some View {
         let parsed = FrontMatterYAML.parse(note.content)
+        // A block of YAML this reader cannot follow: adding a property would write a
+        // second block above it.
+        let unreadable = parsed == nil && FrontMatterEditor.hasUnreadableBlock(in: note.content)
         InspectorSection(title: "Properties", systemImage: "list.bullet.rectangle",
                          count: parsed?.properties.count, expanded: $expanded) {
             if let parsed {
@@ -283,12 +286,17 @@ struct NotePropertiesSection: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
+            } else if unreadable {
+                Text("The properties at the top of this note can't be edited here. Edit them in the text.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             } else {
                 Text("No properties yet.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
-            addControls(existing: parsed?.properties.map(\.keyNorm) ?? [], editable: !(parsed?.truncated ?? false))
+            addControls(existing: parsed?.properties.map(\.keyNorm) ?? [],
+                        editable: !(parsed?.truncated ?? false) && !unreadable)
         }
         .task(id: note.id) {
             known = (try? await session.store?.notes.propertyKeys()) ?? []

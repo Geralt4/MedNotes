@@ -8441,6 +8441,16 @@
           }
         }
       }
+    },
+    "The properties at the top of this note can't be edited here. Edit them in the text." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι ιδιότητες στην αρχή αυτής της σημείωσης δεν μπορούν να επεξεργαστούν εδώ. Επεξεργαστείτε τες μέσα στο κείμενο."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
