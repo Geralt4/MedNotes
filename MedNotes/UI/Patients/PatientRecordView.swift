@@ -12,6 +12,8 @@ struct PatientRecordView: View {
     /// Opens the editor. `nil` for a record that cannot be edited (archived),
     /// which also hides the line offering to fill in missing fields.
     var onEdit: (() -> Void)?
+    /// Text in the medical add rows, when the owner wants to add it on leaving.
+    var pendingEntries: Binding<PendingMedicalEntries>?
 
     var body: some View {
         let fields = PatientRecordFields(patient)
@@ -27,7 +29,7 @@ struct PatientRecordView: View {
                     Self.header(for: section.kind)
                 }
             }
-            PatientMedicalSections(medical: $patient.medical)
+            PatientMedicalSections(medical: $patient.medical, pending: pendingEntries)
             if let onEdit, !fields.missingFields.isEmpty {
                 Section {
                     addDetails(fields.missingFields, action: onEdit)

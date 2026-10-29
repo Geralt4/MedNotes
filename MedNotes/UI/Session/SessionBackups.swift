@@ -522,12 +522,16 @@ extension AppSession {
         defer { if accessing { folderURL.stopAccessingSecurityScopedResource() } }
         let db = try Database(path: scratch.databaseURL.path)
         // The same attachment path as the real import, into a store of its own
-        // that is removed with the scratch root, so both report the same things.
+        // that is removed with the scratch root. The live store's keys are read
+        // (nothing is written) so the report skips what is already there, as the
+        // real import will.
+        let live = try await openStore().db.storedRecordKeys()
         let report = try await JSONImporter(directoryURL: folderURL)
             .importAll(
                 into: db,
                 fileStore: EncryptedFileStore(
-                    root: scratch.attachmentsURL, key: StoreKeyContext.newRootKey()))
+                    root: scratch.attachmentsURL, key: StoreKeyContext.newRootKey()),
+                alreadyStored: live)
         await db.close()
         return report
     }
@@ -540,8 +544,9 @@ extension AppSession {
         return false
     }
 
-    /// Restore point first: the importer is idempotent, but a folder full of
-    /// surprises must never be a one-way door.
+    /// Restore point first: a folder full of surprises must never be a one-way
+    /// door. Records the store already holds are left alone, so running this again
+    /// adds only what is missing.
     func performImport(from folderURL: URL) async throws {
         guard let store else { return }
         let accessing = folderURL.startAccessingSecurityScopedResource()

@@ -306,14 +306,29 @@ struct ImportReport: Codable, Sendable, Hashable {
     var filesSkipped: Int
     var warnings: [String]
     var errors: [String]
+    /// Records in the folder that the store already holds (the same id, or a
+    /// patient's AMKA). They are left exactly as they are, not overwritten.
+    var patientsAlreadyPresent: Int
+    var notesAlreadyPresent: Int
+    var todosAlreadyPresent: Int
+    var eventsAlreadyPresent: Int
 
     var totalImported: Int {
         patientsImported + notesImported + todosImported + eventsImported
     }
 
+    var totalAlreadyPresent: Int {
+        patientsAlreadyPresent + notesAlreadyPresent + todosAlreadyPresent + eventsAlreadyPresent
+    }
+
     init(patientsImported: Int = 0, notesImported: Int = 0, todosImported: Int = 0,
          eventsImported: Int = 0, filesSkipped: Int = 0, warnings: [String] = [],
-         errors: [String] = []) {
+         errors: [String] = [], patientsAlreadyPresent: Int = 0, notesAlreadyPresent: Int = 0,
+         todosAlreadyPresent: Int = 0, eventsAlreadyPresent: Int = 0) {
+        self.patientsAlreadyPresent = patientsAlreadyPresent
+        self.notesAlreadyPresent = notesAlreadyPresent
+        self.todosAlreadyPresent = todosAlreadyPresent
+        self.eventsAlreadyPresent = eventsAlreadyPresent
         self.patientsImported = patientsImported
         self.notesImported = notesImported
         self.todosImported = todosImported

@@ -891,6 +891,41 @@ actor Database {
         return raw
     }
 
+    /// The ids of the records already stored, and each patient's normalised AMKA.
+    /// What the legacy import checks a batch against, so it adds what is missing
+    /// and leaves everything that is there exactly as it is.
+    struct StoredRecordKeys: Sendable {
+        var patientIDs: Set<UUID> = []
+        /// Normalised AMKA of every patient that has one, to that patient's id.
+        var patientIDByAMKA: [String: UUID] = [:]
+        var noteIDs: Set<UUID> = []
+        var todoIDs: Set<UUID> = []
+        var eventIDs: Set<UUID> = []
+    }
+
+    func storedRecordKeys() throws -> StoredRecordKeys {
+        func ids(_ table: String) throws -> Set<UUID> {
+            let s = try conn.prepare("SELECT id FROM \(table)")
+            var out = Set<UUID>()
+            while try s.step() {
+                if let raw = s.columnText(0), let id = UUID(uuidString: raw) { out.insert(id) }
+            }
+            return out
+        }
+        var keys = StoredRecordKeys()
+        let patients = try conn.prepare("SELECT id, amka FROM patients")
+        while try patients.step() {
+            guard let raw = patients.columnText(0), let id = UUID(uuidString: raw) else { continue }
+            keys.patientIDs.insert(id)
+            let amka = AMKA.normalized(patients.columnText(1) ?? "")
+            if !amka.isEmpty { keys.patientIDByAMKA[amka] = id }
+        }
+        keys.noteIDs = try ids("notes")
+        keys.todoIDs = try ids("todo_items")
+        keys.eventIDs = try ids("calendar_events")
+        return keys
+    }
+
     /// Every storage ID any attachment row points at, lowercased.
     func referencedStorageIDs() throws -> Set<String> {
         let s = try conn.prepare(

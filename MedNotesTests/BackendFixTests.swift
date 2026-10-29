@@ -907,6 +907,29 @@ final class BackendFixTests: XCTestCase {
         XCTAssertEqual(Set(all.map(\.profile.lastName)), Set(["Live", "Archived"]))
     }
 
+    /// Saving a patient must not turn a finished course into a discontinued
+    /// one, which is what decoding the stored record used to do.
+    func testSavingAPatientDoesNotRewriteALapsedMedication() async throws {
+        let db = try makeDB()
+        let past = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        var patient = samplePatient(name: "Course", amka: "66666666666")
+        patient.medical.medications = [Medication(name: "Amoxicillin", endDate: past, isActive: true)]
+        patient.hospitalizations = [Hospitalization(
+            admissionDate: past, dischargeDate: past, status: .admitted)]
+        try await db.savePatient(patient)
+
+        // Load, save again as any edit would, and load once more.
+        let loadedOnce = try await db.loadPatient(id: patient.id)
+        let once = try XCTUnwrap(loadedOnce)
+        try await db.savePatient(once)
+        let loadedTwice = try await db.loadPatient(id: patient.id)
+        let twice = try XCTUnwrap(loadedTwice)
+
+        XCTAssertEqual(twice.medical.medications.first?.isActive, true)
+        XCTAssertEqual(twice.hospitalizations.first?.status, .admitted)
+        XCTAssertEqual(twice.medical.medications.first?.isStopped, true, "still shown as stopped")
+    }
+
     func testEditorSaveKeepsTheArchiveFlagOfAnExistingRow() async throws {
         let db = try makeDB()
         let draft = samplePatient(name: "Maria", amka: "33333333333")
