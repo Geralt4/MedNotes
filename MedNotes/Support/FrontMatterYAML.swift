@@ -531,8 +531,31 @@ enum FrontMatterYAML {
         if s.contains(": ") || s.contains(" #") || s.hasSuffix(":") { return true }
         if s.unicodeScalars.contains(where: isLineOrControl) { return true }
         if ["yes", "no", "on", "off", "y", "n"].contains(s.lowercased()) { return true }
+        if readsAsNonStringElsewhere(s) { return true }
         return classifyPlain(s) != .text(s)
     }
+
+    /// Whether another YAML parser would not read the plain text `s` as a string:
+    /// a number in any of YAML's spellings (a leading zero, a sign, a trailing
+    /// zero, an exponent, hex, octal, binary, `_` separators, `.inf`), a
+    /// colon-separated time such as 12:30, or `~`, `null`, `true`, `false`. This
+    /// app reads such a value back as the text it was, so it does not need the
+    /// quotes, but the notes leave the app as Markdown files, and an AMKA written
+    /// as 01018012345 is the integer 1018012345 to anything else.
+    static func readsAsNonStringElsewhere(_ s: String) -> Bool {
+        let lower = s.lowercased()
+        if ["~", "null", "true", "false"].contains(lower) { return true }
+        let range = NSRange(location: 0, length: (s as NSString).length)
+        return nonStringPatterns.contains { $0.firstMatch(in: s, range: range) != nil }
+    }
+
+    private static let nonStringPatterns: [NSRegularExpression] = [
+        #"^[-+]?\d[\d_]*(\.\d*)?([eE][-+]?\d+)?$"#,        // 1018, 01018, 1.50, 1e5, 1_000, +3021
+        #"^[-+]?\.\d+([eE][-+]?\d+)?$"#,                    // .5
+        #"^[-+]?0x[0-9a-fA-F_]+$"#, #"^[-+]?0o[0-7_]+$"#, #"^[-+]?0b[01_]+$"#,
+        #"^[-+]?\.(inf|Inf|INF)$"#, #"^\.(nan|NaN|NAN)$"#,
+        #"^[-+]?\d[\d_]*(:[0-5]?\d)+(\.\d*)?$"#            // 12:30, 1:02:03
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
 
     static func quoted(_ s: String) -> String {
         var out = "\""
@@ -641,7 +664,9 @@ enum FrontMatterEditor {
                     replacement: terminated(lines, parsed.block.lineEnding))
             }
             // No properties block: write one at the top, after a byte-order mark.
-            guard expecting == nil,
+            // Unless there is one this reader cannot follow: a second block above
+            // it would turn the real one into body text.
+            guard expecting == nil, !hasUnreadableBlock(in: ns),
                   let lines = FrontMatterYAML.render(key: key, value: value, comment: nil) else { return nil }
             let ending = lineEnding(of: ns)
             let at = ns.length > 0 && ns.character(at: 0) == 0xFEFF ? 1 : 0
@@ -649,6 +674,22 @@ enum FrontMatterEditor {
                 range: NSRange(location: at, length: 0),
                 replacement: "---" + ending + terminated(lines, ending) + "---" + ending)
         }
+    }
+
+    /// A pair of `---` lines at the top that holds a `key:` line and still did not
+    /// read as properties: YAML this editor cannot follow (a quoted value that
+    /// runs over several lines from column 0, a line separator inside a value),
+    /// so it cannot say where a property would go. Prose between two rules with no
+    /// `key:` line is ordinary text, not this.
+    static func hasUnreadableBlock(in text: String) -> Bool {
+        hasUnreadableBlock(in: text as NSString)
+    }
+
+    static func hasUnreadableBlock(in ns: NSString) -> Bool {
+        guard FrontMatterYAML.parse(ns) == nil, let block = FrontMatter.block(in: ns) else { return false }
+        return ns.range(
+            of: #"(?m)^[^\s#-][^:\n\r]*:([ \t]|$)"#, options: .regularExpression,
+            range: block.innerRange).location != NSNotFound
     }
 
     static func apply(_ edit: Edit, to text: String) -> String {

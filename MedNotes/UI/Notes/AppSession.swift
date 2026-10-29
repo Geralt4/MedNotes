@@ -219,6 +219,11 @@ final class AppSession: ObservableObject {
     var switcherTask: Task<Void, Never>?
     /// Supersedes a lookup still in flight when the query changes again.
     var switcherGeneration = 0
+
+    /// Test seam: runs after a quick-switcher lookup has read the store and before
+    /// it publishes, so a test can land a lock at that point. Nothing in the app
+    /// sets it.
+    var switcherLookupWillPublish: @MainActor () async -> Void = {}
     var calendarObserverTask: Task<Void, Never>?
     var remindersObserverTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
@@ -276,10 +281,24 @@ final class AppSession: ObservableObject {
     /// templated note left untouched is discarded like a blank one.
     var seededNoteContent: [UUID: String] = [:]
 
+    /// Notes saved by `newNote` as the session locked, never opened; see
+    /// `discardNotesAbandonedAtLock`.
+    var notesAbandonedAtLock: Set<UUID> = []
+
+    /// Test seam: runs once `newNote` has saved the note and before it opens it,
+    /// so a test can land a lock at that point. Nothing in the app sets it.
+    var newNoteDidSave: @MainActor () async -> Void = {}
+
     /// The record editors on screen, by the token each registered with, and
     /// how to read each one's draft. `closeStore` reads them all before it
     /// detaches the store; see `OpenEditorDraft`.
     var openEditors: [UUID: () -> OpenEditorDraft?] = [:]
+
+    /// Fields inside an editor that hold typed text not yet written to the
+    /// draft (an inspector property, committed on submit or when focus leaves),
+    /// by registration token. `openEditorDrafts` runs them first, so a lock or a
+    /// restore reads the draft with that text in it.
+    var pendingEdits: [UUID: () -> Void] = [:]
 
     /// Tokens whose drafts the session has already saved or discarded itself,
     /// as a lock or a restore does just before it unmounts the editors. The
@@ -855,6 +874,9 @@ final class AppSession: ObservableObject {
     /// Empties every published record list and invalidates the reloads in
     /// flight, whose generation checks then drop their late results.
     private func clearDisplayedRecords() {
+        // A quick-switcher lookup already past its sleep would refill the
+        // results after the lock has emptied them.
+        switcherGeneration &+= 1
         notesReloadGeneration += 1
         patientsReloadGeneration += 1
         todosReloadGeneration += 1
@@ -1069,6 +1091,7 @@ final class AppSession: ObservableObject {
         observeCalendarChanges()
         observeRemindersChanges()
         await pushDraftsSavedAtLock()
+        await discardNotesAbandonedAtLock()
         if let store {
             restorePointUpgradeTask?.cancel()
             restorePointUpgradeTask = Task { await store.backups.upgradeLegacyRestorePoints() }
@@ -1274,6 +1297,8 @@ final class AppSession: ObservableObject {
         if injectedDataRoot == nil {
             // Plaintext copies a crash left in the app's temporary folder.
             EncryptedFileStore.purgeOrphanedTemporaries(in: DataRoot.appExternalCopiesURL)
+            // So are the working folders of a restore or an upgrade that was killed.
+            StagingLeftovers.purge()
         }
         do {
             let dataRoot = try injectedDataRoot ?? Self.resolveDataRoot()
