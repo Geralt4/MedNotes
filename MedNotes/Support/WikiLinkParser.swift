@@ -38,7 +38,7 @@ struct ParsedLink: Equatable, Sendable {
 enum WikiLinkParser {
     /// Bump when the parsing rules change; stored link rows with an older
     /// version are derived again on the next open.
-    static let version = 2
+    static let version = 3
 
     /// A link longer than this between its brackets is stray text.
     static let maxInnerLength = 500
@@ -57,7 +57,10 @@ enum WikiLinkParser {
         let ns = text as NSString
 
         // A ``` line inside the front matter is a value, not a fence; fences
-        // are looked for in the body only.
+        // are looked for in the body only. For the same reason a backtick, a `%%` or
+        // a `<!--` there opens nothing: a lone one paired with a closer in the body
+        // and hid its links, tags and headings from the index. `[[links]]` in a
+        // value are still read.
         let bodyStart = FrontMatter.properties(in: ns).map { NSMaxRange($0.range) } ?? 0
         let fences = fenceRanges(units, ns, from: bodyStart)
         var protected = fences
@@ -88,7 +91,7 @@ enum WikiLinkParser {
                 } else {
                     i += 1
                 }
-            case 0x60: // `
+            case 0x60 where i >= bodyStart: // `
                 var run = 0
                 while i + run < n, units[i + run] == 0x60 { run += 1 }
                 if let end = closingBackticks(
@@ -98,7 +101,7 @@ enum WikiLinkParser {
                 } else {
                     i += run
                 }
-            case 0x25: // %
+            case 0x25 where i >= bodyStart: // %
                 if i + 1 < n, units[i + 1] == 0x25, !noPercentCloser {
                     if let end = find([0x25, 0x25], in: units, from: i + 2) {
                         protected.append(NSRange(location: i, length: end + 2 - i))
@@ -110,7 +113,7 @@ enum WikiLinkParser {
                 } else {
                     i += 1
                 }
-            case 0x3C: // <
+            case 0x3C where i >= bodyStart: // <
                 if !noCommentCloser, hasPrefix([0x3C, 0x21, 0x2D, 0x2D], in: units, at: i) {
                     if let end = find([0x2D, 0x2D, 0x3E], in: units, from: i + 4) {
                         protected.append(NSRange(location: i, length: end + 3 - i))
