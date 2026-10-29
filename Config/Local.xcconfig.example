@@ -1,0 +1,9 @@
+// Copy to Config/Local.xcconfig, which git ignores, and fill in your team.
+//
+// Needs an Apple Development certificate and a Mac development provisioning
+// profile for com.johnteam.MedNotes. Xcode makes both when the project is
+// built with this team and automatic signing (or pass -allowProvisioningUpdates
+// to xcodebuild).
+
+DEVELOPMENT_TEAM = ABCDE12345
+CODE_SIGN_IDENTITY = Apple Development

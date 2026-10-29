@@ -134,6 +134,12 @@ explicit.**
   runtime, verifies the signature and entitlement allowlist, builds and signs a
   DMG, notarizes with `notarytool`, staples, validates with `stapler` and
   `spctl`, and publishes a checksum. Any mismatch fails the release.
+- The Developer ID signature needs a provisioning profile for the bundle id.
+  The profile adds `com.apple.application-identifier` and
+  `com.apple.developer.team-identifier`, which the data-protection Keychain
+  requires; the verifier checks both and that they name the signing team. No
+  `keychain-access-groups` entitlement is needed: the default group is the
+  application identifier.
 
 ## Consequences
 

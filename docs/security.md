@@ -22,6 +22,13 @@ keys are derived from it with libsodium's KDF, so a single unlock covers the
 whole store. Keys are never written beside the data and are dropped from memory
 when the store locks.
 
+The key lives in the data-protection Keychain, which only answers an app that
+carries an application identifier from a provisioning profile. A build signed
+without one (ad hoc, or Developer ID with no profile) is refused with
+`errSecMissingEntitlement` and cannot create or read the key. The release script
+requires the profile and `scripts/verify_entitlements.py` checks the signed app
+for it.
+
 The store locks after five minutes without activity, when the screen locks
 (Lock Screen, or a screen saver or display sleep once the login password is
 required), when the displays or the Mac go to sleep, when you switch to

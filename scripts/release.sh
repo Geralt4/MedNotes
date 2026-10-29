@@ -10,8 +10,19 @@
 # Required environment:
 #   MEDNOTES_TEAM_ID          Developer ID team identifier
 #   MEDNOTES_SIGN_IDENTITY    e.g. "Developer ID Application: Jane Doe (ABCDE12345)"
+#   MEDNOTES_PROFILE_NAME     name of the Developer ID provisioning profile for
+#                             com.johnteam.MedNotes (developer.apple.com >
+#                             Profiles). It supplies the application-identifier
+#                             entitlement, without which the data-protection
+#                             Keychain refuses every call and the app cannot
+#                             hold its device key.
 #   MEDNOTES_NOTARY_PROFILE   keychain profile created with
 #                             `xcrun notarytool store-credentials`
+#
+# The test gate below runs with the project's own signing settings, so
+# Config/Local.xcconfig (see Config/Local.xcconfig.example) must name your team on
+# the machine that releases. Otherwise KeychainEntitlementTests skips on an
+# ad-hoc build and the gate refuses the release.
 #
 # Usage:
 #   scripts/release.sh 2.0.1
@@ -29,6 +40,7 @@ fi
 
 : "${MEDNOTES_TEAM_ID:?set MEDNOTES_TEAM_ID}"
 : "${MEDNOTES_SIGN_IDENTITY:?set MEDNOTES_SIGN_IDENTITY}"
+: "${MEDNOTES_PROFILE_NAME:?set MEDNOTES_PROFILE_NAME}"
 : "${MEDNOTES_NOTARY_PROFILE:?set MEDNOTES_NOTARY_PROFILE}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -91,6 +103,7 @@ xcodebuild \
   DEVELOPMENT_TEAM="$MEDNOTES_TEAM_ID" \
   CODE_SIGN_IDENTITY="$MEDNOTES_SIGN_IDENTITY" \
   CODE_SIGN_STYLE=Manual \
+  PROVISIONING_PROFILE_SPECIFIER="$MEDNOTES_PROFILE_NAME" \
   ENABLE_HARDENED_RUNTIME=YES \
   OTHER_CODE_SIGN_FLAGS="--options=runtime" \
   archive
@@ -104,6 +117,11 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
   <key>method</key><string>developer-id</string>
   <key>teamID</key><string>$MEDNOTES_TEAM_ID</string>
   <key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>$MEDNOTES_SIGN_IDENTITY</string>
+  <key>provisioningProfiles</key>
+  <dict>
+    <key>com.johnteam.MedNotes</key><string>$MEDNOTES_PROFILE_NAME</string>
+  </dict>
   <key>destination</key><string>export</string>
 </dict>
 </plist>
@@ -118,7 +136,7 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv --verbose=4 "$APP" 2>&1 | tee "$OUT/codesign.txt"
 ENTITLEMENTS="$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 printf '%s' "$ENTITLEMENTS" > "$OUT/entitlements.plist"
-python3 scripts/verify_entitlements.py "$OUT/entitlements.plist"
+python3 scripts/verify_entitlements.py "$OUT/entitlements.plist" "$MEDNOTES_TEAM_ID"
 
 step "Build the DMG"
 STAGE="$OUT/dmg-root"
