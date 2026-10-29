@@ -339,26 +339,20 @@ enum DisplayCopy {
         switch entry.action {
         case "markdown_export":
             // "notes=12 bytes=3456"
-            if let token = words.first(where: { $0.hasPrefix("notes=") }),
-               let notes = Int(token.dropFirst("notes=".count)) {
+            if let notes = number("notes", in: words) {
                 return String(localized: "Exported \(notes) notes as plaintext Markdown.")
             }
         case "links_rebuilt":
             // "notes=40 links=120 unresolved=8 ambiguous=0 earlier=118 unresolvedNow=5"
-            func count(_ name: String) -> Int? {
-                words.first(where: { $0.hasPrefix(name + "=") }).flatMap { Int($0.dropFirst(name.count + 1)) }
-            }
-            if let links = count("links"), let unresolved = count("unresolved"),
-               let lost = count("unresolvedNow") {
+            if let links = number("links", in: words), let unresolved = number("unresolved", in: words),
+               let lost = number("unresolvedNow", in: words) {
                 return String(localized: "\(links) links (\(unresolved) unresolved); \(lost) earlier links no longer resolve")
             }
         case "indexes_rebuilt":
             // "notes=40 links=120 unresolved=8 ambiguous=0 headings=90 tags=30 properties=12 failed=0 passed=1"
-            func count(_ name: String) -> Int? {
-                words.first(where: { $0.hasPrefix(name + "=") }).flatMap { Int($0.dropFirst(name.count + 1)) }
-            }
-            if let notes = count("notes"), let links = count("links"), let unresolved = count("unresolved"),
-               let headings = count("headings"), let tags = count("tags") {
+            if let notes = number("notes", in: words), let links = number("links", in: words),
+               let unresolved = number("unresolved", in: words),
+               let headings = number("headings", in: words), let tags = number("tags", in: words) {
                 return String(localized: "Rebuilt \(notes) notes: \(links) links (\(unresolved) unresolved), \(headings) headings, \(tags) tags.")
             }
         case "restore_point_prune":
@@ -382,6 +376,11 @@ enum DisplayCopy {
         default: break
         }
         return details
+    }
+
+    /// The whole number after `name=` in the `key=value` words of an audit detail.
+    private static func number(_ name: String, in words: [Substring]) -> Int? {
+        words.first(where: { $0.hasPrefix(name + "=") }).flatMap { Int($0.dropFirst(name.count + 1)) }
     }
 
     /// The text between `prefix` and the next straight quote.
@@ -498,11 +497,13 @@ enum DisplayCopy {
 
     // MARK: Timestamps
 
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
+    private static func makeRelativeFormatter() -> RelativeDateTimeFormatter {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter
-    }()
+    }
+
+    private static let relativeFormatter = makeRelativeFormatter()
 
     /// Compact "2h ago" stamp. `Text(_, style: .relative)` renders a bare
     /// "2 minutes" with no direction, and re-ticks every second in every
@@ -516,8 +517,7 @@ enum DisplayCopy {
         guard let locale else {
             return relativeFormatter.localizedString(for: date, relativeTo: reference)
         }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
+        let formatter = makeRelativeFormatter()
         formatter.locale = locale
         return formatter.localizedString(for: date, relativeTo: reference)
     }
