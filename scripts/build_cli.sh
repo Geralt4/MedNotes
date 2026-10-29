@@ -22,6 +22,7 @@ SOURCES=(
   MedNotes/Support/EncryptedBackupFormat.swift
   MedNotes/Support/DataRoot.swift
   MedNotes/Support/SecurityLog.swift
+  MedNotes/Support/TextUnits.swift
   MedNotes/Support/FrontMatter.swift
   MedNotes/Support/FrontMatterYAML.swift
   MedNotes/Support/NoteMetadata.swift
