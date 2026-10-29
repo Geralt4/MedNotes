@@ -79,6 +79,14 @@ enum FrontMatterYAML {
     /// Read-only spellings of the list keys.
     static let singularKeys: Set<String> = ["tag", "alias", "cssclass"]
 
+    /// A value that starts with one of these is block text, an anchor, an alias,
+    /// a tag, a mapping or a directive. It is shown read-only and never rewritten.
+    private static let unsupportedValueStarts = Set("|>&*!{%@`".unicodeScalars)
+
+    /// YAML indicators. A plain (unquoted) key or value cannot start with one, so
+    /// the writer quotes such a value and refuses such a key.
+    private static let plainScalarCannotStartWith = Set("-?:,[]{}#&*!|>'\"%@`".unicodeScalars)
+
     // MARK: - Parsing
 
     static func parse(_ text: String) -> PropertySet? {
@@ -197,49 +205,45 @@ enum FrontMatterYAML {
         let location = first.range.location
         let length = (entry.lines.last.map { NSMaxRange($0.range) } ?? NSMaxRange(first.range)) - location
         let range = NSRange(location: location, length: max(0, length))
-        let verbatim = ns.substring(with: range)
         let split = splitKey(first.content)
         let key = split?.key ?? ""
         let keyNorm = key.lowercased()
-        let id = "\(keyNorm)#\(occurrence)"
 
-        func property(_ value: PropertyValue, comment: String? = nil, supported: Bool = true) -> Property {
-            let quotedKey = key.hasPrefix("\"") || key.hasPrefix("'")
-            let editable = supported && !duplicate && !entry.hasGap && !truncated && !quotedKey
-                && !singularKeys.contains(keyNorm) && isValidKey(key)
-            return Property(id: id, key: key, keyNorm: keyNorm, value: value, range: range,
-                            text: verbatim, comment: comment, isEditable: editable)
-        }
+        let (value, comment) = readValue(of: entry, key: split, keyNorm: keyNorm)
+        let hasQuotedKey = key.hasPrefix("\"") || key.hasPrefix("'")
+        let isEditable = value != .unsupported && !duplicate && !entry.hasGap && !truncated
+            && !hasQuotedKey && !singularKeys.contains(keyNorm) && isValidKey(key)
+        return Property(id: "\(keyNorm)#\(occurrence)", key: key, keyNorm: keyNorm, value: value, range: range,
+                        text: ns.substring(with: range), comment: comment, isEditable: isEditable)
+    }
 
-        guard let split else { return property(.unsupported, supported: false) }
+    /// An entry's value, and the comment after it on the key line. What this
+    /// parser does not understand comes back as `.unsupported`.
+    private static func readValue(
+        of entry: RawEntry, key split: (key: String, rest: String)?, keyNorm: String
+    ) -> (value: PropertyValue, comment: String?) {
+        guard let split else { return (.unsupported, nil) }
         let (valueText, comment) = splitComment(split.rest)
         let trimmed = valueText.trimmingCharacters(in: .whitespaces)
         let continuation = Array(entry.lines.dropFirst())
 
         // A key followed by indented lines: only a block list is understood.
         if !continuation.isEmpty {
-            guard trimmed.isEmpty, let items = blockListItems(continuation) else {
-                return property(.unsupported, comment: comment, supported: false)
-            }
-            return property(listValue(items, key: keyNorm), comment: comment)
+            guard trimmed.isEmpty, let items = blockListItems(continuation) else { return (.unsupported, comment) }
+            return (listValue(items, key: keyNorm), comment)
+        }
+        if trimmed.isEmpty {
+            return (listKeys.contains(keyNorm) ? .list([]) : .empty, comment)
         }
 
-        if trimmed.isEmpty {
-            return property(listKeys.contains(keyNorm) ? .list([]) : .empty, comment: comment)
+        let value = scalarValue(trimmed)
+        // `tags: a, b` is a list too, as are the singular spellings (read-only).
+        guard listKeys.contains(keyNorm) || singularKeys.contains(keyNorm) else { return (value, comment) }
+        switch value {
+        case .list(let items): return (listValue(items, key: keyNorm), comment)
+        case .unsupported: return (.unsupported, comment)
+        default: return (listValue(splitCommas(plainText(trimmed)), key: keyNorm), comment)
         }
-        guard let value = scalarValue(trimmed) else {
-            return property(.unsupported, comment: comment, supported: false)
-        }
-        if listKeys.contains(keyNorm) || singularKeys.contains(keyNorm) {
-            switch value {
-            case .list(let items): return property(listValue(items, key: keyNorm), comment: comment)
-            case .unsupported: return property(value, comment: comment, supported: false)
-            default:
-                let raw = plainText(trimmed)
-                return property(listValue(splitCommas(raw), key: keyNorm), comment: comment)
-            }
-        }
-        return property(value, comment: comment, supported: value != .unsupported)
     }
 
     private static func listValue(_ items: [String], key: String) -> PropertyValue {
@@ -266,9 +270,9 @@ enum FrontMatterYAML {
     // MARK: - Scalars
 
     /// A scalar on the key line: quoted, flow list or plain.
-    private static func scalarValue(_ trimmed: String) -> PropertyValue? {
+    private static func scalarValue(_ trimmed: String) -> PropertyValue {
         guard let first = trimmed.unicodeScalars.first else { return .empty }
-        if "|>&*!{%@`".unicodeScalars.contains(first) { return .unsupported }
+        if unsupportedValueStarts.contains(first) { return .unsupported }
         if first == "[" {
             guard let items = flowListItems(trimmed) else { return .unsupported }
             return .list(items)
@@ -293,60 +297,75 @@ enum FrontMatterYAML {
     /// A quoted or plain scalar and whether it was quoted; nil when the text
     /// after a closing quote is not empty or a quote never closes.
     private static func parseScalar(_ trimmed: String) -> (text: String, quoted: Bool)? {
-        guard let first = trimmed.unicodeScalars.first else { return ("", false) }
-        let scalars = Array(trimmed.unicodeScalars)
-        if first == "\"" {
-            var out = String.UnicodeScalarView()
-            var i = 1
-            while i < scalars.count {
-                let c = scalars[i]
-                if c == "\"" {
-                    return i == scalars.count - 1 ? (String(out), true) : nil
-                }
-                if c == "\\" {
-                    i += 1
-                    guard i < scalars.count else { return nil }
-                    switch scalars[i] {
-                    case "n": out.append("\n")
-                    case "r": out.append("\r")
-                    case "t": out.append("\t")
-                    case "\"": out.append("\"")
-                    case "\\": out.append("\\")
-                    case "/": out.append("/")
-                    case "u":
-                        guard i + 4 < scalars.count,
-                              let code = UInt32(String(String.UnicodeScalarView(scalars[(i + 1)...(i + 4)])), radix: 16),
-                              let scalar = Unicode.Scalar(code) else { return nil }
-                        out.append(scalar)
-                        i += 4
-                    default: return nil
-                    }
-                } else {
-                    out.append(c)
-                }
-                i += 1
-            }
-            return nil
+        switch trimmed.unicodeScalars.first {
+        case nil: return ("", false)
+        case "\"": return parseDoubleQuoted(trimmed).map { ($0, true) }
+        case "'": return parseSingleQuoted(trimmed).map { ($0, true) }
+        default: return (trimmed, false)
         }
-        if first == "'" {
-            var out = String.UnicodeScalarView()
-            var i = 1
-            while i < scalars.count {
-                let c = scalars[i]
-                if c == "'" {
-                    if i + 1 < scalars.count, scalars[i + 1] == "'" {
-                        out.append("'")
-                        i += 2
-                        continue
-                    }
-                    return i == scalars.count - 1 ? (String(out), true) : nil
-                }
+    }
+
+    /// The text inside `"..."`, escapes resolved; nil when the closing quote is
+    /// missing, is followed by more text, or an escape is not understood.
+    private static func parseDoubleQuoted(_ token: String) -> String? {
+        let scalars = Array(token.unicodeScalars)
+        var out = String.UnicodeScalarView()
+        var i = 1   // past the opening quote
+        while i < scalars.count {
+            let c = scalars[i]
+            if c == "\"" {
+                return i == scalars.count - 1 ? String(out) : nil
+            }
+            if c == "\\" {
+                guard let (escaped, next) = readEscape(scalars, at: i + 1) else { return nil }
+                out.append(escaped)
+                i = next
+            } else {
                 out.append(c)
                 i += 1
             }
-            return nil
         }
-        return (trimmed, false)
+        return nil
+    }
+
+    /// The character a backslash stands for and the index after it. `index` is
+    /// just past the backslash.
+    private static func readEscape(_ scalars: [Unicode.Scalar], at index: Int) -> (Unicode.Scalar, next: Int)? {
+        guard index < scalars.count else { return nil }
+        switch scalars[index] {
+        case "n": return ("\n", index + 1)
+        case "r": return ("\r", index + 1)
+        case "t": return ("\t", index + 1)
+        case "\"", "\\", "/": return (scalars[index], index + 1)
+        case "u":   // \u followed by four hex digits
+            guard index + 4 < scalars.count,
+                  let code = UInt32(String(String.UnicodeScalarView(scalars[(index + 1)...(index + 4)])), radix: 16),
+                  let scalar = Unicode.Scalar(code) else { return nil }
+            return (scalar, index + 5)
+        default: return nil
+        }
+    }
+
+    /// The text inside `'...'`, where `''` stands for one quote; nil when the
+    /// closing quote is missing or is followed by more text.
+    private static func parseSingleQuoted(_ token: String) -> String? {
+        let scalars = Array(token.unicodeScalars)
+        var out = String.UnicodeScalarView()
+        var i = 1   // past the opening quote
+        while i < scalars.count {
+            let c = scalars[i]
+            if c == "'" {
+                if i + 1 < scalars.count, scalars[i + 1] == "'" {
+                    out.append("'")
+                    i += 2
+                    continue
+                }
+                return i == scalars.count - 1 ? String(out) : nil
+            }
+            out.append(c)
+            i += 1
+        }
+        return nil
     }
 
     /// `[a, "b, c", d]` on one line.
@@ -440,53 +459,60 @@ enum FrontMatterYAML {
     /// exponent or trailing zeros after the point; at most 15 digits. A phone
     /// number or `mrn: 00123` stays text.
     static func isStrictNumber(_ s: String) -> Bool {
-        var chars = Array(s.unicodeScalars)
-        guard !chars.isEmpty else { return false }
-        if chars[0] == "-" { chars.removeFirst() }
-        guard !chars.isEmpty else { return false }
-        var intPart: [Unicode.Scalar] = []
-        var index = 0
-        while index < chars.count, ASCII.isDigit(chars[index]) {
-            intPart.append(chars[index])
+        let scalars = Array(s.unicodeScalars)
+        let isNegative = scalars.first == "-"
+        var index = isNegative ? 1 : 0
+
+        let integerStart = index
+        while index < scalars.count, ASCII.isDigit(scalars[index]) { index += 1 }
+        let integer = scalars[integerStart..<index]
+        guard !integer.isEmpty else { return false }
+        if integer.count > 1, integer.first == "0" { return false }                       // 007
+        if isNegative, integer.first == "0", index == scalars.count { return false }      // -0
+
+        var fractionCount = 0
+        if index < scalars.count {
+            guard scalars[index] == "." else { return false }
             index += 1
+            let fractionStart = index
+            while index < scalars.count, ASCII.isDigit(scalars[index]) { index += 1 }
+            let fraction = scalars[fractionStart..<index]
+            guard !fraction.isEmpty, fraction.last != "0" else { return false }           // 1. and 1.50
+            fractionCount = fraction.count
         }
-        guard !intPart.isEmpty else { return false }
-        if intPart.count > 1, intPart[0] == "0" { return false }
-        if s.hasPrefix("-"), intPart == ["0"], index == chars.count { return false }   // "-0"
-        var fraction: [Unicode.Scalar] = []
-        if index < chars.count {
-            guard chars[index] == ".", index + 1 < chars.count else { return false }
-            index += 1
-            while index < chars.count, ASCII.isDigit(chars[index]) {
-                fraction.append(chars[index])
-                index += 1
-            }
-            guard !fraction.isEmpty, fraction.last != "0" else { return false }
-        }
-        return index == chars.count && intPart.count + fraction.count <= 15
+        return index == scalars.count && integer.count + fractionCount <= 15
     }
 
+    /// `YYYY-MM-DD`, and a day that exists in that month.
     static func isDate(_ s: String) -> Bool {
         let parts = s.split(separator: "-", omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
-              parts.allSatisfy({ $0.unicodeScalars.allSatisfy(ASCII.isDigit) }),
-              let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2]),
-              (1...12).contains(m), y >= 1 else { return false }
-        let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
-        let days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]
-        return (1...days).contains(d)
+        guard parts.count == 3, isDigits(parts[0], count: 4), isDigits(parts[1], count: 2),
+              isDigits(parts[2], count: 2),
+              let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]),
+              (1...12).contains(month), year >= 1 else { return false }
+        return (1...daysIn(month: month, year: year)).contains(day)
     }
 
+    /// `YYYY-MM-DDTHH:mm` or `YYYY-MM-DDTHH:mm:ss`.
     static func isDateTime(_ s: String) -> Bool {
         let halves = s.split(separator: "T", omittingEmptySubsequences: false)
         guard halves.count == 2, isDate(String(halves[0])) else { return false }
         let time = halves[1].split(separator: ":", omittingEmptySubsequences: false)
-        guard time.count == 2 || time.count == 3,
-              time.allSatisfy({ $0.count == 2 && $0.unicodeScalars.allSatisfy(ASCII.isDigit) }),
-              let h = Int(time[0]), let mi = Int(time[1]), (0...23).contains(h), (0...59).contains(mi)
-        else { return false }
-        if time.count == 3 { guard let sec = Int(time[2]), (0...59).contains(sec) else { return false } }
+        guard time.count == 2 || time.count == 3, time.allSatisfy({ isDigits($0, count: 2) }),
+              let hour = Int(time[0]), let minute = Int(time[1]),
+              (0...23).contains(hour), (0...59).contains(minute) else { return false }
+        if time.count == 3 { guard let second = Int(time[2]), (0...59).contains(second) else { return false } }
         return true
+    }
+
+    /// Exactly `count` characters, all ASCII digits.
+    private static func isDigits(_ part: Substring, count: Int) -> Bool {
+        part.count == count && part.unicodeScalars.allSatisfy(ASCII.isDigit)
+    }
+
+    private static func daysIn(month: Int, year: Int) -> Int {
+        let isLeapYear = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+        return [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
     }
 
     // MARK: - Writing
@@ -503,7 +529,7 @@ enum FrontMatterYAML {
     static func isValidKey(_ key: String) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed == key, let first = trimmed.unicodeScalars.first else { return false }
-        if "-?:,[]{}#&*!|>'\"%@`".unicodeScalars.contains(first) { return false }
+        if plainScalarCannotStartWith.contains(first) { return false }
         if trimmed.contains(":") || trimmed.contains(" #") { return false }
         return !trimmed.unicodeScalars.contains(where: isLineOrControl)
     }
@@ -512,7 +538,7 @@ enum FrontMatterYAML {
     static func needsQuotes(_ s: String) -> Bool {
         if s.isEmpty { return true }
         if s != s.trimmingCharacters(in: .whitespaces) { return true }
-        if let first = s.unicodeScalars.first, "-?:,[]{}#&*!|>'\"%@`".unicodeScalars.contains(first) { return true }
+        if let first = s.unicodeScalars.first, plainScalarCannotStartWith.contains(first) { return true }
         if s.contains(": ") || s.contains(" #") || s.hasSuffix(":") { return true }
         if s.unicodeScalars.contains(where: isLineOrControl) { return true }
         if ["yes", "no", "on", "off", "y", "n"].contains(s.lowercased()) { return true }
@@ -574,89 +600,5 @@ private extension Property {
     func withEditable(_ editable: Bool) -> Property {
         Property(id: id, key: key, keyNorm: keyNorm, value: value, range: range, text: text,
                  comment: comment, isEditable: editable && isEditable)
-    }
-}
-
-// MARK: - Editor
-
-/// Changes one property of a note's front matter and nothing else: the edit
-/// is a single splice (`range` replaced by `replacement`), so every other
-/// byte of the note is untouched, line endings included.
-enum FrontMatterEditor {
-    struct Edit: Equatable, Sendable {
-        /// In the text the edit was computed from, UTF-16 units.
-        let range: NSRange
-        let replacement: String
-    }
-
-    enum Operation: Equatable, Sendable {
-        /// Changes an existing property, or adds it when there is none.
-        case set(key: String, value: PropertyValue)
-        case remove(key: String)
-    }
-
-    /// The splice for `operation`, or nil when it cannot be made safely: the
-    /// property is not editable (unsupported, duplicate, quoted key), the key
-    /// or value cannot be written, or `expecting` is given and the property's
-    /// lines are no longer exactly that text.
-    static func edit(_ operation: Operation, in text: String, expecting: String? = nil) -> Edit? {
-        let ns = text as NSString
-        let parsed = FrontMatterYAML.parse(ns)
-        switch operation {
-        case .remove(let key):
-            guard let parsed, !parsed.truncated, let property = parsed.property(forKey: key),
-                  property.isEditable, matches(property, expecting) else { return nil }
-            return Edit(range: property.range, replacement: "")
-
-        case .set(let key, let value):
-            if let parsed {
-                guard !parsed.truncated else { return nil }
-                if let property = parsed.property(forKey: key) {
-                    guard property.isEditable, matches(property, expecting),
-                          let lines = FrontMatterYAML.render(key: key, value: value, comment: property.comment)
-                    else { return nil }
-                    return Edit(range: property.range, replacement: terminated(lines, parsed.block.lineEnding))
-                }
-                // `Status` beside an existing `status` would make both duplicates,
-                // and so both read-only.
-                guard expecting == nil, !parsed.properties.contains(where: { $0.keyNorm == key.lowercased() }),
-                      let lines = FrontMatterYAML.render(key: key, value: value, comment: nil) else { return nil }
-                return Edit(
-                    range: NSRange(location: parsed.block.closeLine.location, length: 0),
-                    replacement: terminated(lines, parsed.block.lineEnding))
-            }
-            // No properties block: write one at the top, after a byte-order mark.
-            guard expecting == nil,
-                  let lines = FrontMatterYAML.render(key: key, value: value, comment: nil) else { return nil }
-            let ending = lineEnding(of: ns)
-            let at = ns.length > 0 && ns.character(at: 0) == 0xFEFF ? 1 : 0
-            return Edit(
-                range: NSRange(location: at, length: 0),
-                replacement: "---" + ending + terminated(lines, ending) + "---" + ending)
-        }
-    }
-
-    static func apply(_ edit: Edit, to text: String) -> String {
-        let ns = text as NSString
-        guard edit.range.location >= 0, NSMaxRange(edit.range) <= ns.length else { return text }
-        return ns.replacingCharacters(in: edit.range, with: edit.replacement)
-    }
-
-    // MARK: - Private
-
-    private static func matches(_ property: Property, _ expecting: String?) -> Bool {
-        expecting == nil || property.text == expecting
-    }
-
-    private static func terminated(_ lines: [String], _ ending: String) -> String {
-        lines.map { $0 + ending }.joined()
-    }
-
-    /// The first line break in the text, or LF.
-    private static func lineEnding(of ns: NSString) -> String {
-        let start = ns.length > 0 && ns.character(at: 0) == 0xFEFF ? 1 : 0
-        var lines = ns.lines(from: start)
-        guard let first = lines.next(), first.hasBreak else { return "\n" }
-        return ns.substring(with: NSRange(location: first.contentsEnd, length: first.end - first.contentsEnd))
     }
 }
