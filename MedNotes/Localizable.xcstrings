@@ -8401,6 +8401,16 @@
           }
         }
       }
+    },
+    "%lld deleted here, left in Apple" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld διαγράφηκαν εδώ και παραμένουν στο Apple"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

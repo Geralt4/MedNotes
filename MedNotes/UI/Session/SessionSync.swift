@@ -256,6 +256,10 @@ extension AppSession {
                     // Edited in Calendar since the last sync: the pull below
                     // takes that version and reports the conflict.
                     continue
+                case .movedElsewhere:
+                    // The event was moved to another calendar: nothing is
+                    // written, and the pull below reports it as missing.
+                    continue
                 case .pushed(let synced):
                     // A save during the push has already written a newer row.
                     // Storing this snapshot over it would undo that edit; leave
@@ -268,7 +272,9 @@ extension AppSession {
                 }
             }
             locals = try await store.events.loadAll()
-            let result = try await appleCalendar.pull(localEvents: locals, from: destination)
+            let tombstones = try await store.db.syncTombstones(domain: SyncDestinationCore.calendarDomain)
+            let result = try await appleCalendar.pull(
+                localEvents: locals, from: destination, tombstones: tombstones)
             // Rows that lost the identifier of the object they made are
             // pointed at it again before anything else is stored.
             for (id, identifier) in result.rebinds {
@@ -292,6 +298,7 @@ extension AppSession {
             report.created = result.creations.count
             report.conflicts = result.conflictingIDs.count
             report.remoteMissing = result.remoteMissing
+            report.ignoredDeleted = result.ignoredDeleted
             appleCalendar.consumePendingExternalChanges()
             lastCalendarSyncSummary = report.summary
             var warnings: [String] = []
@@ -400,6 +407,10 @@ extension AppSession {
                     // Edited in Reminders since the last sync: the pull below
                     // takes that version and reports the conflict.
                     continue
+                case .movedElsewhere:
+                    // The reminder was moved to another list: nothing is
+                    // written, and the pull below reports it as missing.
+                    continue
                 case .pushed(let synced):
                     // A newer local edit must not be overwritten by the
                     // snapshot this push started from.
@@ -411,7 +422,9 @@ extension AppSession {
                 }
             }
             locals = try await store.todos.loadAll()
-            let result = try await appleReminders.pull(localTodos: locals, from: destination)
+            let tombstones = try await store.db.syncTombstones(domain: SyncDestinationCore.remindersDomain)
+            let result = try await appleReminders.pull(
+                localTodos: locals, from: destination, tombstones: tombstones)
             for (id, identifier) in result.rebinds {
                 try await store.todos.setRemoteIdentifier(id: id, identifier: identifier)
             }
@@ -435,6 +448,7 @@ extension AppSession {
             report.created = result.creations.count
             report.conflicts = result.conflictingIDs.count
             report.remoteMissing = result.remoteMissing
+            report.ignoredDeleted = result.ignoredDeleted
             appleReminders.consumePendingExternalChanges()
             lastRemindersSyncSummary = report.summary
             var warnings: [String] = []

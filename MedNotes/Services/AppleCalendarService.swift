@@ -111,6 +111,9 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         /// (its marker names the row). Row id → the object's identifier. Not
         /// new events, and not missing ones: the row is pointed at its object.
         var rebinds: [UUID: String] = [:]
+        /// MedNotes-made objects whose row was deleted here, left alone rather
+        /// than imported as new events.
+        var ignoredDeleted = 0
     }
 
     enum PushOutcome: Sendable {
@@ -119,6 +122,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         /// The Apple event was edited after the last sync; nothing was
         /// written, and the pull that follows takes the Apple version.
         case remoteNewer
+        /// The Apple event this row made has been moved to another calendar.
+        /// Nothing was written (a second event would sit beside it); the pull
+        /// that follows reports the row as missing from the destination.
+        case movedElsewhere
     }
 
     @Published private(set) var state: AccessState
@@ -323,9 +330,16 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         }
         var ek: EKEvent
         var isExisting = true
-        if let identifier = event.ekEventIdentifier,
-           let found = store.calendarItem(withIdentifier: identifier) as? EKEvent,
-           found.calendar?.calendarIdentifier == destination.calendarIdentifier {
+        let identified = event.ekEventIdentifier.flatMap { store.calendarItem(withIdentifier: $0) as? EKEvent }
+        let route = SyncDestinationCore.pushRoute(
+            rowID: event.id, destination: destination,
+            found: identified.map {
+                ($0.calendar?.calendarIdentifier == destination.calendarIdentifier,
+                 SyncDestinationCore.marker(from: $0.url),
+                 SyncDestinationCore.recordID(from: $0.url))
+            })
+        if route == .movedElsewhere { return .movedElsewhere }
+        if route == .useFound, let found = identified {
             ek = found
         } else if let made = objectMade(from: event.id, in: targetCalendar, destination: destination) {
             // The row lost the identifier of an object it already made (a full
@@ -380,17 +394,27 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         }
     }
 
+    /// Removes the Apple event made from `event`, if it can be found.
+    ///
+    /// It is found by the identifier the row stored, and when that finds nothing
+    /// (a full sync changes identifiers, or a push's result was never stored) by
+    /// the marker MedNotes put on it, which names this row. Only an object in the
+    /// destination that carries this app's marker is ever removed.
     func deleteRemote(_ event: CalendarEvent, from destination: SyncDestination) async throws {
-        guard state == .granted,
-              let identifier = event.ekEventIdentifier,
-              let item = store.calendarItem(withIdentifier: identifier) as? EKEvent,
-              item.calendar?.calendarIdentifier == destination.calendarIdentifier,
-              SyncDestinationCore.ownsRemoteObject(
-                marker: SyncDestinationCore.marker(from: item.url),
-                destination: destination,
-                inDestination: true) else {
-            return
+        guard state == .granted else { return }
+        var target: EKEvent?
+        if let identifier = event.ekEventIdentifier,
+           let item = store.calendarItem(withIdentifier: identifier) as? EKEvent,
+           item.calendar?.calendarIdentifier == destination.calendarIdentifier,
+           SyncDestinationCore.ownsRemoteObject(
+            marker: SyncDestinationCore.marker(from: item.url),
+            destination: destination,
+            inDestination: true) {
+            target = item
+        } else if let calendar = calendar(for: destination) {
+            target = objectMade(from: event.id, in: calendar, destination: destination)
         }
+        guard let item = target else { return }
         do {
             try store.remove(item, span: .thisEvent, commit: true)
         } catch {
@@ -415,7 +439,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// that calendar and carrying the MedNotes marker are read; a local row
     /// whose remote object disappeared is reported as a conflict, never a
     /// silent delete.
-    func pull(localEvents: [CalendarEvent], from destination: SyncDestination) async throws -> PullResult {
+    func pull(
+        localEvents: [CalendarEvent], from destination: SyncDestination,
+        tombstones: Set<UUID> = []
+    ) async throws -> PullResult {
         guard state == .granted else { throw CalendarSyncError.accessDenied }
         guard let targetCalendar = calendar(for: destination) else {
             throw CalendarSyncError.destinationMissing
@@ -486,14 +513,23 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         for ek in windowEvents {
             let identifier = ek.calendarItemIdentifier
             guard byEKID[identifier] == nil else { continue }
-            // Made from a row we have: not a new event, whatever identifier
-            // EventKit gives it now.
-            if let record = SyncDestinationCore.recordID(from: ek.url), localIDs.contains(record) { continue }
             // Only MedNotes-created objects may be imported.
             guard SyncDestinationCore.ownsRemoteObject(
                 marker: SyncDestinationCore.marker(from: ek.url),
                 destination: destination,
                 inDestination: true) else { continue }
+            // Made from a row we have: not a new event, whatever identifier
+            // EventKit gives it now. Made from a row deleted here: left alone,
+            // not brought back as a new event with no patient.
+            switch SyncDestinationCore.importDecision(
+                recordID: SyncDestinationCore.recordID(from: ek.url),
+                localIDs: localIDs, tombstones: tombstones) {
+            case .belongsToLocalRow: continue
+            case .deletedHere:
+                if imported.insert(identifier).inserted { result.ignoredDeleted += 1 }
+                continue
+            case .importAsNew: break
+            }
             // One import per remote item: a recurring event yields one entry per occurrence, all sharing the identifier.
             guard imported.insert(identifier).inserted else { continue }
             result.creations.append(CalendarEvent(

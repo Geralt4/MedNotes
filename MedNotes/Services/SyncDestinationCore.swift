@@ -74,6 +74,59 @@ enum SyncDestinationCore {
         return UUID(uuidString: parts[1])
     }
 
+    /// The two kinds of record that sync, as `sync_tombstones` names them.
+    static let calendarDomain = Schema.tombstoneCalendarDomain
+    static let remindersDomain = Schema.tombstoneRemindersDomain
+
+    /// What a pull does with an owned object in the destination that no local
+    /// row holds the identifier of.
+    enum RemoteImportDecision: Equatable {
+        /// MedNotes did not make it from a row it has or had: a new record.
+        case importAsNew
+        /// Made from a row that exists: that row owns it, whatever identifier
+        /// EventKit gives it now.
+        case belongsToLocalRow
+        /// Made from a row that was deleted here. It is left alone, never
+        /// brought back as a new, unlinked record.
+        case deletedHere
+    }
+
+    /// `recordID` is the row named by the object's marker, when it names one.
+    static func importDecision(
+        recordID: UUID?, localIDs: Set<UUID>, tombstones: Set<UUID>
+    ) -> RemoteImportDecision {
+        guard let recordID else { return .importAsNew }
+        if localIDs.contains(recordID) { return .belongsToLocalRow }
+        if tombstones.contains(recordID) { return .deletedHere }
+        return .importAsNew
+    }
+
+    /// Where a push goes when the row's stored identifier finds an object.
+    enum PushRoute: Equatable {
+        /// It is in the destination: write to it.
+        case useFound
+        /// It is the object this row made, but it has been moved out of the
+        /// destination. Writing would make a second one beside it; the pull
+        /// reports the row as missing so the user decides.
+        case movedElsewhere
+        /// Not ours to write to: look in the destination for the object this row
+        /// made, and make a new one if there is none.
+        case searchDestination
+    }
+
+    /// `found` describes what the identifier resolved to, or is nil when it
+    /// found nothing.
+    static func pushRoute(
+        rowID: UUID, destination: SyncDestination,
+        found: (inDestination: Bool, marker: String?, recordID: UUID?)?
+    ) -> PushRoute {
+        guard let found else { return .searchDestination }
+        if found.inDestination { return .useFound }
+        let madeHere = ownsRemoteObject(
+            marker: found.marker, destination: destination, inDestination: true)
+        return madeHere && found.recordID == rowID ? .movedElsewhere : .searchDestination
+    }
+
     /// How far after the last sync an Apple object's modified time may be and
     /// still count as our own push. Calendar servers stamp a change when it
     /// reaches them, which is after the moment the push was saved here; reading
@@ -115,6 +168,8 @@ struct SyncPassReport: Sendable, Equatable {
     var conflicts = 0
     var remoteMissing: [UUID] = []
     var skippedForConsent = 0
+    /// Apple objects made from a record deleted here, left alone.
+    var ignoredDeleted = 0
 
     var summary: String {
         var parts: [String] = []
@@ -125,6 +180,7 @@ struct SyncPassReport: Sendable, Equatable {
         if conflicts > 0 { parts.append(String(localized: "\(conflicts) conflicts")) }
         if !remoteMissing.isEmpty { parts.append(String(localized: "\(remoteMissing.count) missing remotely")) }
         if skippedForConsent > 0 { parts.append(String(localized: "\(skippedForConsent) awaiting consent")) }
+        if ignoredDeleted > 0 { parts.append(String(localized: "\(ignoredDeleted) deleted here, left in Apple")) }
         return parts.isEmpty ? String(localized: "Nothing to sync") : parts.joined(separator: ", ")
     }
 }

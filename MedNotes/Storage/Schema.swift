@@ -1,7 +1,7 @@
 import Foundation
 
 enum Schema {
-    static let currentVersion = 8
+    static let currentVersion = 9
 
     static let v1: [String] = [
         """
@@ -403,6 +403,27 @@ enum Schema {
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_note_properties_key ON note_properties(key_norm)"
+    ]
+
+    /// The two values of `sync_tombstones.domain`, named here because the storage
+    /// layer writes them.
+    static let tombstoneCalendarDomain = "calendar"
+    static let tombstoneRemindersDomain = "reminders"
+
+    /// Schema v9: the records deleted here whose Apple Calendar or Reminders
+    /// counterpart may still exist. An Apple object made by MedNotes whose row is
+    /// gone used to be imported as a new, unlinked row by the next pull; the pull
+    /// now skips any record named here. One row per deleted record, written by the
+    /// delete itself. Additive, and carried by backups with the rest of the store.
+    static let v9: [String] = [
+        """
+        CREATE TABLE IF NOT EXISTS sync_tombstones (
+            domain TEXT NOT NULL,
+            local_id TEXT NOT NULL,
+            deleted_at TEXT NOT NULL,
+            PRIMARY KEY (domain, local_id)
+        )
+        """
     ]
 
     /// Schema v7: small named values the app keeps for itself, such as the
