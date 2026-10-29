@@ -98,7 +98,11 @@ struct ImportFlowSheet: View {
                 }
             }
             if report.totalImported == 0 {
-                if report.errors.isEmpty {
+                if report.errors.isEmpty, report.totalAlreadyPresent > 0 {
+                    Text("Everything in this folder is already in MedNotes. Nothing needs importing.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else if report.errors.isEmpty {
                     Text("No records were found in this folder.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -108,9 +112,9 @@ struct ImportFlowSheet: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                // The check reads the folder on its own, so these counts are
-                // what it holds, not what is new to MedNotes.
-                Text("Records already in MedNotes are updated, not added twice.")
+                // The check is made against the store as it is now, so these
+                // are the records the import will add.
+                Text("Records already in MedNotes are left as they are, not overwritten.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -155,6 +159,8 @@ struct ImportFlowSheet: View {
             (report.todosImported, String(localized: "todos")),
             (report.eventsImported, String(localized: "events"))
         ]
-        return parts.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        let imported = parts.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        guard report.totalAlreadyPresent > 0 else { return imported }
+        return imported + " · " + String(localized: "\(report.totalAlreadyPresent) already present, left as they are")
     }
 }

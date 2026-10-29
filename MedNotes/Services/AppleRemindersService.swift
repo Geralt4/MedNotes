@@ -56,6 +56,16 @@ struct ReminderFields: Hashable, Sendable {
 }
 
 enum ReminderSyncCore {
+    /// Whether the todo has anything to send. A new todo nobody has typed into is
+    /// a placeholder the editor discards when it closes; see
+    /// `CalendarSyncCore.shouldPush`.
+    static func shouldPush(_ todo: TodoItem) -> Bool {
+        if todo.reminderIdentifier == nil { return !todo.isUntouchedNewRecord }
+        guard todo.syncStatus != .localOnly else { return true }
+        guard let synced = todo.lastSyncDate else { return true }
+        return todo.updatedAt > synced
+    }
+
     enum PullDecision: Equatable {
         case same
         case update(conflict: Bool)
@@ -176,6 +186,9 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         /// never stored, though a reminder made from them is in the list (its
         /// marker names the row). Row id → the reminder's identifier.
         var rebinds: [UUID: String] = [:]
+        /// MedNotes-made reminders whose todo was deleted here, left alone
+        /// rather than imported as new todos.
+        var ignoredDeleted = 0
     }
 
     enum PushOutcome: Sendable {
@@ -184,6 +197,10 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         /// The reminder was edited after the last sync; nothing was written,
         /// and the pull that follows takes the reminder's version.
         case remoteNewer
+        /// The reminder this todo made has been moved to another list. Nothing
+        /// was written (a second reminder would sit beside it); the pull that
+        /// follows reports the todo as missing from the list.
+        case movedElsewhere
     }
 
     @Published private(set) var state: AccessState
@@ -374,9 +391,16 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         }
         let reminder: EKReminder
         var isExisting = true
-        if let identifier = todo.reminderIdentifier,
-           let found = store.calendarItem(withIdentifier: identifier) as? EKReminder,
-           found.calendar?.calendarIdentifier == destination.calendarIdentifier {
+        let identified = todo.reminderIdentifier.flatMap { store.calendarItem(withIdentifier: $0) as? EKReminder }
+        let route = SyncDestinationCore.pushRoute(
+            rowID: todo.id, destination: destination,
+            found: identified.map {
+                ($0.calendar?.calendarIdentifier == destination.calendarIdentifier,
+                 SyncDestinationCore.marker(from: $0.url),
+                 SyncDestinationCore.recordID(from: $0.url))
+            })
+        if route == .movedElsewhere { return .movedElsewhere }
+        if route == .useFound, let found = identified {
             reminder = found
         } else if let made = await reminderMade(from: todo.id, in: list, destination: destination) {
             // The todo lost the identifier of a reminder it already made: reuse
@@ -426,17 +450,25 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         }
     }
 
+    /// Removes the Apple reminder made from `todo`, if it can be found: by the
+    /// identifier the todo stored, and when that finds nothing by the marker
+    /// MedNotes put on it, which names this todo. Only a reminder in the
+    /// destination that carries this app's marker is ever removed.
     func deleteRemote(_ todo: TodoItem, from destination: SyncDestination) async throws {
-        guard state == .granted,
-              let identifier = todo.reminderIdentifier,
-              let item = store.calendarItem(withIdentifier: identifier) as? EKReminder,
-              item.calendar?.calendarIdentifier == destination.calendarIdentifier,
-              SyncDestinationCore.ownsRemoteObject(
-                marker: SyncDestinationCore.marker(from: item.url),
-                destination: destination,
-                inDestination: true) else {
-            return
+        guard state == .granted else { return }
+        var target: EKReminder?
+        if let identifier = todo.reminderIdentifier,
+           let item = store.calendarItem(withIdentifier: identifier) as? EKReminder,
+           item.calendar?.calendarIdentifier == destination.calendarIdentifier,
+           SyncDestinationCore.ownsRemoteObject(
+            marker: SyncDestinationCore.marker(from: item.url),
+            destination: destination,
+            inDestination: true) {
+            target = item
+        } else if let list = list(for: destination) {
+            target = await reminderMade(from: todo.id, in: list, destination: destination)
         }
+        guard let item = target else { return }
         do {
             try store.remove(item, commit: true)
         } catch {
@@ -475,7 +507,10 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// One reconcile pass against the confirmed list. A local row whose
     /// remote reminder is gone or untagged is reported as a conflict, never a
     /// silent deletion; only MedNotes-marked objects are imported.
-    func pull(localTodos: [TodoItem], from destination: SyncDestination) async throws -> PullResult {
+    func pull(
+        localTodos: [TodoItem], from destination: SyncDestination,
+        tombstones: Set<UUID> = []
+    ) async throws -> PullResult {
         guard state == .granted else { throw RemindersSyncError.accessDenied }
         guard let list = list(for: destination) else {
             throw RemindersSyncError.destinationMissing
@@ -538,13 +573,22 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         for reminder in listReminders {
             let identifier = reminder.calendarItemIdentifier
             guard byReminderID[identifier] == nil else { continue }
-            // Made from a todo we have: not a new one, whatever identifier
-            // EventKit gives it now.
-            if let record = SyncDestinationCore.recordID(from: reminder.url), localIDs.contains(record) { continue }
             guard SyncDestinationCore.ownsRemoteObject(
                 marker: SyncDestinationCore.marker(from: reminder.url),
                 destination: destination,
                 inDestination: true) else { continue }
+            // Made from a todo we have: not a new one, whatever identifier
+            // EventKit gives it now. Made from one deleted here: left alone, not
+            // brought back as a new todo with no patient.
+            switch SyncDestinationCore.importDecision(
+                recordID: SyncDestinationCore.recordID(from: reminder.url),
+                localIDs: localIDs, tombstones: tombstones) {
+            case .belongsToLocalRow: continue
+            case .deletedHere:
+                result.ignoredDeleted += 1
+                continue
+            case .importAsNew: break
+            }
             let fields = reminder.reminderFields()
             let now = Date()
             result.creations.append(TodoItem(

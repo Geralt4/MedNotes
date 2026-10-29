@@ -138,6 +138,7 @@ extension AppSession {
         do {
             try await store.notes.save(note)
             await revealNote(note.id)
+            guard canUseStore else { return }
             pendingFocusRecordId = note.id
         } catch {
             errorMessage = error.localizedDescription

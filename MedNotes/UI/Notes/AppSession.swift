@@ -219,6 +219,11 @@ final class AppSession: ObservableObject {
     var switcherTask: Task<Void, Never>?
     /// Supersedes a lookup still in flight when the query changes again.
     var switcherGeneration = 0
+
+    /// Test seam: runs after a quick-switcher lookup has read the store and before
+    /// it publishes, so a test can land a lock at that point. Nothing in the app
+    /// sets it.
+    var switcherLookupWillPublish: @MainActor () async -> Void = {}
     var calendarObserverTask: Task<Void, Never>?
     var remindersObserverTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
@@ -276,10 +281,24 @@ final class AppSession: ObservableObject {
     /// templated note left untouched is discarded like a blank one.
     var seededNoteContent: [UUID: String] = [:]
 
+    /// Notes saved by `newNote` as the session locked, never opened; see
+    /// `discardNotesAbandonedAtLock`.
+    var notesAbandonedAtLock: Set<UUID> = []
+
+    /// Test seam: runs once `newNote` has saved the note and before it opens it,
+    /// so a test can land a lock at that point. Nothing in the app sets it.
+    var newNoteDidSave: @MainActor () async -> Void = {}
+
     /// The record editors on screen, by the token each registered with, and
     /// how to read each one's draft. `closeStore` reads them all before it
     /// detaches the store; see `OpenEditorDraft`.
     var openEditors: [UUID: () -> OpenEditorDraft?] = [:]
+
+    /// Fields inside an editor that hold typed text not yet written to the
+    /// draft (an inspector property, committed on submit or when focus leaves),
+    /// by registration token. `openEditorDrafts` runs them first, so a lock or a
+    /// restore reads the draft with that text in it.
+    var pendingEdits: [UUID: () -> Void] = [:]
 
     /// Tokens whose drafts the session has already saved or discarded itself,
     /// as a lock or a restore does just before it unmounts the editors. The
@@ -668,7 +687,9 @@ final class AppSession: ObservableObject {
             isObscured = false
             return
         }
-        guard !isUnlocking, let coordinator, let dataRoot else { return }
+        // A store must not open on files a restore is still replacing.
+        _ = await restoreRun?.value
+        guard isLocked, !isUnlocking, let coordinator, let dataRoot else { return }
         isUnlocking = true
         pendingLockReason = nil
         // Not a `defer`: the pending-lock path below clears it before its own
@@ -819,8 +840,18 @@ final class AppSession: ObservableObject {
             SwipeDiagnostics.purge()
         }
         if let closing {
+            // A restore that was running is cancelled above and finishes first:
+            // the drafts are written, and the store is closed, only once the
+            // files are no longer being swapped. `draftFlush` is set before the
+            // first suspension, so an unlock waits for all of it.
+            let pendingRestore = restoreRun
             let flush = Task {
-                let failures = await self.saveDrafts(drafts, into: closing)
+                // The drafts were saved before the restore began, so they are in
+                // the safety copy. Once the data has been replaced they must not
+                // be written into it: that would put the stale text back over
+                // the restored records.
+                let replaced = await pendingRestore?.value ?? false
+                let failures = replaced ? 0 : await self.saveDrafts(drafts, into: closing)
                 if failures > 0 {
                     // The alert waits for the unlock; ContentView hides it while locked.
                     self.errorMessage = String(localized: "MedNotes locked while a record was being edited, and \(failures) edit(s) could not be saved.")
@@ -843,6 +874,9 @@ final class AppSession: ObservableObject {
     /// Empties every published record list and invalidates the reloads in
     /// flight, whose generation checks then drop their late results.
     private func clearDisplayedRecords() {
+        // A quick-switcher lookup already past its sleep would refill the
+        // results after the lock has emptied them.
+        switcherGeneration &+= 1
         notesReloadGeneration += 1
         patientsReloadGeneration += 1
         todosReloadGeneration += 1
@@ -1057,6 +1091,7 @@ final class AppSession: ObservableObject {
         observeCalendarChanges()
         observeRemindersChanges()
         await pushDraftsSavedAtLock()
+        await discardNotesAbandonedAtLock()
         if let store {
             restorePointUpgradeTask?.cancel()
             restorePointUpgradeTask = Task { await store.backups.upgradeLegacyRestorePoints() }
@@ -1125,6 +1160,13 @@ final class AppSession: ObservableObject {
     /// container, by token. A lock cancels each one (`closeStore`), and they
     /// look for that before every record or note they write.
     var outgoing: [UUID: () -> Void] = [:]
+
+    /// The restore in progress, so a lock and an unlock can wait for it. A
+    /// restore swaps the database file and the attachment folder; closing the
+    /// store, or opening a new one, in the middle of that would leave a store
+    /// open on files that are being replaced. `nil` when none is running. Its
+    /// value is whether the restore got as far as replacing the data.
+    var restoreRun: Task<Bool, Never>?
 
     /// Test seam: runs as a backup or export begins writing outside the
     /// container, so a test can land a lock there. Nothing in the app sets it.
@@ -1255,10 +1297,15 @@ final class AppSession: ObservableObject {
         if injectedDataRoot == nil {
             // Plaintext copies a crash left in the app's temporary folder.
             EncryptedFileStore.purgeOrphanedTemporaries(in: DataRoot.appExternalCopiesURL)
+            // So are the working folders of a restore or an upgrade that was killed.
+            StagingLeftovers.purge()
         }
         do {
             let dataRoot = try injectedDataRoot ?? Self.resolveDataRoot()
             self.dataRoot = dataRoot
+            // An install that a crash cut off is undone before anything reads a
+            // key or opens a store, and before the orphan sweep can see it.
+            try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
             let keyManager = resolvedKeyManager()
             try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager).recoverInterruptedMigration()
             let coordinator = SecureStoreCoordinator(keyManager: keyManager, dataRoot: dataRoot)

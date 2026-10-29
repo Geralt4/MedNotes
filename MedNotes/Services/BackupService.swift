@@ -135,6 +135,9 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     /// that cannot be read, say), so nothing was replaced. The user may choose
     /// to restore without it.
     case safetyCopyIncomplete(String)
+    /// A restore point still sealed under the old public passphrase; the
+    /// upgrade pass reseals it under the device key first.
+    case restorePointNotUpgraded
 
     var description: String {
         switch self {
@@ -153,6 +156,7 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
         case let .safetyCopyIncomplete(detail): return "the restore point of the current data could not be made: \(detail)"
+        case .restorePointNotUpgraded: return "the restore point is still sealed under the old passphrase"
         case let .rollbackFailed(folder, detail):
             return "restore failed and the original data could not be put back (kept in \(folder)): \(detail)"
         }
@@ -188,6 +192,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "A restore point could not be made because this store has no restore key.")
         case let .safetyCopyIncomplete(detail):
             return String(localized: "A copy of your current data could not be made first, so nothing was changed: \(detail)")
+        case .restorePointNotUpgraded:
+            return String(localized: "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again.")
         case let .rollbackFailed(folder, detail):
             return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”. \(detail)")
         }
@@ -369,6 +375,48 @@ actor BackupService {
         attachmentKey: Data,
         createRestorePoint: Bool = true
     ) async throws -> BackupManifest {
+        try await restore(
+            archiveAt: fileURL, sealing: .passphrase(passphrase),
+            databaseKey: databaseKey, attachmentKey: attachmentKey,
+            createRestorePoint: createRestorePoint)
+    }
+
+    /// Restores one of this store's own restore points, the "Pre-restore" and
+    /// "Pre-import" snapshots a restore or an import keeps first. They are
+    /// sealed by the device restore key, so only this device's store opens
+    /// them. A point from before restore points had a device key is still under
+    /// the public passphrase until the upgrade pass has resealed it; restoring
+    /// it is refused until then rather than reading it with that passphrase.
+    func restore(
+        fromRestorePointAt url: URL,
+        databaseKey: Data,
+        attachmentKey: Data,
+        createRestorePoint: Bool = true
+    ) async throws -> BackupManifest {
+        guard let restorePointKey else { throw BackupError.restorePointKeyUnavailable }
+        // Only a file in this store's restore point folder, never a path from elsewhere.
+        guard url.pathExtension == "mnrp",
+              url.deletingLastPathComponent().standardizedFileURL
+                == restorePointsRoot.standardizedFileURL,
+              let profile = BackupArchiveV2.profile(at: url) else {
+            throw BackupError.invalidArchive
+        }
+        guard profile == BackupArchiveV2.deviceKeyProfile else {
+            throw BackupError.restorePointNotUpgraded
+        }
+        return try await restore(
+            archiveAt: url, sealing: .deviceKey(restorePointKey),
+            databaseKey: databaseKey, attachmentKey: attachmentKey,
+            createRestorePoint: createRestorePoint)
+    }
+
+    private func restore(
+        archiveAt fileURL: URL,
+        sealing: BackupArchiveV2.Sealing,
+        databaseKey: Data,
+        attachmentKey: Data,
+        createRestorePoint: Bool
+    ) async throws -> BackupManifest {
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("mednotes-restore-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -382,7 +430,7 @@ actor BackupService {
         let stagingAttachments = staging.appendingPathComponent("Attachments", isDirectory: true)
         let stagingStore = try EncryptedFileStore(root: stagingAttachments, key: attachmentKey)
         // One passphrase derivation serves the extraction and the snapshot key.
-        let opened = try BackupArchiveV2.openReader(at: fileURL, passphrase: passphrase)
+        let opened = try BackupArchiveV2.openReader(at: fileURL, sealing: sealing)
         defer { try? opened.reader.handle.close() }
         let manifest = try await ArchiveExtraction.extract(
             opened: opened, snapshotURL: snapshotURL, store: stagingStore).manifest
@@ -398,9 +446,12 @@ actor BackupService {
         try await validateStagedDatabase(
             at: snapshotURL, key: opened.archiveKey, attachments: stagingStore)
 
+        // A lock cancels the restore; it stops here, before a live file moves.
+        try Task.checkCancellation()
         if createRestorePoint {
             try await takePreRestorePoint()
         }
+        try await readyToInstall()
         try await installStaged(
             databaseAt: snapshotURL, sourceKey: opened.archiveKey,
             attachmentsAt: stagingAttachments)
@@ -477,6 +528,7 @@ actor BackupService {
         guard FileManager.default.fileExists(atPath: snapshotURL.path) else {
             throw BackupError.missingDatabase(fileURL)
         }
+        try Task.checkCancellation()
         if createRestorePoint {
             try await takePreRestorePoint()
         }
@@ -488,6 +540,7 @@ actor BackupService {
         let stagedDatabase = built.appendingPathComponent("mednotes.db")
         try await validateStagedDatabase(
             at: stagedDatabase, key: databaseKey, attachments: stagingStore)
+        try await readyToInstall()
         try await installStaged(
             databaseAt: stagedDatabase, sourceKey: nil,
             attachmentsAt: built.appendingPathComponent("Attachments", isDirectory: true))
@@ -767,6 +820,30 @@ actor BackupService {
         }
     }
 
+    /// Test seam: runs once everything is staged and checked, just before the
+    /// install, so a test can land a lock at the last point a restore can stop.
+    var beforeInstallForTesting: (@Sendable () async -> Void)?
+
+    func setBeforeInstallForTesting(_ hook: (@Sendable () async -> Void)?) {
+        beforeInstallForTesting = hook
+    }
+
+    /// Test seam: runs once the database and the attachments have been swapped,
+    /// before the live store is verified, so a test can land a lock after the
+    /// point where a restore can no longer be cancelled.
+    var afterSwapForTesting: (@Sendable () async -> Void)?
+
+    func setAfterSwapForTesting(_ hook: (@Sendable () async -> Void)?) {
+        afterSwapForTesting = hook
+    }
+
+    /// The last point a restore can be cancelled. Past it the swap runs to its
+    /// end, or is rolled back, and is never abandoned half way.
+    private func readyToInstall() async throws {
+        await beforeInstallForTesting?()
+        try Task.checkCancellation()
+    }
+
     /// Test seam: runs after the database swap and the attachment swap, before
     /// the live store is verified, so a test can fail the install late.
     var installFaultForTesting: (() throws -> Void)?
@@ -786,8 +863,19 @@ actor BackupService {
         let fm = FileManager.default
         let root = restorePointsRoot.deletingLastPathComponent()
         let liveAttachments = root.appendingPathComponent("Attachments", isDirectory: true)
-        let kept = root.appendingPathComponent("RestoreRollback-\(UUID().uuidString)", isDirectory: true)
+        let kept = root.appendingPathComponent(
+            "\(RestoreRecovery.rollbackPrefix)\(UUID().uuidString)", isDirectory: true)
         let keptAttachments = kept.appendingPathComponent("Attachments", isDirectory: true)
+
+        // The journal is what lets a launch undo an install that a crash cut
+        // off (`RestoreRecovery`): it exists before anything live moves.
+        do {
+            try fm.createDirectory(at: kept, withIntermediateDirectories: true)
+            try RestoreRecovery.writeJournal(.started, in: kept)
+        } catch {
+            try? fm.removeItem(at: kept)
+            throw BackupError.restoreFailed("install: \(error.localizedDescription)")
+        }
 
         do {
             try await db.replaceDatabaseFile(
@@ -801,16 +889,21 @@ actor BackupService {
 
         var attachmentsMoved = false
         do {
+            try RestoreRecovery.writeJournal(.databaseReplaced, in: kept)
             if fm.fileExists(atPath: liveAttachments.path) {
                 try fm.moveItem(at: liveAttachments, to: keptAttachments)
                 attachmentsMoved = true
+                try RestoreRecovery.writeJournal(.attachmentsAside, in: kept)
             }
             try fm.moveItem(at: stagedAttachments, to: liveAttachments)
+            try RestoreRecovery.writeJournal(.attachmentsIn, in: kept)
             try installFaultForTesting?()
+            await afterSwapForTesting?()
             try await db.suspendSyncDestinations()
             if let fileStore {
                 try await db.verifyAttachmentDigests(fileStore: fileStore)
             }
+            try RestoreRecovery.writeJournal(.verified, in: kept)
         } catch {
             do {
                 try await db.reinstateDatabaseFile(from: kept)
@@ -824,7 +917,16 @@ actor BackupService {
             try? fm.removeItem(at: kept)
             throw BackupError.restoreFailed("install: \(error.localizedDescription)")
         }
-        try? fm.removeItem(at: kept)
+        // Renamed first, so the delete cannot be half applied to a folder that
+        // still looks like a rollback: a crash during it leaves a discard folder
+        // that the next launch simply deletes.
+        let discard = root.appendingPathComponent(
+            "\(RestoreRecovery.discardPrefix)\(UUID().uuidString)", isDirectory: true)
+        if (try? fm.moveItem(at: kept, to: discard)) != nil {
+            try? fm.removeItem(at: discard)
+        } else {
+            try? fm.removeItem(at: kept)
+        }
     }
 
     /// Builds, beside nothing live, an encrypted database and attachment store

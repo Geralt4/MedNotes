@@ -6,3 +6,4 @@ xcuserdata/
 *.xcuserstate
 *.profraw
 Config/Local.xcconfig
+__pycache__/

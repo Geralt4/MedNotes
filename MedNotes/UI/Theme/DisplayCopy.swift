@@ -193,6 +193,7 @@ enum DisplayCopy {
         case "Pre-encryption backup": return String(localized: "Pre-encryption backup")
         case "Pre-restore snapshot": return String(localized: "Pre-restore snapshot")
         case "Pre-import snapshot": return String(localized: "Pre-import snapshot")
+        case "Pre-mirror snapshot": return String(localized: "Pre-mirror snapshot")
         default: return name
         }
     }

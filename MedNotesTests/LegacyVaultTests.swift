@@ -223,6 +223,39 @@ final class LegacyVaultTests: XCTestCase {
         XCTAssertEqual(notes.count, 2)
     }
 
+    func testReplacingWithMirrorVersionsKeepsARestorePointThatBringsTheNotesBack() async throws {
+        let f = try await fixture()
+
+        _ = try await f.session.resolveLegacyVault(.useMirror)
+
+        var notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "MIRROR-VERSION")
+        let points = await f.session.restorePoints()
+        let snapshot = try XCTUnwrap(points.first { $0.name == "Pre-mirror snapshot" },
+                                     "the current notes must be kept before they are overwritten")
+        XCTAssertEqual(BackupFlowSheet.summary(counts: snapshot.counts).isEmpty, false)
+
+        // And that point puts the database's own version back.
+        try await f.session.restoreFromRestorePoint(snapshot)
+        notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "DATABASE-VERSION")
+    }
+
+    func testNothingIsReplacedWhenTheSafetyCopyCannotBeMade() async throws {
+        let f = try await fixture()
+        // A file where the restore point folder should be: no point can be written.
+        try FileManager.default.removeItem(at: f.root.restorePointsURL)
+        try Data("not a folder".utf8).write(to: f.root.restorePointsURL)
+
+        do {
+            _ = try await f.session.resolveLegacyVault(.useMirror)
+            XCTFail("without a safety copy nothing may be replaced")
+        } catch {}
+
+        let notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "DATABASE-VERSION")
+    }
+
     func testDecisionsAreRefusedWhileLocked() async throws {
         let f = try await fixture()
         await f.session.lockNow(reason: "test")

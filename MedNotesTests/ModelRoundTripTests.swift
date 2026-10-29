@@ -445,16 +445,16 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertTrue(stay.procedures.isEmpty)
     }
 
-    func testDischargedHospitalizationIsNotActive() throws {
+    func testHospitalizationWithADischargeDateIsNoLongerAdmittedButKeepsItsStoredStatus() throws {
         let json = """
         {"id":"2720DBF2-119E-453B-8451-94F382288673",
          "admissionDate":"2026-03-01T10:00:00Z",
          "dischargeDate":"2026-03-05T10:00:00Z"}
         """.data(using: .utf8)!
         let stay = try decodeJSONData(Hospitalization.self, from: json)
-        XCTAssertEqual(stay.status, .discharged)
-        XCTAssertFalse(stay.isActive)
-        XCTAssertFalse(stay.isCurrentlyAdmitted)
+        XCTAssertFalse(stay.isCurrentlyAdmitted, "the discharge date answers whether they are still in")
+        XCTAssertEqual(stay.status, .admitted, "loading must not change the status the user recorded")
+        XCTAssertTrue(stay.isActive)
     }
 
     func testDiscontinuedHospitalMedicationIsNotActive() throws {
@@ -467,14 +467,16 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertFalse(med.isActive)
     }
 
-    func testHospitalMedicationWithPastEndDateIsNotActive() throws {
+    /// A course that simply ran out is finished, not discontinued: those mean
+    /// different things in the record, and the end date must not set the flag.
+    func testHospitalMedicationWithPastEndDateIsNotMarkedDiscontinued() throws {
         let json = """
         {"id":"2720DBF2-119E-453B-8451-94F382288673",
          "medicationName":"Heparin","endDate":"2020-01-01T00:00:00Z"}
         """.data(using: .utf8)!
         let med = try decodeJSONData(HospitalMedication.self, from: json)
-        XCTAssertTrue(med.discontinued)
-        XCTAssertFalse(med.isActive)
+        XCTAssertFalse(med.discontinued)
+        XCTAssertTrue(med.isActive)
     }
 
     func testVisitAndTagDecodeWithMissingDefaults() throws {
@@ -571,13 +573,58 @@ final class ModelRoundTripTests: XCTestCase {
         XCTAssertTrue(corruptStart.isActive)
     }
 
-    func testMedicationWithPastEndDateIsNotActive() throws {
+    func testMedicationWithPastEndDateIsShownStoppedWithoutChangingTheStoredFlag() throws {
         let json = """
         {"id":"F57821B9-33D2-40E2-9767-8575DF0BE8AF","name":"Lisinopril",
          "endDate":"2020-01-01T00:00:00Z"}
         """.data(using: .utf8)!
         let med = try decodeJSONData(Medication.self, from: json)
-        XCTAssertFalse(med.isActive)
+        XCTAssertTrue(med.isActive, "loading must not rewrite the flag that was stored")
+        XCTAssertTrue(med.hasLapsed)
+        XCTAssertTrue(med.isStopped)
+        XCTAssertFalse(med.isCurrentlyActive)
+    }
+
+    func testPastDatedMedicationsSurviveADecodeEncodeDecodeUnchanged() throws {
+        let json = """
+        {"id":"F57821B9-33D2-40E2-9767-8575DF0BE8AF","name":"Amoxicillin",
+         "startDate":"2019-12-25T00:00:00Z","endDate":"2020-01-01T00:00:00Z","isActive":true}
+        """.data(using: .utf8)!
+        let first = try decodeJSONData(Medication.self, from: json)
+        let again = try decodeJSONData(Medication.self, from: try encodeJSONData(first))
+        XCTAssertEqual(first, again)
+        XCTAssertTrue(again.isActive)
+
+        let courseJSON = """
+        {"id":"2720DBF2-119E-453B-8451-94F382288673","medicationName":"Heparin",
+         "startDate":"2019-12-25T00:00:00Z","endDate":"2020-01-01T00:00:00Z"}
+        """.data(using: .utf8)!
+        let course = try decodeJSONData(HospitalMedication.self, from: courseJSON)
+        let courseAgain = try decodeJSONData(HospitalMedication.self, from: try encodeJSONData(course))
+        XCTAssertEqual(course, courseAgain)
+        XCTAssertFalse(courseAgain.discontinued)
+    }
+
+    /// The case the old rewrite broke: a course that had ended, then given a
+    /// later end date, must be active again.
+    func testExtendingALapsedMedicationsEndDateMakesItActiveAgain() throws {
+        let json = """
+        {"id":"F57821B9-33D2-40E2-9767-8575DF0BE8AF","name":"Amoxicillin",
+         "endDate":"2020-01-01T00:00:00Z"}
+        """.data(using: .utf8)!
+        var med = try decodeJSONData(Medication.self, from: json)
+        XCTAssertTrue(med.isStopped)
+        med.endDate = Calendar.current.date(byAdding: .day, value: 7, to: Date())
+        XCTAssertFalse(med.isStopped)
+        XCTAssertTrue(med.isCurrentlyActive)
+    }
+
+    func testAMedicationTheUserStoppedStaysStoppedWhateverItsEndDate() {
+        var med = Medication(name: "Lisinopril")
+        med.stop()
+        XCTAssertTrue(med.isStopped)
+        med.endDate = Calendar.current.date(byAdding: .day, value: 30, to: Date())
+        XCTAssertTrue(med.isStopped, "only the user's resume() clears a stop")
     }
 
     func testMedicationWithEndDateTodayStaysActive() throws {

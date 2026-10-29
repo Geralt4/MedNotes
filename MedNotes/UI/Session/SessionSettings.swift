@@ -48,10 +48,22 @@ extension AppSession {
         return settledEditors.remove(token) == nil
     }
 
+    /// Called by a field that holds typed text it has not written to the draft.
+    /// `flush` writes it, and does nothing when there is nothing to write.
+    func registerPendingEdit(_ token: UUID, flush: @escaping () -> Void) {
+        pendingEdits[token] = flush
+    }
+
+    func unregisterPendingEdit(_ token: UUID) {
+        pendingEdits[token] = nil
+    }
+
     /// The drafts of the editors on screen, as `save` would store them, with
-    /// the token each registered under.
+    /// the token each registered under. Fields holding typed text write it first:
+    /// their usual commit (focus leaving) arrives after the editor is gone.
     func openEditorDrafts() -> [(token: UUID, draft: OpenEditorDraft)] {
-        openEditors.compactMap { token, read in
+        pendingEdits.values.forEach { $0() }
+        return openEditors.compactMap { token, read in
             read().map { (token, preparedForSave($0)) }
         }
     }

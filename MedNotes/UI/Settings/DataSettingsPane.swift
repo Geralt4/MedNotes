@@ -16,6 +16,10 @@ struct StorageSummary: Equatable {
     /// Row counts keyed by table, as `Database.counts()` reports them.
     let counts: [String: Int]
     var lastBackup: LastBackup? = nil
+    /// The folder an earlier version kept unencrypted backups in, and how many
+    /// entries it holds. Nothing in this version writes there.
+    var oldBackupsURL: URL? = nil
+    var oldBackupCount = 0
 
     /// Whether there is anything to lose.
     var hasRecords: Bool {
@@ -31,6 +35,11 @@ struct RestorePoint: Identifiable, Equatable, Sendable {
     let counts: [String: Int]
     /// The database plus every attachment copy; nil until measured.
     let sizeBytes: Int64?
+
+    /// Still sealed under the passphrase an earlier version compiled in, so
+    /// anyone with the file can read it. The next unlock reseals it; one that
+    /// cannot be converted stays like this until it is deleted.
+    var needsUpgrade = false
 
     var id: String { url.lastPathComponent }
 }
@@ -62,6 +71,9 @@ struct DataSettingsPane: View {
     let loadSummary: () async -> StorageSummary?
     let loadRestorePoints: () async -> [RestorePoint]
     let deleteRestorePoint: (RestorePoint) async throws -> Void
+    /// Replaces the store's data with a restore point's; the session keeps a
+    /// restore point of the current data first.
+    let restoreRestorePoint: (RestorePoint) async throws -> Void
     let checkIntegrity: () async -> IntegrityReport
     let rebuildIndexes: () async -> IndexRebuildOutcome
     /// Nil when no folder was chosen or a lock stopped the export.
@@ -80,6 +92,9 @@ struct DataSettingsPane: View {
     @State private var summary: StorageSummary?
     @State private var restorePoints: [RestorePoint] = []
     @State private var pendingDelete: RestorePoint?
+    @State private var pendingRestore: RestorePoint?
+    @State private var isRestoring = false
+    @State private var pendingMirrorReplace = false
     @State private var failure: String?
     @State private var integrity: IntegrityReport?
     @State private var isChecking = false
@@ -140,6 +155,7 @@ struct DataSettingsPane: View {
     init(loadSummary: @escaping () async -> StorageSummary?,
          loadRestorePoints: @escaping () async -> [RestorePoint] = { [] },
          deleteRestorePoint: @escaping (RestorePoint) async throws -> Void = { _ in },
+         restoreRestorePoint: @escaping (RestorePoint) async throws -> Void = { _ in },
          checkIntegrity: @escaping () async -> IntegrityReport,
          rebuildIndexes: @escaping () async -> IndexRebuildOutcome = {
              IndexRebuildOutcome(passed: true, rebuiltAt: Date(), detail: "")
@@ -156,6 +172,7 @@ struct DataSettingsPane: View {
         self.loadSummary = loadSummary
         self.loadRestorePoints = loadRestorePoints
         self.deleteRestorePoint = deleteRestorePoint
+        self.restoreRestorePoint = restoreRestorePoint
         self.checkIntegrity = checkIntegrity
         self.rebuildIndexes = rebuildIndexes
         self.exportMarkdown = exportMarkdown
@@ -217,9 +234,11 @@ struct DataSettingsPane: View {
                     }
                 } else {
                     ForEach(restorePoints) { point in
-                        RestorePointRow(point: point) {
-                            pendingDelete = point
-                        }
+                        RestorePointRow(
+                            point: point,
+                            canRestore: !isRestoring,
+                            onRestore: { pendingRestore = point },
+                            onDelete: { pendingDelete = point })
                     }
                 }
                 if let failure {
@@ -231,6 +250,15 @@ struct DataSettingsPane: View {
                 if let summary {
                     Button("Show Backups in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([summary.backupsURL])
+                    }
+                    if let old = summary.oldBackupsURL, summary.oldBackupCount > 0 {
+                        Text("\(summary.oldBackupCount) backup(s) from an earlier version are in a folder that is not encrypted. Make an encrypted backup with File › Back Up…, then delete them.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Show Old Backups in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([old])
+                        }
                     }
                 }
             } header: {
@@ -369,7 +397,7 @@ struct DataSettingsPane: View {
                         Menu(String(localized: "Decide \(vaultReport.unresolvedDivergent.count) differing note(s)")) {
                             Button("Keep the database versions") { resolveVault(.keepDatabase) }
                             Button("Import the mirror versions as copies") { resolveVault(.importAsCopies) }
-                            Button("Replace with the mirror versions", role: .destructive) { resolveVault(.useMirror) }
+                            Button("Replace with the mirror versions", role: .destructive) { pendingMirrorReplace = true }
                         }
                         .disabled(isResolvingVault || resolveLegacyVault == nil)
                     }
@@ -426,6 +454,25 @@ struct DataSettingsPane: View {
         } message: {
             Text("This cannot be undone.")
         }
+        .confirmationDialog("Restore from this restore point?", isPresented: Binding(
+            get: { pendingRestore != nil },
+            set: { if !$0 { pendingRestore = nil } }
+        ), titleVisibility: .visible) {
+            Button("Restore", role: .destructive) {
+                guard let point = pendingRestore else { return }
+                Task { await restore(point) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your current data is replaced by what this restore point holds. A restore point of the current data is made first.")
+        }
+        .confirmationDialog("Replace the database versions with the mirror versions?",
+                            isPresented: $pendingMirrorReplace, titleVisibility: .visible) {
+            Button("Replace", role: .destructive) { resolveVault(.useMirror) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(mirrorReplaceMessage)
+        }
         .confirmationDialog("Delete the plaintext Markdown mirror?", isPresented: $pendingVaultDelete,
                             titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -443,6 +490,11 @@ struct DataSettingsPane: View {
         } message: {
             Text(vaultDeleteMessage)
         }
+    }
+
+    private var mirrorReplaceMessage: String {
+        let count = vaultReport?.unresolvedDivergent.count ?? 0
+        return String(localized: "\(count) note(s) in the database are overwritten by the older text in the mirror. A restore point of the current data is made first.")
     }
 
     /// The warning, plus how many entries go without ever having been read as
@@ -471,6 +523,19 @@ struct DataSettingsPane: View {
             vaultReport = await legacyVaultReport()
             isResolvingVault = false
         }
+    }
+
+    private func restore(_ point: RestorePoint) async {
+        isRestoring = true
+        failure = nil
+        do {
+            try await restoreRestorePoint(point)
+        } catch {
+            failure = error.localizedDescription
+        }
+        restorePoints = await loadRestorePoints()
+        isRestoring = false
+        pendingRestore = nil
     }
 
     private func delete(_ point: RestorePoint) async {
@@ -512,6 +577,8 @@ struct DataSettingsPane: View {
 /// button on the right.
 private struct RestorePointRow: View {
     let point: RestorePoint
+    let canRestore: Bool
+    let onRestore: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -523,11 +590,24 @@ private struct RestorePointRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if point.needsUpgrade {
+                    Text("Old format: readable by anyone with the file until it is converted. Lock and unlock to convert it, or delete it.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: Chrome.Space.sm)
             Text(verbatim: DataSettingsPane.sizeText(point.sizeBytes))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+            Button(action: onRestore) {
+                Image(systemName: "arrow.counterclockwise")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canRestore)
+            .help("Restore from this restore point")
+            .accessibilityLabel("Restore from this restore point")
             Button(action: onDelete) {
                 Image(systemName: "trash")
             }
