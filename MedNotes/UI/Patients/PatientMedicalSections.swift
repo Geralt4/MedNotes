@@ -11,20 +11,31 @@ import SwiftUI
 struct PatientMedicalSections: View {
     @Binding var medical: MedicalInfo
 
-    @State private var newConditionName = ""
-    @State private var newConditionStatus: ConditionStatus = .active
-    @State private var newAllergyName = ""
-    @State private var newAllergySeverity: AllergySeverity = .moderate
-    @State private var newMedicationName = ""
-    @State private var newMedicationDosage = ""
-    @State private var newMedicationFrequency = ""
     @State private var expandedRows: Set<UUID> = []
+    @State private var pendingRemoval: PendingRemoval?
+
+    /// Text in the add rows. Owned by the detail view when it passes one, so it
+    /// can add what was typed wherever the editor is left; this view keeps its
+    /// own copy otherwise (offscreen renders).
+    @State private var ownPending = PendingMedicalEntries()
+    private let sharedPending: Binding<PendingMedicalEntries>?
+    private var pending: Binding<PendingMedicalEntries> { sharedPending ?? $ownPending }
+
+    /// One item asked to be taken out, held while the user is asked to confirm.
+    private struct PendingRemoval: Identifiable {
+        enum Kind { case condition, allergy, medication }
+        let id: UUID
+        let kind: Kind
+        let name: String
+    }
 
     /// `initiallyExpanded` exists for offscreen review renders, which cannot
     /// click a disclosure triangle.
-    init(medical: Binding<MedicalInfo>, initiallyExpanded: Set<UUID> = []) {
+    init(medical: Binding<MedicalInfo>, initiallyExpanded: Set<UUID> = [],
+         pending: Binding<PendingMedicalEntries>? = nil) {
         self._medical = medical
         self._expandedRows = State(initialValue: initiallyExpanded)
+        self.sharedPending = pending
     }
 
     var body: some View {
@@ -32,6 +43,17 @@ struct PatientMedicalSections: View {
             conditionRows
         } header: {
             DetailSectionHeader(title: "Conditions", systemImage: "stethoscope")
+        }
+        .confirmationDialog(
+            removalTitle, isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }),
+            titleVisibility: .visible, presenting: pendingRemoval
+        ) { removal in
+            Button("Remove", role: .destructive) { remove(removal) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The patient record is updated when you save, or when you leave it.")
         }
         Section {
             allergyRows
@@ -59,15 +81,15 @@ struct PatientMedicalSections: View {
             } label: {
                 listRow(title: condition.name, detail: condition.notes,
                         removeLabel: "Remove condition",
-                        onRemove: { medical.conditions.removeAll { $0.id == condition.id } }) {
+                        onRemove: { pendingRemoval = PendingRemoval(id: condition.id, kind: .condition, name: condition.name) }) {
                     StatusPillMenu(selection: binding.status, options: ConditionStatus.allCases,
                                    title: DisplayCopy.conditionStatus, tint: Self.conditionTint,
                                    help: "Change status")
                 }
             }
         }
-        EditorAddRow(prompt: "Add a condition", text: $newConditionName, action: addCondition) {
-            Picker("Status", selection: $newConditionStatus) {
+        EditorAddRow(prompt: "Add a condition", text: pending.conditionName, action: addCondition) {
+            Picker("Status", selection: pending.conditionStatus) {
                 ForEach(ConditionStatus.allCases, id: \.self) { status in
                     Text(DisplayCopy.conditionStatus(status)).tag(status)
                 }
@@ -103,11 +125,9 @@ struct PatientMedicalSections: View {
     }
 
     private func addCondition() {
-        let name = newConditionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        medical.conditions.append(MedicalCondition(name: name, status: newConditionStatus))
-        newConditionName = ""
-        newConditionStatus = .active
+        var entries = pending.wrappedValue
+        entries.addCondition(to: &medical)
+        pending.wrappedValue = entries
     }
 
     private static func conditionTint(_ status: ConditionStatus) -> Color {
@@ -128,15 +148,15 @@ struct PatientMedicalSections: View {
             } label: {
                 listRow(title: allergy.allergen, detail: allergy.reaction,
                         removeLabel: "Remove allergy",
-                        onRemove: { medical.allergies.removeAll { $0.id == allergy.id } }) {
+                        onRemove: { pendingRemoval = PendingRemoval(id: allergy.id, kind: .allergy, name: allergy.allergen) }) {
                     StatusPillMenu(selection: binding.severity, options: AllergySeverity.allCases,
                                    title: DisplayCopy.allergySeverity, tint: Self.allergyTint,
                                    help: "Change severity")
                 }
             }
         }
-        EditorAddRow(prompt: "Add an allergy", text: $newAllergyName, action: addAllergy) {
-            Picker("Severity", selection: $newAllergySeverity) {
+        EditorAddRow(prompt: "Add an allergy", text: pending.allergyName, action: addAllergy) {
+            Picker("Severity", selection: pending.allergySeverity) {
                 ForEach(AllergySeverity.allCases, id: \.self) { severity in
                     Text(DisplayCopy.allergySeverity(severity)).tag(severity)
                 }
@@ -169,11 +189,9 @@ struct PatientMedicalSections: View {
     }
 
     private func addAllergy() {
-        let name = newAllergyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        medical.allergies.append(Allergy(allergen: name, severity: newAllergySeverity))
-        newAllergyName = ""
-        newAllergySeverity = .moderate
+        var entries = pending.wrappedValue
+        entries.addAllergy(to: &medical)
+        pending.wrappedValue = entries
     }
 
     static func allergyTint(_ severity: AllergySeverity) -> Color {
@@ -201,7 +219,7 @@ struct PatientMedicalSections: View {
                             .filter { !$0.isEmpty }
                             .joined(separator: " · "),
                         removeLabel: "Remove medication",
-                        onRemove: { medical.medications.removeAll { $0.id == medication.id } }) {
+                        onRemove: { pendingRemoval = PendingRemoval(id: medication.id, kind: .medication, name: medication.name) }) {
                     StatusPillMenu(
                         selection: medicationState(binding),
                         options: [MedicationState.active, .stopped],
@@ -211,12 +229,12 @@ struct PatientMedicalSections: View {
                 }
             }
         }
-        EditorAddRow(prompt: "Add a medication", text: $newMedicationName, action: addMedication) {
-            TextField("Dosage", text: $newMedicationDosage, prompt: Text("Dosage"))
+        EditorAddRow(prompt: "Add a medication", text: pending.medicationName, action: addMedication) {
+            TextField("Dosage", text: pending.medicationDosage, prompt: Text("Dosage"))
                 .textFieldStyle(.roundedBorder)
                 .labelsHidden()
                 .frame(width: 100)
-            TextField("Frequency", text: $newMedicationFrequency, prompt: Text("Frequency"))
+            TextField("Frequency", text: pending.medicationFrequency, prompt: Text("Frequency"))
                 .textFieldStyle(.roundedBorder)
                 .labelsHidden()
                 .frame(width: 120)
@@ -295,15 +313,26 @@ struct PatientMedicalSections: View {
     }
 
     private func addMedication() {
-        let name = newMedicationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        medical.medications.append(Medication(
-            name: name,
-            dosage: newMedicationDosage.trimmingCharacters(in: .whitespacesAndNewlines),
-            frequency: newMedicationFrequency.trimmingCharacters(in: .whitespacesAndNewlines)))
-        newMedicationName = ""
-        newMedicationDosage = ""
-        newMedicationFrequency = ""
+        var entries = pending.wrappedValue
+        entries.addMedication(to: &medical)
+        pending.wrappedValue = entries
+    }
+
+    // MARK: - Removal
+
+    private var removalTitle: String {
+        let name = pendingRemoval?.name ?? ""
+        let shown = name.isEmpty ? String(localized: "Unnamed") : name
+        return String(localized: "Remove “\(shown)”?")
+    }
+
+    private func remove(_ removal: PendingRemoval) {
+        switch removal.kind {
+        case .condition: medical.conditions.removeAll { $0.id == removal.id }
+        case .allergy: medical.allergies.removeAll { $0.id == removal.id }
+        case .medication: medical.medications.removeAll { $0.id == removal.id }
+        }
+        pendingRemoval = nil
     }
 
     // MARK: - Row helpers

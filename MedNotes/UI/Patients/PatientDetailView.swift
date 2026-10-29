@@ -13,6 +13,10 @@ struct PatientDetailView: View {
     /// Numbers the loads, so only the newest one clears the spinner; see
     /// `LoadGeneration`.
     @State private var loads = LoadGeneration()
+    /// Text typed into the medical lists' "Add…" rows and not yet added. Added to
+    /// the draft wherever the editor is left, so it is never dropped; see
+    /// `PendingMedicalEntries`.
+    @State private var pendingEntries = PendingMedicalEntries()
     /// The record whose "First name" field takes focus when its editor appears:
     /// only ever the patient the user just created, never one they arrowed to.
     @State private var autofocusPatientId: UUID?
@@ -44,15 +48,20 @@ struct PatientDetailView: View {
             await loadPatient()
         }
         .onAppear {
-            let draft = $draft, original = $original
+            let draft = $draft, original = $original, pending = $pendingEntries
             session.registerOpenEditor(lockToken) {
-                draft.wrappedValue.map {
-                    .patient($0, edited: $0 != original.wrappedValue,
-                             knownFileIDs: original.wrappedValue.map { Set($0.files.map(\.id)) })
+                draft.wrappedValue.map { current in
+                    // What is typed in an add row goes with the draft the lock saves.
+                    var committed = current
+                    var entries = pending.wrappedValue
+                    entries.commitAll(into: &committed.medical)
+                    return .patient(committed, edited: committed != original.wrappedValue,
+                                    knownFileIDs: original.wrappedValue.map { Set($0.files.map(\.id)) })
                 }
             }
         }
         .onDisappear {
+            commitPendingEntries()
             // False when a lock or restore already saved or discarded this draft.
             guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
@@ -101,6 +110,10 @@ struct PatientDetailView: View {
         // cancelled and ends late must not uncover the previous record.
         defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedPatientId
+        // Moving to another patient: what was typed for this one goes with it.
+        if let current = draft, current.id != selectedId {
+            commitPendingEntries()
+        }
         if let d = draft, d.id == selectedId, hasChanges {
             return
         }
@@ -185,12 +198,14 @@ struct PatientDetailView: View {
                             session.patientDirectory.first {
                                 $0.id != patient.id && AMKA.normalized($0.profile.amka) == amka
                             }
-                        }
+                        },
+                        pendingEntries: $pendingEntries
                     )
                 } else {
                     PatientRecordView(
                         patient: binding,
-                        onEdit: patient.isArchived ? nil : { isEditing = true })
+                        onEdit: patient.isArchived ? nil : { isEditing = true },
+                        pendingEntries: $pendingEntries)
                         // An archived record is read until it is restored.
                         .disabled(patient.isArchived)
                 }
@@ -209,11 +224,15 @@ struct PatientDetailView: View {
                 } else {
                     PatientToolbar(
                         isEditing: isEditing,
-                        hasChanges: hasChanges,
+                        hasChanges: hasChanges || !pendingEntries.isEmpty,
                         onEdit: { isEditing = true },
-                        onRevert: { draft = original },
+                        onRevert: {
+                            draft = original
+                            pendingEntries = PendingMedicalEntries()
+                        },
                         onCancel: {
                             draft = original
+                            pendingEntries = PendingMedicalEntries()
                             isEditing = false
                         },
                         onSave: { save(thenLeaveEditing: false) },
@@ -227,9 +246,18 @@ struct PatientDetailView: View {
         }
     }
 
+    /// Adds whatever is typed in the medical add rows to the draft, so leaving
+    /// the editor (Save, Done, another patient, a lock) never drops it.
+    private func commitPendingEntries() {
+        guard !pendingEntries.isEmpty, var d = draft else { return }
+        pendingEntries.commitAll(into: &d.medical)
+        draft = d
+    }
+
     /// Saves the draft. Leaves the editor only once the save succeeded, so a
     /// failed save (a duplicate AMKA) keeps the fields in front of the user.
     private func save(thenLeaveEditing leave: Bool) {
+        commitPendingEntries()
         guard let d = draft else { return }
         guard hasChanges else {
             if leave { isEditing = false }

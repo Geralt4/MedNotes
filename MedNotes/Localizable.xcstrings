@@ -8321,6 +8321,36 @@
           }
         }
       }
+    },
+    "Remove" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση"
+          }
+        }
+      }
+    },
+    "Remove “%@”?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αφαίρεση «%@»;"
+          }
+        }
+      }
+    },
+    "The patient record is updated when you save, or when you leave it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εγγραφή του ασθενούς ενημερώνεται όταν την αποθηκεύσετε ή όταν την αφήσετε."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
