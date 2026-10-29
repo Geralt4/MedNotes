@@ -139,13 +139,19 @@ extension AppSession {
         guard let store else { return }
         // Snapshot before deletion so a linked Apple Reminders copy can go too.
         do {
-            if let snapshot = try await store.todos.load(id: id), snapshot.reminderIdentifier != nil {
-                guard appleReminders.state == .granted,
-                      let destination = try await store.destinations.destination(for: .reminders),
-                      SyncDestinationCore.mayWrite(destination) else {
-                    throw LinkedDeletionError.reminders
+            if let snapshot = try await store.todos.load(id: id) {
+                // A lookup that fails must not stop an unlinked row being deleted.
+                let destination = try? await store.destinations.destination(for: .reminders)
+                let canReach = appleReminders.state == .granted && SyncDestinationCore.mayWrite(destination)
+                if snapshot.reminderIdentifier != nil {
+                    // Linked: the delete waits until the Apple copy can be removed.
+                    guard canReach, let destination else { throw LinkedDeletionError.reminders }
+                    try await appleReminders.deleteRemote(snapshot, from: destination)
+                } else if canReach, let destination, !snapshot.isUntouchedNewRecord {
+                    // No identifier stored, but a reminder may exist under its
+                    // marker; see `removeEvent`.
+                    try? await appleReminders.deleteRemote(snapshot, from: destination)
                 }
-                try await appleReminders.deleteRemote(snapshot, from: destination)
             }
             if discarding {
                 try await store.todos.discard(id: id)
