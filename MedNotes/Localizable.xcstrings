@@ -8381,6 +8381,26 @@
           }
         }
       }
+    },
+    "Add or clear it first" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προσθέστε το ή καθαρίστε το πρώτα"
+          }
+        }
+      }
+    },
+    "“%@” is typed in an Add row but has not been added. Press Add, or clear the field, then save." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το «%@» έχει πληκτρολογηθεί σε γραμμή προσθήκης αλλά δεν έχει προστεθεί. Πατήστε Προσθήκη ή καθαρίστε το πεδίο και μετά αποθηκεύστε."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

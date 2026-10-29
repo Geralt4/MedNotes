@@ -45,6 +45,17 @@ final class PendingMedicalEntriesTests: XCTestCase {
         XCTAssertTrue(medical.medications.isEmpty, "a dosage with no medication name is not an entry")
     }
 
+    func testFirstUnaddedNamesWhatWaitsInAnAddRow() {
+        var entries = PendingMedicalEntries()
+        XCTAssertNil(entries.firstUnadded)
+        entries.medicationDosage = "850 mg"
+        XCTAssertNil(entries.firstUnadded, "a dosage with no name is not an entry")
+        entries.allergyName = "  Latex "
+        XCTAssertEqual(entries.firstUnadded, "Latex")
+        entries.conditionName = "Asthma"
+        XCTAssertEqual(entries.firstUnadded, "Asthma", "conditions come first")
+    }
+
     func testAddingOneRowLeavesTheOthersPending() {
         var entries = PendingMedicalEntries()
         entries.allergyName = "Latex"

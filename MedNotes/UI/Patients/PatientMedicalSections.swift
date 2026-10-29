@@ -44,17 +44,6 @@ struct PatientMedicalSections: View {
         } header: {
             DetailSectionHeader(title: "Conditions", systemImage: "stethoscope")
         }
-        .confirmationDialog(
-            removalTitle, isPresented: Binding(
-                get: { pendingRemoval != nil },
-                set: { if !$0 { pendingRemoval = nil } }),
-            titleVisibility: .visible, presenting: pendingRemoval
-        ) { removal in
-            Button("Remove", role: .destructive) { remove(removal) }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("The patient record is updated when you save, or when you leave it.")
-        }
         Section {
             allergyRows
         } header: {
@@ -96,6 +85,19 @@ struct PatientMedicalSections: View {
             }
             .labelsHidden()
             .fixedSize()
+        }
+        // One dialog for all three lists, on a row that is always there: a
+        // modifier on a Section inside a Form is not known to present.
+        .confirmationDialog(
+            removalTitle, isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }),
+            titleVisibility: .visible, presenting: pendingRemoval
+        ) { removal in
+            Button("Remove", role: .destructive) { remove(removal) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The patient record is updated when you save, or when you leave it.")
         }
     }
 

@@ -13,10 +13,13 @@ struct PatientDetailView: View {
     /// Numbers the loads, so only the newest one clears the spinner; see
     /// `LoadGeneration`.
     @State private var loads = LoadGeneration()
-    /// Text typed into the medical lists' "Add…" rows and not yet added. Added to
-    /// the draft wherever the editor is left, so it is never dropped; see
-    /// `PendingMedicalEntries`.
+    /// Text typed into the medical lists' "Add…" rows and not yet added. Save and
+    /// Done wait for it; leaving the patient or a lock, which cannot ask, add it
+    /// to the draft so it is never dropped. See `PendingMedicalEntries`.
     @State private var pendingEntries = PendingMedicalEntries()
+    /// What is typed in an Add row when Save or Done is pressed: the save waits
+    /// until it is added or cleared, so a severity is never defaulted unseen.
+    @State private var unaddedEntry: String?
     /// The record whose "First name" field takes focus when its editor appears:
     /// only ever the patient the user just created, never one they arrowed to.
     @State private var autofocusPatientId: UUID?
@@ -79,6 +82,14 @@ struct PatientDetailView: View {
                 // record was open: it was never meant to be kept.
                 Task { await session.discardIfUntouched(d) }
             }
+        }
+        .alert("Add or clear it first", isPresented: Binding(
+            get: { unaddedEntry != nil },
+            set: { if !$0 { unaddedEntry = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("“\(unaddedEntry ?? "")” is typed in an Add row but has not been added. Press Add, or clear the field, then save.")
         }
         .confirmationDialog(
             confirmTarget?.permanent ?? isArchived
@@ -246,8 +257,9 @@ struct PatientDetailView: View {
         }
     }
 
-    /// Adds whatever is typed in the medical add rows to the draft, so leaving
-    /// the editor (Save, Done, another patient, a lock) never drops it.
+    /// Adds whatever is typed in the medical add rows to the draft where the
+    /// editor is left without a chance to ask (another patient, a lock), so it is
+    /// never dropped. Save and Done ask instead; see `save`.
     private func commitPendingEntries() {
         guard !pendingEntries.isEmpty, var d = draft else { return }
         pendingEntries.commitAll(into: &d.medical)
@@ -257,7 +269,12 @@ struct PatientDetailView: View {
     /// Saves the draft. Leaves the editor only once the save succeeded, so a
     /// failed save (a duplicate AMKA) keeps the fields in front of the user.
     private func save(thenLeaveEditing leave: Bool) {
-        commitPendingEntries()
+        // Text in an Add row is not on the record yet. Saving now would either
+        // drop it or add it with a status or severity nobody chose, so it waits.
+        if let unadded = pendingEntries.firstUnadded {
+            unaddedEntry = unadded
+            return
+        }
         guard let d = draft else { return }
         guard hasChanges else {
             if leave { isEditing = false }

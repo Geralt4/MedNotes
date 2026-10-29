@@ -6,9 +6,10 @@ import Foundation
 /// The rows used to keep this to themselves, so Done, Save, switching patient
 /// and a lock all dropped it silently: an allergen typed and not added left no
 /// allergy on the record and no sign that it had been forgotten. The detail view
-/// owns the entries instead, and adds them to the draft wherever the editor is
-/// left (`commitAll`). The status or severity shown beside each row goes with
-/// them, so what is recorded is what was on screen.
+/// owns the entries instead. Save and Done stop until the text is added or
+/// cleared, so the severity is a deliberate click. Leaving the patient or a lock
+/// cannot ask, so they add it to the draft (`commitAll`) with the status or
+/// severity shown beside the row: dropping an allergy is the worse mistake.
 struct PendingMedicalEntries: Equatable {
     var conditionName = ""
     var conditionStatus: ConditionStatus = .active
@@ -20,6 +21,11 @@ struct PendingMedicalEntries: Equatable {
 
     private static func clean(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The first name typed in an Add row, for saying what has not been added.
+    var firstUnadded: String? {
+        [conditionName, allergyName, medicationName].map(Self.clean).first { !$0.isEmpty }
     }
 
     /// No row has a name typed into it. A dosage or frequency without a name
