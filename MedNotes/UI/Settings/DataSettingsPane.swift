@@ -16,6 +16,10 @@ struct StorageSummary: Equatable {
     /// Row counts keyed by table, as `Database.counts()` reports them.
     let counts: [String: Int]
     var lastBackup: LastBackup? = nil
+    /// The folder an earlier version kept unencrypted backups in, and how many
+    /// entries it holds. Nothing in this version writes there.
+    var oldBackupsURL: URL? = nil
+    var oldBackupCount = 0
 
     /// Whether there is anything to lose.
     var hasRecords: Bool {
@@ -31,6 +35,11 @@ struct RestorePoint: Identifiable, Equatable, Sendable {
     let counts: [String: Int]
     /// The database plus every attachment copy; nil until measured.
     let sizeBytes: Int64?
+
+    /// Still sealed under the passphrase an earlier version compiled in, so
+    /// anyone with the file can read it. The next unlock reseals it; one that
+    /// cannot be converted stays like this until it is deleted.
+    var needsUpgrade = false
 
     var id: String { url.lastPathComponent }
 }
@@ -241,6 +250,15 @@ struct DataSettingsPane: View {
                 if let summary {
                     Button("Show Backups in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([summary.backupsURL])
+                    }
+                    if let old = summary.oldBackupsURL, summary.oldBackupCount > 0 {
+                        Text("\(summary.oldBackupCount) backup(s) from an earlier version are in a folder that is not encrypted. Make an encrypted backup with File › Back Up…, then delete them.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Show Old Backups in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([old])
+                        }
                     }
                 }
             } header: {
@@ -572,6 +590,12 @@ private struct RestorePointRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if point.needsUpgrade {
+                    Text("Old format: readable by anyone with the file until it is converted. Lock and unlock to convert it, or delete it.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: Chrome.Space.sm)
             Text(verbatim: DataSettingsPane.sizeText(point.sizeBytes))

@@ -10,11 +10,15 @@ extension AppSession {
         let counts = (try? await store.counts()) ?? [:]
         let lastBackup = (try? await store.audit.latest(action: "backup_create"))
             .flatMap { $0.map { StorageSummary.LastBackup(date: $0.timestamp, name: $0.entityId) } }
+        // Only what an earlier version put there: the folder itself is always made.
+        let old = (try? FileManager.default.contentsOfDirectory(atPath: dataRoot.backupsURL.path)) ?? []
         return StorageSummary(
             rootURL: dataRoot.rootURL,
             backupsURL: dataRoot.restorePointsURL,
             counts: counts,
-            lastBackup: lastBackup)
+            lastBackup: lastBackup,
+            oldBackupsURL: dataRoot.backupsURL,
+            oldBackupCount: old.filter { !$0.hasPrefix(".") }.count)
     }
 
     /// The encrypted restore points, newest first, each measured.
@@ -25,7 +29,9 @@ extension AppSession {
         return await Task.detached(priority: .utility) {
             infos.map { info in
                 RestorePoint(url: info.url, createdAt: info.manifest.createdAt, name: info.manifest.name,
-                             counts: info.manifest.counts, sizeBytes: BackupService.sizeOnDisk(at: info.url))
+                             counts: info.manifest.counts, sizeBytes: BackupService.sizeOnDisk(at: info.url),
+                             needsUpgrade: BackupArchiveV2.profile(at: info.url)
+                                == BackupArchiveV2.KDFProfile.argon2id64MiB3Ops.rawValue)
             }
         }.value
     }

@@ -1297,6 +1297,8 @@ final class AppSession: ObservableObject {
         if injectedDataRoot == nil {
             // Plaintext copies a crash left in the app's temporary folder.
             EncryptedFileStore.purgeOrphanedTemporaries(in: DataRoot.appExternalCopiesURL)
+            // So are the working folders of a restore or an upgrade that was killed.
+            StagingLeftovers.purge()
         }
         do {
             let dataRoot = try injectedDataRoot ?? Self.resolveDataRoot()

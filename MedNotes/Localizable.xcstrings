@@ -8411,6 +8411,36 @@
           }
         }
       }
+    },
+    "%lld backup(s) from an earlier version are in a folder that is not encrypted. Make an encrypted backup with File › Back Up…, then delete them." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντίγραφα ασφαλείας από παλαιότερη έκδοση που βρίσκονται σε φάκελο χωρίς κρυπτογράφηση: %lld. Δημιουργήστε κρυπτογραφημένο αντίγραφο με Αρχείο › Δημιουργία αντιγράφου ασφαλείας… και μετά διαγράψτε τα."
+          }
+        }
+      }
+    },
+    "Show Old Backups in Finder" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση παλαιών αντιγράφων στο Finder"
+          }
+        }
+      }
+    },
+    "Old format: readable by anyone with the file until it is converted. Lock and unlock to convert it, or delete it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παλαιά μορφή: μπορεί να διαβαστεί από όποιον έχει το αρχείο, μέχρι να μετατραπεί. Κλειδώστε και ξεκλειδώστε για να μετατραπεί, ή διαγράψτε το."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
