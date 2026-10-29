@@ -244,7 +244,7 @@ struct PatientMedicalSections: View {
                 }
             }
             EditorTextField("Notes", text: medication.notes)
-            if !medication.wrappedValue.isActive {
+            if medication.wrappedValue.isStopped {
                 EditorTextField("Reason for stopping", text: Binding(
                     get: { medication.wrappedValue.reasonForStopping ?? "" },
                     set: { medication.wrappedValue.reasonForStopping = $0.isEmpty ? nil : $0 }
@@ -257,10 +257,10 @@ struct PatientMedicalSections: View {
 
     private func medicationState(_ medication: Binding<Medication>) -> Binding<MedicationState> {
         Binding(
-            get: { medication.wrappedValue.isActive ? .active : .stopped },
+            get: { medication.wrappedValue.isStopped ? .stopped : .active },
             set: { state in
                 // Re-selecting the current state must not restamp the stop date or reason.
-                guard state != (medication.wrappedValue.isActive ? .active : .stopped) else { return }
+                guard state != (medication.wrappedValue.isStopped ? .stopped : .active) else { return }
                 if state == .active {
                     medication.wrappedValue.resume()
                 } else {
@@ -275,7 +275,7 @@ struct PatientMedicalSections: View {
         case .stopped:
             return String(localized: "Stopped")
         case .active:
-            return startsInTheFuture(medication) && medication.isActive
+            return startsInTheFuture(medication) && !medication.isStopped
                 ? String(localized: "Not started")
                 : String(localized: "Active")
         }
