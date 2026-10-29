@@ -135,6 +135,9 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     /// that cannot be read, say), so nothing was replaced. The user may choose
     /// to restore without it.
     case safetyCopyIncomplete(String)
+    /// A restore point still sealed under the old public passphrase; the
+    /// upgrade pass reseals it under the device key first.
+    case restorePointNotUpgraded
 
     var description: String {
         switch self {
@@ -153,6 +156,7 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
         case let .safetyCopyIncomplete(detail): return "the restore point of the current data could not be made: \(detail)"
+        case .restorePointNotUpgraded: return "the restore point is still sealed under the old passphrase"
         case let .rollbackFailed(folder, detail):
             return "restore failed and the original data could not be put back (kept in \(folder)): \(detail)"
         }
@@ -188,6 +192,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "A restore point could not be made because this store has no restore key.")
         case let .safetyCopyIncomplete(detail):
             return String(localized: "A copy of your current data could not be made first, so nothing was changed: \(detail)")
+        case .restorePointNotUpgraded:
+            return String(localized: "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again.")
         case let .rollbackFailed(folder, detail):
             return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”. \(detail)")
         }
@@ -369,6 +375,48 @@ actor BackupService {
         attachmentKey: Data,
         createRestorePoint: Bool = true
     ) async throws -> BackupManifest {
+        try await restore(
+            archiveAt: fileURL, sealing: .passphrase(passphrase),
+            databaseKey: databaseKey, attachmentKey: attachmentKey,
+            createRestorePoint: createRestorePoint)
+    }
+
+    /// Restores one of this store's own restore points, the "Pre-restore" and
+    /// "Pre-import" snapshots a restore or an import keeps first. They are
+    /// sealed by the device restore key, so only this device's store opens
+    /// them. A point from before restore points had a device key is still under
+    /// the public passphrase until the upgrade pass has resealed it; restoring
+    /// it is refused until then rather than reading it with that passphrase.
+    func restore(
+        fromRestorePointAt url: URL,
+        databaseKey: Data,
+        attachmentKey: Data,
+        createRestorePoint: Bool = true
+    ) async throws -> BackupManifest {
+        guard let restorePointKey else { throw BackupError.restorePointKeyUnavailable }
+        // Only a file in this store's restore point folder, never a path from elsewhere.
+        guard url.pathExtension == "mnrp",
+              url.deletingLastPathComponent().standardizedFileURL
+                == restorePointsRoot.standardizedFileURL,
+              let profile = BackupArchiveV2.profile(at: url) else {
+            throw BackupError.invalidArchive
+        }
+        guard profile == BackupArchiveV2.deviceKeyProfile else {
+            throw BackupError.restorePointNotUpgraded
+        }
+        return try await restore(
+            archiveAt: url, sealing: .deviceKey(restorePointKey),
+            databaseKey: databaseKey, attachmentKey: attachmentKey,
+            createRestorePoint: createRestorePoint)
+    }
+
+    private func restore(
+        archiveAt fileURL: URL,
+        sealing: BackupArchiveV2.Sealing,
+        databaseKey: Data,
+        attachmentKey: Data,
+        createRestorePoint: Bool
+    ) async throws -> BackupManifest {
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("mednotes-restore-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -382,7 +430,7 @@ actor BackupService {
         let stagingAttachments = staging.appendingPathComponent("Attachments", isDirectory: true)
         let stagingStore = try EncryptedFileStore(root: stagingAttachments, key: attachmentKey)
         // One passphrase derivation serves the extraction and the snapshot key.
-        let opened = try BackupArchiveV2.openReader(at: fileURL, passphrase: passphrase)
+        let opened = try BackupArchiveV2.openReader(at: fileURL, sealing: sealing)
         defer { try? opened.reader.handle.close() }
         let manifest = try await ArchiveExtraction.extract(
             opened: opened, snapshotURL: snapshotURL, store: stagingStore).manifest

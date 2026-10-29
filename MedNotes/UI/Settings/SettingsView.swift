@@ -56,6 +56,7 @@ struct SettingsView: View {
                 loadSummary: { await session.storageSummary() },
                 loadRestorePoints: { await session.restorePoints() },
                 deleteRestorePoint: { try await session.deleteRestorePoint($0) },
+                restoreRestorePoint: { try await session.restoreFromRestorePoint($0) },
                 checkIntegrity: { await session.checkIntegrity() },
                 rebuildIndexes: { await session.rebuildIndexes() },
                 exportMarkdown: { try await session.exportMarkdownVault() },

@@ -227,6 +227,22 @@ extension AppSession {
         let mirror = Dictionary(scan.notes.map { ($0.note.id, $0.note) }, uniquingKeysWith: { first, _ in first })
         let targets = choice == .importMirrorOnly ? report.unresolvedVaultOnly : report.unresolvedDivergent
 
+        // Replacing overwrites database notes with older text, and the mirror
+        // is about to become deletable, so the current notes are kept first. No
+        // copy, no replacement: there is no way to skip this step.
+        if choice == .useMirror, !targets.isEmpty {
+            do {
+                _ = try await store.backups.createEncryptedRestorePoint(name: "Pre-mirror snapshot")
+            } catch let error as BackupError {
+                throw error
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+            }
+            await pruneRestorePoints()
+        }
+
         var decided: [UUID] = []
         defer { markLegacyVaultResolved(decided) }
         for item in targets {
@@ -327,6 +343,31 @@ extension AppSession {
     /// keeps first. Only the sheet's second button passes it, after the copy
     /// failed.
     func performRestore(from fileURL: URL, passphrase: String, withoutSafetyCopy: Bool = false) async throws {
+        try await performRestore(source: .archive(fileURL, passphrase: passphrase),
+                                 withoutSafetyCopy: withoutSafetyCopy)
+    }
+
+    /// Restores one of this store's own restore points (Settings › Data). The
+    /// current data is kept as a new restore point first, as for any restore.
+    func restoreFromRestorePoint(_ point: RestorePoint) async throws {
+        try await performRestore(source: .restorePoint(point.url), withoutSafetyCopy: false)
+    }
+
+    /// Where a restore reads from: a backup file the user chose, sealed by its
+    /// passphrase, or one of the store's own restore points.
+    enum RestoreSource: Sendable {
+        case archive(URL, passphrase: String)
+        case restorePoint(URL)
+
+        var url: URL {
+            switch self {
+            case let .archive(url, _), let .restorePoint(url): return url
+            }
+        }
+    }
+
+    private func performRestore(source: RestoreSource, withoutSafetyCopy: Bool) async throws {
+        let fileURL = source.url
         guard let store, let coordinator else { return }
         let databaseKey = try coordinator.requireDatabaseKey()
         let attachmentKey = try coordinator.requireAttachmentKey()
@@ -345,19 +386,27 @@ extension AppSession {
         // (`restoreRun`): the restore stops before it touches a live file, or
         // finishes the swap, and is never cut off in the middle of one.
         let run = Task { @MainActor () throws -> BackupManifest in
-            do {
+            switch source {
+            case let .restorePoint(url):
                 return try await store.backups.restore(
-                    fromEncryptedBackupAt: fileURL, passphrase: passphrase,
+                    fromRestorePointAt: url,
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
-            } catch BackupArchiveV2.ArchiveError.notAnArchive {
-                // Only a container that is not v2 at all is tried as v1. Any
-                // other failure is about a v2 archive and must not be retried
-                // against a store that a failed install may have touched.
-                return try await store.backups.restore(
-                    fromLegacyBackupAt: fileURL, passphrase: passphrase,
-                    databaseKey: databaseKey, attachmentKey: attachmentKey,
-                    createRestorePoint: !withoutSafetyCopy)
+            case let .archive(url, passphrase):
+                do {
+                    return try await store.backups.restore(
+                        fromEncryptedBackupAt: url, passphrase: passphrase,
+                        databaseKey: databaseKey, attachmentKey: attachmentKey,
+                        createRestorePoint: !withoutSafetyCopy)
+                } catch BackupArchiveV2.ArchiveError.notAnArchive {
+                    // Only a container that is not v2 at all is tried as v1. Any
+                    // other failure is about a v2 archive and must not be retried
+                    // against a store that a failed install may have touched.
+                    return try await store.backups.restore(
+                        fromLegacyBackupAt: url, passphrase: passphrase,
+                        databaseKey: databaseKey, attachmentKey: attachmentKey,
+                        createRestorePoint: !withoutSafetyCopy)
+                }
             }
         }
         let token = UUID()
