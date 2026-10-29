@@ -694,9 +694,13 @@ actor Database {
     /// `knownFileIDs` are the attachment ids the draft was loaded with: a stored
     /// row outside that set (and outside the draft) was added by another save
     /// and must not be deleted as if the draft had removed it.
+    /// `preservingArchiveFlag`: the archive flag of a row that already exists
+    /// is not written. It changes only through `setPatientArchived`, and an
+    /// editor saving a draft it loaded before the archive must not undo it.
+    /// A new row still takes the draft's flag.
     func savePatient(
         _ patient: Patient, attachmentReferences: [PatientFile]? = nil,
-        knownFileIDs: Set<UUID>? = nil
+        knownFileIDs: Set<UUID>? = nil, preservingArchiveFlag: Bool = false
     ) throws {
         try transaction {
             if let attachmentReferences {
@@ -704,7 +708,7 @@ actor Database {
                     patientId: patient.id, references: attachmentReferences,
                     known: knownFileIDs.map { $0.union(patient.files.map(\.id)) })
             }
-            try insertPatient(patient)
+            try insertPatient(patient, preservingArchiveFlag: preservingArchiveFlag)
             try syncPatientFiles(patientId: patient.id, files: patient.files)
             let linkedName = patient.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             try updateTodoPatientNames(
@@ -738,11 +742,13 @@ actor Database {
         }
     }
 
-    private func insertPatient(_ patient: Patient) throws {
+    private func insertPatient(_ patient: Patient, preservingArchiveFlag: Bool) throws {
         let p = patient.profile
         func enc<T: Encodable>(_ v: T) throws -> String {
             String(data: try encoder.encode(v), encoding: .utf8) ?? "{}"
         }
+        // An editor save leaves the flag of an existing row alone; see `savePatient`.
+        let archiveUpdate = preservingArchiveFlag ? "" : "is_archived=excluded.is_archived, "
         let sql = """
         INSERT INTO patients (
             id, first_name, last_name, fathers_name, date_of_birth, gender, phone, email,
@@ -764,7 +770,7 @@ actor Database {
             hospitalizations_json=excluded.hospitalizations_json,
             files_json=excluded.files_json, alerts_json=excluded.alerts_json,
             notes_json=excluded.notes_json, tasks_json=excluded.tasks_json,
-            is_archived=excluded.is_archived, last_modified=excluded.last_modified
+            \(archiveUpdate)last_modified=excluded.last_modified
         """
         let s = try conn.prepare(sql)
         s.bind(1, patient.id.uuidString)

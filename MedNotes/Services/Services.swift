@@ -47,10 +47,10 @@ actor PatientService {
         // The archive flag changes only through `archive` and `unarchive`. An
         // editor autosaving a draft it loaded before the record was archived
         // must not quietly restore it — that is exactly what happens when a
-        // patient with unsaved edits is archived from the toolbar.
-        if let existing = try await db.loadPatient(id: patient.id) {
-            stored.isArchived = existing.isArchived
-        }
+        // patient with unsaved edits is archived from the toolbar. The write
+        // itself leaves an existing row's flag alone (`preservingArchiveFlag`):
+        // reading it here and writing it back after the awaits below could
+        // still undo an archive that committed in between.
         var createdPatientDir = false
         var staged: [(URL, URL)] = []
         var promoted: FilePromote.Transaction?
@@ -74,7 +74,7 @@ actor PatientService {
             promoted = try FilePromote.apply(staged)
             try await db.savePatient(
                 stored, attachmentReferences: patient.files.filter { $0.data == nil },
-                knownFileIDs: knownFileIDs)
+                knownFileIDs: knownFileIDs, preservingArchiveFlag: true)
             promoted?.commit()
             promoted = nil
         } catch {
