@@ -8221,6 +8221,106 @@
           }
         }
       }
+    },
+    "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το σημείο επαναφοράς δημιουργήθηκε από παλαιότερη έκδοση και δεν έχει μετατραπεί ακόμη. Κλειδώστε και ξεκλειδώστε το MedNotes και δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "An interrupted restore could not be undone automatically. Your original data is in the folder “%@” inside the MedNotes data folder, and nothing was deleted. %@" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μια διακοπείσα επαναφορά δεν μπόρεσε να αναιρεθεί αυτόματα. Τα αρχικά σας δεδομένα βρίσκονται στον φάκελο «%@» μέσα στον φάκελο δεδομένων του MedNotes και δεν διαγράφηκε τίποτα. %@"
+          }
+        }
+      }
+    },
+    "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes κλείδωσε ενώ ολοκληρωνόταν η επαναφορά. Το αντίγραφο ασφαλείας επαναφέρθηκε· ξεκλειδώστε και ελέγξτε ότι οι εγγραφές σας είναι όπως τις περιμένετε."
+          }
+        }
+      }
+    },
+    "Restore from this restore point?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αυτό το σημείο επαναφοράς;"
+          }
+        }
+      }
+    },
+    "Your current data is replaced by what this restore point holds. A restore point of the current data is made first." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα τρέχοντα δεδομένα σας αντικαθίστανται από όσα περιέχει αυτό το σημείο επαναφοράς. Πρώτα δημιουργείται ένα σημείο επαναφοράς των τρεχόντων δεδομένων."
+          }
+        }
+      }
+    },
+    "Replace the database versions with the mirror versions?" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατάσταση των εκδόσεων της βάσης δεδομένων με τις εκδόσεις του αντικατοπτρισμού;"
+          }
+        }
+      }
+    },
+    "Replace" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αντικατάσταση"
+          }
+        }
+      }
+    },
+    "%lld note(s) in the database are overwritten by the older text in the mirror. A restore point of the current data is made first." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σημειώσεις της βάσης δεδομένων που αντικαθίστανται από το παλαιότερο κείμενο του αντικατοπτρισμού: %lld. Πρώτα δημιουργείται ένα σημείο επαναφοράς των τρεχόντων δεδομένων."
+          }
+        }
+      }
+    },
+    "Restore from this restore point" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επαναφορά από αυτό το σημείο επαναφοράς"
+          }
+        }
+      }
+    },
+    "Pre-mirror snapshot" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Στιγμιότυπο πριν από την αντικατάσταση από τον αντικατοπτρισμό"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

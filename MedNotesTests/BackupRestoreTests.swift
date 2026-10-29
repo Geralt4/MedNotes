@@ -84,6 +84,70 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertFalse(restoredDestination?.mayReceiveWrites ?? true)
     }
 
+    func testARestorePointRestoresTheDataItHeld() async throws {
+        var patient = samplePatient(name: "Before", amka: "11111111111")
+        patient.files = [PatientFile(name: "scan.txt", type: .other, data: Data("ORIGINAL".utf8))]
+        try await store.patients.save(patient)
+        let fileName = try await store.backups.createEncryptedRestorePoint(name: "Pre-restore snapshot")
+        let point = root.restorePointsURL.appendingPathComponent(fileName)
+
+        // Everything since is to be undone: an edit, and a second patient.
+        var edited = patient
+        edited.profile.lastName = "Changed"
+        try await store.patients.save(edited)
+        try await store.patients.save(samplePatient(name: "Extra", amka: "22222222222"))
+
+        let manifest = try await store.backups.restore(
+            fromRestorePointAt: point,
+            databaseKey: TestKeys.database(for: root),
+            attachmentKey: TestKeys.attachment(for: root),
+            createRestorePoint: false)
+
+        XCTAssertEqual(manifest.counts["patients"], 1)
+        let all = try await store.patients.loadAll()
+        XCTAssertEqual(all.map(\.profile.lastName), ["Patient"])
+        let file = try XCTUnwrap(all.first?.files.first)
+        let bytes = try await store.patients.loadFileData(patientId: patient.id, fileId: file.id)
+        XCTAssertEqual(bytes, Data("ORIGINAL".utf8))
+    }
+
+    func testOnlyAFileInTheRestorePointFolderCanBeRestoredAsARestorePoint() async throws {
+        try await store.patients.save(samplePatient())
+        let fileName = try await store.backups.createEncryptedRestorePoint(name: "Pre-restore snapshot")
+        let elsewhere = tempDir.appendingPathComponent(fileName)
+        try FileManager.default.copyItem(
+            at: root.restorePointsURL.appendingPathComponent(fileName), to: elsewhere)
+        do {
+            _ = try await store.backups.restore(
+                fromRestorePointAt: elsewhere,
+                databaseKey: TestKeys.database(for: root),
+                attachmentKey: TestKeys.attachment(for: root), createRestorePoint: false)
+            XCTFail("a path outside the restore point folder must be refused")
+        } catch BackupError.invalidArchive {
+        } catch {
+            XCTFail("expected invalidArchive, got \(error)")
+        }
+    }
+
+    func testARestorePointStillUnderTheOldPassphraseIsRefusedUntilItIsUpgraded() async throws {
+        try await store.patients.save(samplePatient())
+        // A passphrase-sealed archive in the restore point folder is what an
+        // earlier build wrote.
+        let old = root.restorePointsURL.appendingPathComponent("restore_old.mnrp")
+        _ = try await store.backups.createEncryptedBackup(
+            name: "old", to: old, passphrase: BackupService.legacyRestorePointPassphrase)
+        do {
+            _ = try await store.backups.restore(
+                fromRestorePointAt: old,
+                databaseKey: TestKeys.database(for: root),
+                attachmentKey: TestKeys.attachment(for: root), createRestorePoint: false)
+            XCTFail("an unconverted restore point must be refused")
+        } catch BackupError.restorePointNotUpgraded {
+        } catch {
+            XCTFail("expected restorePointNotUpgraded, got \(error)")
+        }
+    }
+
     func testWrongPassphraseIsRejectedBeforeTheStoreChanges() async throws {
         try await store.patients.save(samplePatient(name: "Keep", amka: "33333333333"))
         let file = tempDir.appendingPathComponent("locked.mednotesbackup")

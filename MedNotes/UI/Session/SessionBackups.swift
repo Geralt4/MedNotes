@@ -227,6 +227,22 @@ extension AppSession {
         let mirror = Dictionary(scan.notes.map { ($0.note.id, $0.note) }, uniquingKeysWith: { first, _ in first })
         let targets = choice == .importMirrorOnly ? report.unresolvedVaultOnly : report.unresolvedDivergent
 
+        // Replacing overwrites database notes with older text, and the mirror
+        // is about to become deletable, so the current notes are kept first. No
+        // copy, no replacement: there is no way to skip this step.
+        if choice == .useMirror, !targets.isEmpty {
+            do {
+                _ = try await store.backups.createEncryptedRestorePoint(name: "Pre-mirror snapshot")
+            } catch let error as BackupError {
+                throw error
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+            }
+            await pruneRestorePoints()
+        }
+
         var decided: [UUID] = []
         defer { markLegacyVaultResolved(decided) }
         for item in targets {
@@ -327,6 +343,31 @@ extension AppSession {
     /// keeps first. Only the sheet's second button passes it, after the copy
     /// failed.
     func performRestore(from fileURL: URL, passphrase: String, withoutSafetyCopy: Bool = false) async throws {
+        try await performRestore(source: .archive(fileURL, passphrase: passphrase),
+                                 withoutSafetyCopy: withoutSafetyCopy)
+    }
+
+    /// Restores one of this store's own restore points (Settings › Data). The
+    /// current data is kept as a new restore point first, as for any restore.
+    func restoreFromRestorePoint(_ point: RestorePoint) async throws {
+        try await performRestore(source: .restorePoint(point.url), withoutSafetyCopy: false)
+    }
+
+    /// Where a restore reads from: a backup file the user chose, sealed by its
+    /// passphrase, or one of the store's own restore points.
+    enum RestoreSource: Sendable {
+        case archive(URL, passphrase: String)
+        case restorePoint(URL)
+
+        var url: URL {
+            switch self {
+            case let .archive(url, _), let .restorePoint(url): return url
+            }
+        }
+    }
+
+    private func performRestore(source: RestoreSource, withoutSafetyCopy: Bool) async throws {
+        let fileURL = source.url
         guard let store, let coordinator else { return }
         let databaseKey = try coordinator.requireDatabaseKey()
         let attachmentKey = try coordinator.requireAttachmentKey()
@@ -341,21 +382,53 @@ extension AppSession {
         guard canUseStore, self.store === store else { return }
         let locksAtStart = lockRequests
         let manifest: BackupManifest
-        do {
-            do {
-                manifest = try await store.backups.restore(
-                    fromEncryptedBackupAt: fileURL, passphrase: passphrase,
+        // A task of its own that a lock cancels (`outgoing`) and then waits for
+        // (`restoreRun`): the restore stops before it touches a live file, or
+        // finishes the swap, and is never cut off in the middle of one.
+        let run = Task { @MainActor () throws -> BackupManifest in
+            let restored: BackupManifest
+            switch source {
+            case let .restorePoint(url):
+                restored = try await store.backups.restore(
+                    fromRestorePointAt: url,
                     databaseKey: databaseKey, attachmentKey: attachmentKey,
                     createRestorePoint: !withoutSafetyCopy)
-            } catch BackupArchiveV2.ArchiveError.notAnArchive {
-                // Only a container that is not v2 at all is tried as v1. Any
-                // other failure is about a v2 archive and must not be retried
-                // against a store that a failed install may have touched.
-                manifest = try await store.backups.restore(
-                    fromLegacyBackupAt: fileURL, passphrase: passphrase,
-                    databaseKey: databaseKey, attachmentKey: attachmentKey,
-                    createRestorePoint: !withoutSafetyCopy)
+            case let .archive(url, passphrase):
+                do {
+                    restored = try await store.backups.restore(
+                        fromEncryptedBackupAt: url, passphrase: passphrase,
+                        databaseKey: databaseKey, attachmentKey: attachmentKey,
+                        createRestorePoint: !withoutSafetyCopy)
+                } catch BackupArchiveV2.ArchiveError.notAnArchive {
+                    // Only a container that is not v2 at all is tried as v1. Any
+                    // other failure is about a v2 archive and must not be retried
+                    // against a store that a failed install may have touched.
+                    restored = try await store.backups.restore(
+                        fromLegacyBackupAt: url, passphrase: passphrase,
+                        databaseKey: databaseKey, attachmentKey: attachmentKey,
+                        createRestorePoint: !withoutSafetyCopy)
+                }
             }
+            // Logged here, before the task ends: a lock that landed during the
+            // install waits for this task and then closes the store, so an entry
+            // written after it returned could find the store gone.
+            try? await store.audit.log(
+                action: "backup_restore", entityType: "backup", entityId: fileURL.lastPathComponent,
+                details: BackupFlowSheet.summary(of: restored))
+            return restored
+        }
+        let token = UUID()
+        outgoing[token] = run.cancel
+        restoreRun = Task {
+            if case .success = await run.result { return true }
+            return false
+        }
+        defer {
+            outgoing[token] = nil
+            restoreRun = nil
+        }
+        do {
+            manifest = try await run.value
         } catch where lockRequests != locksAtStart && !Self.isRollbackFailure(error) {
             // The lock took the restore sheet, and the error it would show,
             // with it; ContentView holds this alert until the unlock.
@@ -371,9 +444,12 @@ extension AppSession {
             }
             throw error
         }
-        try? await store.audit.log(
-            action: "backup_restore", entityType: "backup", entityId: fileURL.lastPathComponent,
-            details: BackupFlowSheet.summary(of: manifest))
+        // The swap finished, but a lock landed meanwhile: the store is closed and
+        // the lists are empty. Unlock reloads everything from the restored files.
+        guard lockRequests == locksAtStart else {
+            errorMessage = String(localized: "MedNotes locked while the restore was finishing. The backup was restored; unlock and check that your records are as you expect.")
+            return
+        }
         await pruneRestorePoints()
         // Every record may have changed identity; start the UI over. Sync is
         // suspended until the user reconfirms each destination. The editors
