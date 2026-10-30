@@ -27,8 +27,10 @@ enum MarkdownSections {
         return nil
     }
 
-    /// Each earlier key is the nearest heading above with a lower level than
-    /// the one after it.
+    /// Each earlier key is a heading above with a lower level than the one
+    /// after it, and no closed section lies between: a lower heading that is
+    /// not the key ends the search at that level, so a heading under another
+    /// parent is not found through an earlier one.
     private static func ancestorsMatch(_ keys: [String], headings: [NoteMetadata.Heading], before index: Int) -> Bool {
         var level = headings[index].level
         var cursor = index - 1
@@ -37,8 +39,9 @@ enum MarkdownSections {
             while cursor >= 0 {
                 let candidate = headings[cursor]
                 cursor -= 1
-                if candidate.level < level, candidate.key == key {
-                    level = candidate.level
+                guard candidate.level < level else { continue }
+                level = candidate.level
+                if candidate.key == key {
                     found = true
                     break
                 }

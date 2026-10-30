@@ -11,7 +11,7 @@ import Sodium
 /// Fixed header (authenticated as additional data on every chunk):
 ///
 ///     "MNB2" | version (1) | kdf profile (1) | Argon2 salt (16)
-///         | stream header (24) | u64 payloadLength | u16 reserved
+///         | stream header (24) | 10 reserved bytes, written as zero
 ///
 /// Then a sequence of records, each one `secretstream_xchacha20poly1305`
 /// chunk:
@@ -384,10 +384,13 @@ enum BackupArchiveV2 {
         /// framing and decrypts exactly one chunk.
         func next() throws -> (type: RecordType, payload: Data)? {
             if finished || exhausted { return nil }
-            guard let frame = try? readExact(9), frame.count == 9 else {
+            // Nothing left is the physical end. A read error is an error, and
+            // a frame cut short is a truncated backup, not an end.
+            guard var frame = try handle.read(upToCount: 9), !frame.isEmpty else {
                 exhausted = true
                 return nil
             }
+            if frame.count < 9 { frame.append(try readExact(9 - frame.count)) }
             recordsRead += 1
             guard recordsRead <= maxRecords else { throw ArchiveError.tooManyRecords }
             guard let type = RecordType(rawValue: frame[frame.startIndex]) else {
@@ -421,7 +424,7 @@ enum BackupArchiveV2 {
     }
 
     /// The header profile byte of the file at `url`, or nil if it has no
-    /// readable v2 header. Reads 28 bytes and derives nothing.
+    /// readable v2 header. Reads the fixed header and derives nothing.
     static func profile(at url: URL) -> UInt8? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }

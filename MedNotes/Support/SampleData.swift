@@ -9,8 +9,8 @@ import Foundation
 /// due state. An empty store shows only empty states, and a store full of tidy
 /// records shows only the easy half of every row.
 ///
-/// Everything is written through the real services, so foreign keys, vault
-/// mirroring and wiki-link resolution run on the paths the app actually uses
+/// Everything is written through the real services, so foreign keys and
+/// wiki-link resolution run on the paths the app actually uses
 /// rather than on a seeding-only shortcut.
 enum SampleData {
 

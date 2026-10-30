@@ -86,6 +86,13 @@ final class FrontMatterYAMLTests: XCTestCase {
         XCTAssertEqual(set.property(forKey: "tags")?.value, .list([]))
     }
 
+    func testAQuoteInAFlowListAndADoubledSingleQuoteHideAHash() throws {
+        let set = try XCTUnwrap(parse("tags: [a, \"b #c\"] # note", "t: 'it''s #1'"))
+        XCTAssertEqual(set.property(forKey: "tags")?.value, .list(["a", "b #c"]))
+        XCTAssertEqual(set.property(forKey: "tags")?.comment, "note")
+        XCTAssertEqual(set.property(forKey: "t")?.value, .text("it's #1"))
+    }
+
     func testListKeys() throws {
         let set = try XCTUnwrap(parse(
             "tags: a, b",

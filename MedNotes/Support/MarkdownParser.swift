@@ -523,7 +523,9 @@ enum MarkdownParser {
             guard i + 1 < lines.endIndex, lines[i].units.contains(0x7C),
                   let alignments = delimiterRow(lines[i + 1]) else { return nil }
             let header = cells(lines[i], depth: depth)
-            guard !header.isEmpty else { return nil }
+            // The delimiter row must give one column per header cell; `a | b`
+            // over `---` is a paragraph and a rule, and padding would drop `b`.
+            guard !header.isEmpty, header.count == alignments.count else { return nil }
             var rows: [[[MarkdownInline]]] = []
             var j = i + 2
             while j < lines.endIndex, !lines[j].isBlank, lines[j].units.contains(0x7C), !startsBlock(lines[j]) || listMarker(lines[j]) != nil {
