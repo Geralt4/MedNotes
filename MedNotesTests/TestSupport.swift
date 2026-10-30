@@ -21,28 +21,34 @@ enum TestKeys {
     }
 
     static func database(for dataRoot: DataRoot) -> Data {
-        (try? StoreKeyContext.subkey(rootKey: root(for: dataRoot), context: StoreKeyContext.database))
-            ?? Data(repeating: 0, count: 32)
+        subkey(root(for: dataRoot), StoreKeyContext.database)
     }
 
     static func restorePoint(for dataRoot: DataRoot) -> Data {
-        (try? StoreKeyContext.subkey(rootKey: root(for: dataRoot), context: StoreKeyContext.restorePoints))
-            ?? Data(repeating: 0, count: 32)
+        subkey(root(for: dataRoot), StoreKeyContext.restorePoints)
     }
 
     static func attachment(for dataRoot: DataRoot) -> Data {
-        (try? StoreKeyContext.subkey(rootKey: root(for: dataRoot), context: StoreKeyContext.attachments))
-            ?? Data(repeating: 0, count: 32)
+        subkey(root(for: dataRoot), StoreKeyContext.attachments)
     }
 
     static func database(forPath path: String) -> Data {
-        (try? StoreKeyContext.subkey(rootKey: root(forPath: path), context: StoreKeyContext.database))
-            ?? Data(repeating: 0, count: 32)
+        subkey(root(forPath: path), StoreKeyContext.database)
     }
 
     static func attachment(forPath path: String) -> Data {
-        (try? StoreKeyContext.subkey(rootKey: root(forPath: path), context: StoreKeyContext.attachments))
-            ?? Data(repeating: 0, count: 32)
+        subkey(root(forPath: path), StoreKeyContext.attachments)
+    }
+
+    /// A failed derivation stops the run: a silent all-zero key would give the
+    /// database, attachment and restore-point keys one value and let wrong-key
+    /// tests pass for the wrong reason.
+    private static func subkey(_ rootKey: Data, _ context: String) -> Data {
+        do {
+            return try StoreKeyContext.subkey(rootKey: rootKey, context: context)
+        } catch {
+            preconditionFailure("test key derivation failed: \(error)")
+        }
     }
 
     private static func derive(seed: String) -> Data {

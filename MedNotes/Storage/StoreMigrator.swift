@@ -209,6 +209,14 @@ actor StoreMigrator {
         }
         report.backupTestedAt = backupURL
 
+        // `Database(path:)` creates a missing file, so without this a store
+        // that is gone, or already encrypted, would "migrate" as an empty one
+        // and the swap would then discard the only original.
+        guard FileManager.default.fileExists(atPath: dataRoot.databaseURL.path),
+              SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
+            throw MigrationError.stagingFailed(String(localized: "There is no unencrypted store to convert."))
+        }
+
         let staging = Self.stagingDirectory(in: dataRoot)
         let attachments = Self.attachmentsDirectory(in: dataRoot)
         try? FileManager.default.removeItem(at: Self.stagingAttachmentsDirectory(in: dataRoot))
@@ -227,8 +235,9 @@ actor StoreMigrator {
         let encrypted = try Database(path: stagingDBURL.path, key: databaseKey)
 
         let plaintextPath = dataRoot.databaseURL.path
-        // The original store gets its schema brought up to date (new tables and
-        // markers only) but no derived rows, and its data is never written.
+        // Opening the original brings its schema up to date, which also
+        // rewrites rows the app derives (link rows, the built-in templates,
+        // missing update times); none of the user's records are written.
         let plainReader = try Database(path: plaintextPath, deriveLinks: false)
         defer {
             Task { await plainReader.close() }

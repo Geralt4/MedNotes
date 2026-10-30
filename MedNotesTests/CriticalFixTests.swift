@@ -203,6 +203,12 @@ final class CriticalFixTests: XCTestCase {
         } catch {
             XCTFail("App-created backup containing an empty attachment cannot restore: \(error.localizedDescription)")
         }
+        // It did not merely not throw: the zero-byte file came back.
+        let restored = try await target.patients.load(id: patient.id)
+        let file = try XCTUnwrap(restored?.files.first, "the empty attachment's record is restored")
+        XCTAssertEqual(restored?.files.count, 1)
+        let bytes = try await target.patients.loadFileData(patientId: patient.id, fileId: file.id)
+        XCTAssertEqual(bytes?.count, 0, "and its (empty) content opens")
         await source.close()
         await target.close()
     }
@@ -425,6 +431,30 @@ final class CriticalFixTests: XCTestCase {
         await reopened.close()
     }
 
+    func testRecoveryDoesNotPutAnOlderFolderBackWhenTheNewestHeld() async throws {
+        // Restore #1 failed to roll back and left its folder; restore #2 held
+        // but was cut off before its folder went. Putting #1's original back
+        // would undo #2 and everything after it.
+        let (target, root, _, _) = try await populatedTarget()
+        await target.close()
+        let older = try stageRollbackFolder(in: root, phase: .attachmentsIn)
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        let newer = root.rootURL.appendingPathComponent(
+            "RestoreRollback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: newer, withIntermediateDirectories: true)
+        try RestoreRecovery.writeJournal(.verified, in: newer)
+        try await installIncoming(in: root, attachments: false)
+        let liveBefore = try Data(contentsOf: root.databaseURL)
+
+        XCTAssertEqual(try RestoreRecovery.recoverInterruptedRestore(rootURL: root.rootURL), 0)
+
+        XCTAssertEqual(try Data(contentsOf: root.databaseURL), liveBefore,
+                       "the restore that held must stay")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: newer.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: older.path),
+                      "the older folder is left where it is")
+    }
+
     func testASuccessfulRestoreLeavesNoRollbackOrDiscardFolder() async throws {
         let sourceRoot = try makeRoot()
         let source = try AppStore.testStore(dataRoot: sourceRoot)
@@ -482,7 +512,9 @@ final class CriticalFixTests: XCTestCase {
                 databaseKey: TestKeys.database(for: targetRoot),
                 attachmentKey: TestKeys.attachment(for: targetRoot))
             XCTFail("an attachment whose digest disagrees must be rejected")
-        } catch {}
+        } catch BackupError.integrityCheckFailed {
+            // the digest check, not some other failure on the way
+        }
         try await assertOriginalIntact(target, original, keeper)
         await source.close()
         await target.close()
@@ -975,20 +1007,25 @@ final class LegacyImportAttachmentTests: XCTestCase {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
-        // Two patients in the folder share an AMKA: the batch cannot commit. (One
-        // that clashes with a stored patient is left out instead of failing.)
+        // The store refuses the second patient, so the batch cannot commit. (A
+        // shared AMKA no longer does that: the importer leaves such a patient out.)
         var first = Patient.newRecord()
         first.profile.amka = "11111111111"
         first.files = [PatientFile(name: "x.txt", type: .other, data: Data("X".utf8))]
         var clash = Patient.newRecord()
-        clash.profile.amka = "11111111111"
+        clash.profile.amka = "22222222222"
+        clash.profile.lastName = "Clash"
+        try await store.db.execForTesting("""
+            CREATE TRIGGER reject_clash BEFORE INSERT ON patients WHEN NEW.last_name = 'Clash'
+            BEGIN SELECT RAISE(ABORT, 'rejected'); END
+            """)
         let (folderRoot, url) = try folder(with: [first, clash])
         defer { try? FileManager.default.removeItem(at: folderRoot.rootURL) }
         let fileStore = await store.fileStore
         let db = await store.db
         do {
             _ = try await JSONImporter(directoryURL: url).importAll(into: db, fileStore: fileStore)
-            XCTFail("a duplicate AMKA must reject the batch")
+            XCTFail("a refused insert must reject the batch")
         } catch {}
         let objects = try FileManager.default.contentsOfDirectory(atPath: root.attachmentsURL.path)
         XCTAssertTrue(objects.isEmpty, "the staged ciphertext must be removed: \(objects)")

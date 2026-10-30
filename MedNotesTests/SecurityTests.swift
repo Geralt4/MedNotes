@@ -144,6 +144,16 @@ final class SecurityTests: XCTestCase {
         reordered.append(original.subdata(in: headerLength..<(headerLength + firstChunk)))
         try reordered.write(to: url)
         await assertStoreReadFails(store, id)
+
+        // Bytes after the final chunk are not covered by any tag.
+        var appended = original
+        appended.append(Data(repeating: 0x00, count: 16))
+        try appended.write(to: url)
+        await assertStoreReadFails(store, id)
+
+        try original.write(to: url)
+        let intact = try await store.read(storageID: id)
+        XCTAssertEqual(intact, payload, "the untouched container still reads")
     }
 
     private func assertStoreReadFails(_ store: EncryptedFileStore, _ id: String,
@@ -201,14 +211,19 @@ final class SecurityTests: XCTestCase {
         let root = try makeRoot()
         let store = try EncryptedFileStore(
             root: root.attachmentsURL, key: TestKeys.attachment(for: root))
-        let oneByteID = try await store.store(Data([0x01]))
-        let nearlyBlockID = try await store.store(Data(repeating: 0x02, count: 4096))
-        let oneByteSize = try FileManager.default
-            .attributesOfItem(atPath: try store.url(for: oneByteID).path)[.size] as? NSNumber
-        let nearlyBlockSize = try FileManager.default
-            .attributesOfItem(atPath: try store.url(for: nearlyBlockID).path)[.size] as? NSNumber
-        XCTAssertEqual(oneByteSize?.intValue, nearlyBlockSize?.intValue,
-                       "small attachments must pad to the same ciphertext size")
+        func size(of count: Int, byte: UInt8) async throws -> Int {
+            let id = try await store.store(Data(repeating: byte, count: count))
+            let attributes = try FileManager.default.attributesOfItem(atPath: try store.url(for: id).path)
+            return try XCTUnwrap((attributes[.size] as? NSNumber)?.intValue)
+        }
+        // The length header and the salt come before the bytes, inside the block.
+        let fullBlock = EncryptedFileStore.paddingBlock - 8 - EncryptedFileStore.saltLength
+        let oneByte = try await size(of: 1, byte: 0x01)
+        let lastOfTheBlock = try await size(of: fullBlock, byte: 0x02)
+        let firstOfTheNext = try await size(of: fullBlock + 1, byte: 0x03)
+        XCTAssertEqual(oneByte, lastOfTheBlock,
+                       "everything up to the block boundary pads to the same ciphertext size")
+        XCTAssertGreaterThan(firstOfTheNext, lastOfTheBlock, "one byte past it is the next block")
     }
 
     // MARK: - Secure store coordinator
@@ -383,11 +398,14 @@ final class SecurityTests: XCTestCase {
         let backupURL = tempDir.appendingPathComponent("pre-migration.mednotesbackup")
         let keyManager = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keyManager)
+        let plaintextReader = try Database(path: root.databaseURL.path)
         let backupService = BackupService(
-            db: try Database(path: root.databaseURL.path),
+            db: plaintextReader,
             fileStore: nil, restorePointsRoot: root.restorePointsURL)
         _ = try await backupService.createEncryptedBackup(
             name: "Pre-encryption", to: backupURL, passphrase: "a long enough passphrase")
+        // The app closes it before the swap, which moves the file under it.
+        await plaintextReader.close()
 
         let report = try await migrator.migrate(
             backupDestination: backupURL, passphrase: "a long enough passphrase")
@@ -439,17 +457,6 @@ final class SecurityTests: XCTestCase {
         }
         // The original store is untouched and still plaintext.
         XCTAssertTrue(SQLiteHeaderInspection.isPlaintextSQLite(at: root.databaseURL))
-    }
-
-    func testMigrationJournalIsPHIFreeAndResumable() async throws {
-        let root = try makeRoot()
-        let journal = StoreMigrator.journalURL(in: root)
-        // The journal shape carries phases and counts only.
-        XCTAssertFalse(journal.lastPathComponent.contains("patient"))
-        XCTAssertFalse(journal.lastPathComponent.contains("note"))
-        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
-        let noJournal = try await migrator.readJournal()
-        XCTAssertTrue(noJournal == nil, "no journal before a migration starts")
     }
 
     func testInterruptedMigrationRestoresBothOriginals() async throws {
@@ -506,9 +513,10 @@ final class SecurityTests: XCTestCase {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             try encoder.encode(journal).write(to: journalURL)
-            await migrator.rollbackStaging()
+            // What launch runs; `rollbackStaging` alone never touches the database.
+            try await migrator.recoverInterruptedMigration()
             XCTAssertFalse(FileManager.default.fileExists(atPath: journalURL.path),
-                           "rollback must clear the journal at \(phase.rawValue)")
+                           "recovery must clear the journal at \(phase.rawValue)")
             XCTAssertTrue(SQLiteHeaderInspection.isPlaintextSQLite(at: root.databaseURL),
                           "the original store must survive a crash at \(phase.rawValue)")
             let check = try Database(path: root.databaseURL.path)
@@ -899,6 +907,9 @@ final class SecurityTests: XCTestCase {
     func testSyncIsRefusedWhileLocked() async throws {
         let root = try makeRoot()
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)

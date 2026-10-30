@@ -82,8 +82,10 @@ actor EncryptedFileStore: AttachmentStore {
         return uuid.uuidString.lowercased() == raw.lowercased()
     }
 
-    /// Per-file key derivation: the 128-bit random salt becomes the KDF index,
-    /// so two files never share a keystream even under the same store key.
+    /// Per-file key derivation: the first 64 bits of the random salt become
+    /// the KDF index, so two files do not share a keystream under the same
+    /// store key. (The secretstream header, random for every file, keeps them
+    /// apart as well.)
     private func streamKey(salt: Data) -> Bytes? {
         let index = salt.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
         let sodium = Sodium()
@@ -201,7 +203,9 @@ actor EncryptedFileStore: AttachmentStore {
             offset = end
             if tag == .FINAL { sawFinal = true; break }
         }
-        guard sawFinal else { throw StoreError.corruptOrWrongKey }
+        // Nothing may follow the final chunk: bytes appended to the container
+        // are a change the tags do not cover.
+        guard sawFinal, offset == container.count else { throw StoreError.corruptOrWrongKey }
 
         // Unwrap the encrypted length header and drop the padding.
         guard let first = firstChunk, first.count >= 8 + Self.saltLength else {
