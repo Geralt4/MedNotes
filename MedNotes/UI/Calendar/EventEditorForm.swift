@@ -81,8 +81,7 @@ struct EventEditorForm: View {
                     DatePicker("Start", selection: Binding(
                         get: { draft.startDate },
                         set: { newValue in
-                            draft.startDate = newValue
-                            draft.ensureEndNotBeforeStart()
+                            draft.moveStart(to: newValue)
                         }
                     ), displayedComponents: components)
                     .labelsHidden()

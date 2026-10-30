@@ -7,6 +7,9 @@ struct EventDetailView: View {
     @State private var isLoading = true
     @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
+    /// The record the open delete dialog is about, taken from the editor the
+    /// button was pressed in; never whatever is selected when it is confirmed.
+    @State private var deleteTargetId: UUID?
     /// The record whose title takes focus when its editor appears: only ever
     /// the event the user just created, never one they arrowed to.
     @State private var autofocusEventId: UUID?
@@ -64,7 +67,7 @@ struct EventDetailView: View {
         }
         .confirmationDialog("Delete this event?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                Task { await session.deleteSelectedEvent() }
+                if let id = deleteTargetId { Task { await session.deleteEvent(id: id) } }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -184,7 +187,10 @@ struct EventDetailView: View {
                         isEditing = false
                     },
                     onDone: save,
-                    onDelete: { showDeleteConfirm = true })
+                    onDelete: {
+                        deleteTargetId = draft?.id
+                        showDeleteConfirm = true
+                    })
             }
         }
     }

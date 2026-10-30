@@ -79,12 +79,13 @@ struct NoteGraphSection: View {
         }
     }
 
-    /// What the neighbourhood is computed from; the graph's own size stands
-    /// in for "it was read again".
+    /// What the neighbourhood is computed from. The graph's read counter says
+    /// "it was read again": a link changed to another note leaves the node and
+    /// edge counts as they were.
     private var localKey: String {
         let s = session.localGraphSettings
         return "\(expanded)|\(noteID)|\(s.localDepth)|\(s.showPatients)|\(s.showEvents)"
-            + "|\(session.graphData.nodes.count)|\(session.graphData.edges.count)|\(session.noteEpoch)"
+            + "|\(session.graphGeneration)"
     }
 
     private var neighbours: some View {

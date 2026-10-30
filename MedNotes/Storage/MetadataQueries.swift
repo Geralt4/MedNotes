@@ -13,10 +13,12 @@ struct TagCount: Equatable, Sendable, Identifiable {
     var id: String { key }
 }
 
-struct PropertyKeyUsage: Equatable, Sendable {
+struct PropertyKeyUsage: Equatable, Sendable, Identifiable {
     let key: String
     let kind: String
     let notes: Int
+    /// A key used with two kinds is two entries.
+    var id: String { "\(key)|\(kind)" }
 }
 
 struct AliasMatch: Equatable, Sendable {

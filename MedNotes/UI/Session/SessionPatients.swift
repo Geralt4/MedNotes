@@ -39,6 +39,10 @@ extension AppSession {
         let patient = Patient.newRecord()
         do {
             try await store.patients.save(patient)
+            // A lock that landed during the save has torn the session down:
+            // selecting the row now would select it under the curtain, over
+            // the selection the unlock restores.
+            guard canUseStore, self.store === store else { return }
             // A new patient is active. Creating one while the Archived list is
             // showing would select a row that list does not contain, so follow
             // it to the list it belongs to before setting the selection.
@@ -207,10 +211,17 @@ extension AppSession {
 
     func reloadPatientDirectory() async {
         guard let store else { return }
+        patientDirectoryGeneration += 1
+        let generation = patientDirectoryGeneration
         do {
-            patientDirectory = try await store.patients.loadAll(includeArchived: true)
-            sidebarPatientCount = patientDirectory.filter { !$0.isArchived }.count
+            let all = try await store.patients.loadAll(includeArchived: true)
+            // Two reloads can finish out of order, and a lock empties the
+            // directory: the older or later-arriving result is dropped.
+            guard generation == patientDirectoryGeneration, self.store === store else { return }
+            patientDirectory = all
+            sidebarPatientCount = all.filter { !$0.isArchived }.count
         } catch {
+            guard generation == patientDirectoryGeneration, self.store === store else { return }
             errorMessage = error.localizedDescription
         }
     }

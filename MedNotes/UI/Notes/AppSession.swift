@@ -149,8 +149,14 @@ final class AppSession: ObservableObject {
 
     @Published var linksOut: [LinkingService.OutgoingLink] = []
     @Published var unlinkedMentions: [(noteId: UUID, title: String)] = []
+    /// The note `unlinkedMentions` was found for; the inspector shows them only
+    /// while that note is the open one, not for the moment after a new one opens.
+    @Published var unlinkedMentionsNoteId: UUID?
     @Published var backlinks: [(noteId: UUID, title: String)] = []
     @Published var graphData = LinkingService.GraphData()
+    /// Counts every read of the graph, so a view that derives from `graphData`
+    /// can tell "read again" from "still the same size".
+    @Published var graphGeneration = 0
     /// The graph's settings panel. They live in the encrypted store, since a
     /// filter or group is often a patient's name; they are read when the store
     /// opens and dropped when it locks.
@@ -229,6 +235,7 @@ final class AppSession: ObservableObject {
     private var loadTask: Task<Void, Never>?
     var notesReloadGeneration = 0
     var patientsReloadGeneration = 0
+    var patientDirectoryGeneration = 0
     var todosReloadGeneration = 0
     var eventsReloadGeneration = 0
 
@@ -879,6 +886,7 @@ final class AppSession: ObservableObject {
         switcherGeneration &+= 1
         notesReloadGeneration += 1
         patientsReloadGeneration += 1
+        patientDirectoryGeneration += 1
         todosReloadGeneration += 1
         eventsReloadGeneration += 1
         notes = []
@@ -889,6 +897,7 @@ final class AppSession: ObservableObject {
         backlinks = []
         linksOut = []
         unlinkedMentions = []
+        unlinkedMentionsNoteId = nil
         graphData = LinkingService.GraphData()
         // The settings may name a patient; the saved copy stays in the store.
         // A change made in the last moments before the lock is not saved.
@@ -1068,14 +1077,14 @@ final class AppSession: ObservableObject {
         await loadGraphSettings()
     }
 
-    /// The session is open: the curtain lifts (unless the app is inactive)
-    /// and everything a live store runs starts. Every path that opens a store
-    /// ends here, so none of them can forget the idle lock or the EventKit
-    /// observers, as the migration and recovery once did.
     /// Reseals restore points an earlier build wrote under a public
     /// passphrase. Tracked so a lock can cancel it.
     private var restorePointUpgradeTask: Task<Void, Never>?
 
+    /// The session is open: the curtain lifts (unless the app is inactive)
+    /// and everything a live store runs starts. Every path that opens a store
+    /// ends here, so none of them can forget the idle lock or the EventKit
+    /// observers, as the migration and recovery once did.
     private func finishOpening() async {
         if obscureWhenReady {
             obscureWhenReady = false

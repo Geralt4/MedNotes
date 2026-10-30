@@ -136,6 +136,9 @@ struct SyncDestinationWizard: View {
             HStack {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
+                    // The confirmation in flight would still store the
+                    // destination after the sheet had gone.
+                    .disabled(isWorking)
                 Spacer()
                 Button(isWorking ? "Connecting…" : "Confirm Destination") {
                     Task { await confirmSelection() }

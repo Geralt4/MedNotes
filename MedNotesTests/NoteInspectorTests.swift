@@ -33,7 +33,12 @@ final class NoteInspectorTests: XCTestCase {
         first.noteInspectorShown = false
         XCTAssertEqual(defaults.object(forKey: AppSession.noteInspectorDefaultsKey) as? Bool, false)
 
-        let second = AppSession.testSession(dataRoot: try DataRoot.temporary(), defaults: defaults)
+        let secondRoot = try DataRoot.temporary()
+        roots.append(secondRoot)
+        let second = AppSession.testSession(dataRoot: secondRoot, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await second.lockNow(reason: "teardown")
+        }
         XCTAssertFalse(second.noteInspectorShown, "a new session reads what the last one chose")
         second.noteInspectorShown = true
         XCTAssertEqual(defaults.object(forKey: AppSession.noteInspectorDefaultsKey) as? Bool, true)
@@ -173,6 +178,10 @@ final class NoteInspectorTests: XCTestCase {
         let moment = try XCTUnwrap(PropertyDates.date(from: "2026-10-27T14:30", time: true))
         XCTAssertEqual(PropertyDates.string(from: moment, time: true), "2026-10-27T14:30")
         XCTAssertNil(PropertyDates.date(from: "27/10/2026", time: false))
+        // The editor accepts seconds in a stored date-time; the picker must not
+        // answer "today" for it.
+        let withSeconds = try XCTUnwrap(PropertyDates.date(from: "2024-03-05T14:30:15", time: true))
+        XCTAssertEqual(PropertyDates.string(from: withSeconds, time: true), "2024-03-05T14:30")
     }
 
     // MARK: - Helpers
@@ -181,6 +190,9 @@ final class NoteInspectorTests: XCTestCase {
         let root = try DataRoot.temporary()
         roots.append(root)
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)

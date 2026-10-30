@@ -43,8 +43,11 @@ struct SidebarView: View {
     /// claim the Todos list is empty when completed todos exist.
     private func accessibilityCount(for module: AppModule, count: Int) -> String {
         switch module {
-        case .notes, .patients:
+        case .notes:
             return count == 0 ? String(localized: "Empty") : "\(count)"
+        case .patients:
+            // The count is of active patients: archived ones can still be there.
+            return count == 0 ? String(localized: "No active patients") : String(localized: "\(count) active patients")
         case .todos:
             return count == 0 ? String(localized: "No pending") : String(localized: "\(count) pending")
         case .calendar:

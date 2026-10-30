@@ -55,6 +55,8 @@ extension AppSession {
         let event = CalendarEvent.newRecord()
         do {
             try await store.events.save(event)
+            // As in `newPatient`: a lock during the save leaves nothing to select.
+            guard canUseStore, self.store === store else { return }
             selectedEventId = event.id
             pendingFocusRecordId = event.id
             eventEpoch += 1

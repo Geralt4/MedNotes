@@ -51,6 +51,16 @@ struct TemplatesSettingsPane: View {
         return !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// `draft` as it is stored when it is left rather than saved with the
+    /// button: Save refuses an empty name, so leaving keeps the old one.
+    private func leavingVersion(of draft: NoteTemplate) -> NoteTemplate {
+        var out = draft
+        if out.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let original {
+            out.name = original.name
+        }
+        return out
+    }
+
     private var selectedIsCustom: Bool {
         draft.map { !$0.isBuiltIn } ?? false
     }
@@ -135,8 +145,9 @@ struct TemplatesSettingsPane: View {
         .onDisappear {
             // Tab switched or window closed: the editors' rule applies —
             // unsaved edits are kept, an untouched "+" is not.
-            guard let draft else { return }
+            guard let shown = draft else { return }
             if hasChanges {
+                let draft = leavingVersion(of: shown)
                 Task {
                     guard (try? await actions.save(draft)) != nil else { return }
                     // The pane's state outlives a tab switch. Without this the
@@ -147,8 +158,8 @@ struct TemplatesSettingsPane: View {
                         templates[index] = draft
                     }
                 }
-            } else if draft.isUntouchedNewRecord {
-                Task { await actions.discardIfUntouched(draft) }
+            } else if shown.isUntouchedNewRecord {
+                Task { await actions.discardIfUntouched(shown) }
             }
         }
         .confirmationDialog("Delete this template?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -241,6 +252,7 @@ struct TemplatesSettingsPane: View {
     private func moveSelection(from previous: String?, to current: String?) async {
         if let leaving = draft, leaving.id != current {
             if hasChanges {
+                let leaving = leavingVersion(of: leaving)
                 do {
                     try await actions.save(leaving)
                     replace(leaving)

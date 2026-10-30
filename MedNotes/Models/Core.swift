@@ -262,6 +262,25 @@ struct CalendarEvent: Codable, Hashable, Sendable, Identifiable {
         }
     }
 
+    /// Moves the start and carries the end with it, so the event keeps its
+    /// length: an appointment moved to an earlier day does not become a
+    /// multi-day event. All-day events keep their number of days.
+    mutating func moveStart(to newStart: Date, calendar: Calendar = .current) {
+        if isAllDay {
+            let days = calendar.dateComponents(
+                [.day], from: calendar.startOfDay(for: startDate),
+                to: calendar.startOfDay(for: endDate)).day ?? 0
+            startDate = newStart
+            endDate = calendar.date(
+                byAdding: .day, value: max(0, days), to: calendar.startOfDay(for: newStart)) ?? newStart
+        } else {
+            let length = max(0, endDate.timeIntervalSince(startDate))
+            startDate = newStart
+            endDate = newStart.addingTimeInterval(length)
+        }
+        ensureEndNotBeforeStart()
+    }
+
     mutating func ensureEndNotBeforeStart() {
         if endDate < startDate {
             endDate = isAllDay ? startDate : startDate.addingTimeInterval(1800)

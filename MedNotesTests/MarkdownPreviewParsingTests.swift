@@ -19,6 +19,12 @@ final class MarkdownPreviewParsingTests: XCTestCase {
         }
     }
 
+    func testAllSixHeadingLevelsAreHeadings() {
+        XCTAssertEqual(describe("##### Plan\n###### Detail\n####### seven"),
+                       ["h5:Plan", "h6:Detail", "p:####### seven"],
+                       "the editor and the outline treat five and six hashes as headings too")
+    }
+
     // MARK: - Numbered lists
 
     /// A medication list used to read "1. Metformin 500mg 2. Ramipril 5mg" on one

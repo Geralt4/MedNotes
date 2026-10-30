@@ -471,7 +471,10 @@ extension AppSession {
         // The restore marked every destination stale in the database; make
         // Settings › Sync show that instead of the pre-restore confirmation.
         await refreshSyncDestinations()
-        // Health and pass summaries belonged to the store just replaced.
+        // Health and pass summaries belonged to the store just replaced, and
+        // so did the choices made about the old mirror: against the restored
+        // notes those are undecided again.
+        defaults.removeObject(forKey: Self.resolvedLegacyVaultKey)
         integrityWarning = nil
         lastCalendarSyncSummary = nil
         lastRemindersSyncSummary = nil
@@ -521,17 +524,25 @@ extension AppSession {
         let accessing = folderURL.startAccessingSecurityScopedResource()
         defer { if accessing { folderURL.stopAccessingSecurityScopedResource() } }
         let db = try Database(path: scratch.databaseURL.path)
-        // The same attachment path as the real import, into a store of its own
-        // that is removed with the scratch root. The live store's keys are read
-        // (nothing is written) so the report skips what is already there, as the
-        // real import will.
-        let live = try await openStore().db.storedRecordKeys()
-        let report = try await JSONImporter(directoryURL: folderURL)
-            .importAll(
-                into: db,
-                fileStore: EncryptedFileStore(
-                    root: scratch.attachmentsURL, key: StoreKeyContext.newRootKey()),
-                alreadyStored: live)
+        let report: ImportReport
+        do {
+            // The same attachment path as the real import, into a store of its own
+            // that is removed with the scratch root. The live store's keys are read
+            // (nothing is written) so the report skips what is already there, as the
+            // real import will.
+            let live = try await openStore().db.storedRecordKeys()
+            report = try await JSONImporter(directoryURL: folderURL)
+                .importAll(
+                    into: db,
+                    fileStore: EncryptedFileStore(
+                        root: scratch.attachmentsURL, key: StoreKeyContext.newRootKey()),
+                    alreadyStored: live)
+        } catch {
+            // The scratch folder is removed on the way out; the connection is
+            // not left open on it.
+            await db.close()
+            throw error
+        }
         await db.close()
         return report
     }

@@ -7,6 +7,9 @@ struct TodoDetailView: View {
     @State private var isLoading = true
     @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
+    /// The record the open delete dialog is about, taken from the editor the
+    /// button was pressed in; never whatever is selected when it is confirmed.
+    @State private var deleteTargetId: UUID?
     /// The record whose title takes focus when its editor appears: only ever
     /// the todo the user just created, never one they arrowed to.
     @State private var autofocusTodoId: UUID?
@@ -64,7 +67,7 @@ struct TodoDetailView: View {
         }
         .confirmationDialog("Delete this todo?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                Task { await session.deleteSelectedTodo() }
+                if let id = deleteTargetId { Task { await session.deleteTodo(id: id) } }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -234,7 +237,10 @@ struct TodoDetailView: View {
                         isEditing = false
                     },
                     onDone: save,
-                    onDelete: { showDeleteConfirm = true })
+                    onDelete: {
+                        deleteTargetId = draft?.id
+                        showDeleteConfirm = true
+                    })
             }
         }
     }

@@ -89,7 +89,9 @@ struct BackupFlowSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .prominentActionButtonStyle()
-                .disabled(!passphrasesMatch || !BackupPassphrasePolicy.isAcceptable(passphrase) || isWorking)
+                .disabled(!passphrasesMatch || !BackupPassphrasePolicy.isAcceptable(passphrase) || isWorking
+                          // An empty name would save as ".mednotesbackup", a hidden file.
+                          || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }

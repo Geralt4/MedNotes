@@ -521,6 +521,9 @@ struct DataSettingsPane: View {
                 vaultFailure = error.localizedDescription
             }
             vaultReport = await legacyVaultReport()
+            // Resolving may have imported notes and made a restore point.
+            summary = await loadSummary()
+            restorePoints = await loadRestorePoints()
             isResolvingVault = false
         }
     }
@@ -534,6 +537,11 @@ struct DataSettingsPane: View {
             failure = error.localizedDescription
         }
         restorePoints = await loadRestorePoints()
+        // What the pane showed described the store that was just replaced.
+        summary = await loadSummary()
+        vaultReport = await legacyVaultReport()
+        integrity = nil
+        rebuild = nil
         isRestoring = false
         pendingRestore = nil
     }

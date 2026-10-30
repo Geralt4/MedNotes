@@ -312,6 +312,9 @@ extension AppSession {
             eventEpoch += 1
             await reloadEvents()
         } catch {
+            // A lock mid-pass closed the store under it: what it threw says
+            // nothing about the data, and the lock has cleared the alerts.
+            guard self.store === store else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -440,7 +443,7 @@ extension AppSession {
                 // Not `save`: that would stamp `updatedAt` past `lastSyncDate`
                 // and the row would read as dirty and push straight back.
                 try await store.todos.saveSyncResult(created)
-                try await store.audit.log(
+                try? await store.audit.log(
                     action: "todo_sync_import", entityType: "todo", entityId: created.id.uuidString,
                     details: "todo imported from the Apple Reminders destination")
             }
@@ -462,6 +465,8 @@ extension AppSession {
             todoEpoch += 1
             await reloadTodos()
         } catch {
+            // As in the Calendar pass.
+            guard self.store === store else { return }
             errorMessage = error.localizedDescription
         }
     }

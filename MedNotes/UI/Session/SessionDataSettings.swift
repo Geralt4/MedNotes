@@ -62,11 +62,21 @@ extension AppSession {
             return IntegrityReport(passed: false, checkedAt: Date(),
                                    detail: String(localized: "The store is not open."))
         }
+        let locksAtStart = lockRequests
         let report = await runIntegrityChecks(on: store)
+        // A lock landing during the check closed the store under it: what came
+        // back says nothing about the data (see `checkIntegrityQuietly`).
+        guard lockRequests == locksAtStart else { return report }
         try? await store.audit.log(
             action: "integrity_check", entityType: "store", entityId: "settings",
             details: report.passed ? "ok" : report.detail)
-        integrityWarning = report.passed ? nil : report.detail
+        if !report.passed {
+            integrityWarning = report.detail
+        } else {
+            // Passing the checks does not rebuild a search index that launch
+            // found stale, so its warning stays until the rebuild.
+            integrityWarning = await store.db.searchIndexNeedsRebuild ? Self.searchRebuildWarning : nil
+        }
         return report
     }
 

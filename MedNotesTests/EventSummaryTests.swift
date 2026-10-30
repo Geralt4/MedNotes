@@ -58,6 +58,26 @@ final class EventSummaryTests: XCTestCase {
         XCTAssertEqual(summary(event, now: date(24, 12)).relative, "in 2 hours")
     }
 
+    func testAnAllDayEventIsWordedInDaysNotHoursFromMidnight() {
+        let tomorrow = CalendarEvent(startDate: date(25), endDate: date(25), isAllDay: true)
+        XCTAssertEqual(summary(tomorrow, now: date(24, 22)).relative, "tomorrow")
+        let inThree = CalendarEvent(startDate: date(27), endDate: date(27), isAllDay: true)
+        XCTAssertEqual(summary(inThree, now: date(24, 23)).relative, "in 3 days")
+        let yesterday = CalendarEvent(startDate: date(23), endDate: date(23), isAllDay: true)
+        XCTAssertEqual(summary(yesterday, now: date(24, 1)).relative, "yesterday")
+    }
+
+    func testMovingTheStartKeepsTheLengthOfTheEvent() {
+        var event = CalendarEvent(startDate: date(5, 10, 0, month: 11), endDate: date(5, 10, 30, month: 11))
+        event.moveStart(to: date(3, 10, 0, month: 11), calendar: calendar)
+        XCTAssertEqual(event.startDate, date(3, 10, 0, month: 11))
+        XCTAssertEqual(event.endDate, date(3, 10, 30, month: 11), "a half-hour appointment stays one")
+
+        var allDay = CalendarEvent(startDate: date(5, month: 11), endDate: date(6, month: 11), isAllDay: true)
+        allDay.moveStart(to: date(3, month: 11), calendar: calendar)
+        XCTAssertEqual(allDay.endDate, date(4, month: 11), "two days stay two days")
+    }
+
     func testAllDayEventIsOnAllDay() {
         let event = CalendarEvent(startDate: date(24), endDate: date(24), isAllDay: true)
         XCTAssertEqual(summary(event, now: date(24, 23, 30)).relative, String(localized: "Now"))

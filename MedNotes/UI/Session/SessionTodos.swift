@@ -58,6 +58,8 @@ extension AppSession {
         let todo = TodoItem.newRecord()
         do {
             try await store.todos.save(todo)
+            // As in `newPatient`: a lock during the save leaves nothing to select.
+            guard canUseStore, self.store === store else { return }
             selectedTodoId = todo.id
             pendingFocusRecordId = todo.id
             todoEpoch += 1
