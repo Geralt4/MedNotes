@@ -19,6 +19,9 @@ struct TodoEditorForm: View {
     /// user just created. The placeholder title comes up selected, so typing
     /// replaces it.
     var focusesTitleOnAppear = false
+    /// The tag typed and not yet added, held by the detail view so that Done,
+    /// leaving the todo and a lock can add it; see `TagEditor`.
+    var pendingTag: Binding<String>?
 
     @FocusState private var isTitleFocused: Bool
 
@@ -136,7 +139,7 @@ struct TodoEditorForm: View {
     // MARK: - Tags
 
     private var tagsField: some View {
-        TagEditor(tags: $draft.tags)
+        TagEditor(tags: $draft.tags, pendingText: pendingTag)
             .padding(.vertical, Chrome.Space.xxs)
     }
 

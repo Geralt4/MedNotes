@@ -58,11 +58,17 @@ extension AppSession {
         pendingEdits[token] = nil
     }
 
+    /// Writes every field's typed-but-unwritten text into its draft. Run
+    /// wherever an editor is left or saved without the field's own commit.
+    func flushPendingEdits() {
+        pendingEdits.values.forEach { $0() }
+    }
+
     /// The drafts of the editors on screen, as `save` would store them, with
     /// the token each registered under. Fields holding typed text write it first:
     /// their usual commit (focus leaving) arrives after the editor is gone.
     func openEditorDrafts() -> [(token: UUID, draft: OpenEditorDraft)] {
-        pendingEdits.values.forEach { $0() }
+        flushPendingEdits()
         return openEditors.compactMap { token, read in
             read().map { (token, preparedForSave($0)) }
         }

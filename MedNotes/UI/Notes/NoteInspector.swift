@@ -455,6 +455,8 @@ private struct PropertyRowView: View {
     @EnvironmentObject private var session: AppSession
     @State private var text: String
     @State private var date: Date
+    /// A tag typed into a list property's field and not yet added.
+    @State private var pendingTag = ""
     @State private var pendingToken = UUID()
     @FocusState private var focused: Bool
 
@@ -537,7 +539,8 @@ private struct PropertyRowView: View {
                 .disabled(!property.isEditable)
                 .onChange(of: date) { _, new in set(.dateTime(PropertyDates.string(from: new, time: true))) }
         case .list(let items):
-            TagEditor(tags: Binding(get: { items }, set: { set(.list($0)) }), collapsesField: true)
+            TagEditor(tags: Binding(get: { items }, set: { set(.list($0)) }), collapsesField: true,
+                      pendingText: $pendingTag)
                 .disabled(!property.isEditable)
         case .unsupported:
             Text("Complex value; edit it in the text.")
@@ -566,9 +569,14 @@ private struct PropertyRowView: View {
     /// Writes typed text that focus has not yet committed. A lock or restore calls
     /// this before it reads the note.
     private func flushPendingText() {
-        guard property.isEditable, text != shownText else { return }
+        guard property.isEditable else { return }
         switch property.value {
-        case .text, .number, .empty: commitText()
+        case .text, .number, .empty:
+            if text != shownText { commitText() }
+        case .list(let items):
+            // A tag typed in the list's field and not added.
+            if let merged = PendingTag.merged(pendingTag, into: items) { set(.list(merged)) }
+            pendingTag = ""
         default: return
         }
     }
