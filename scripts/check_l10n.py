@@ -505,6 +505,13 @@ def main() -> int:
         compiled = [f for f in stringsdata_keys(derived) if f.path in wanted]
 
     failed = False
+    if args.derived_data and not compiled:
+        # The compiler is the authority on what the app asks for. Asked for
+        # explicitly and finding nothing (a wrong folder, a build of a copy at
+        # another path, or this tree reached under a different case of its
+        # name), it must not pass on the source scan alone.
+        print(f"error: no compiled strings from {args.derived_data} belong to {ROOT}", file=sys.stderr)
+        failed = True
     missing: dict[str, list[Found]] = {}
     for f in compiled:
         if f.key not in keys:
