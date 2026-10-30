@@ -39,6 +39,7 @@ extension AppSession {
             if query.isEmpty {
                 return try await store.notes.loadAll()
                     .filter { $0.id != noteId && !Self.isUntitled($0) }
+                    .sorted { $0.updatedAt > $1.updatedAt }
                     .prefix(6)
                     .map { LinkCandidate(id: $0.id, title: DisplayCopy.title($0.title), kind: .note) }
             }
@@ -125,6 +126,7 @@ extension AppSession {
         let found = (try? await store.linking.unlinkedMentions(noteId: noteId)) ?? []
         guard selectedNoteId == noteId else { return }
         unlinkedMentions = found
+        unlinkedMentionsNoteId = noteId
     }
 
     /// Creates a note titled with an unresolved link's text and opens it. The

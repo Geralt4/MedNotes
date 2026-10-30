@@ -156,7 +156,7 @@ struct MarkdownPreview: View {
 
     private static func headingLevel(of line: String) -> (level: Int, text: String)? {
         let hashes = line.prefix(while: { $0 == "#" })
-        guard (1...4).contains(hashes.count) else { return nil }
+        guard (1...6).contains(hashes.count) else { return nil }
         // ATX headings need a space after the hashes; "#tag" is content, as
         // in the rest of the app. Without this, a note opening on a tag loses
         // the hash and renders as a heading.

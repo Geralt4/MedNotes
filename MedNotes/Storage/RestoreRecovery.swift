@@ -94,18 +94,24 @@ enum RestoreRecovery {
             try? fm.removeItem(at: leftover)
         }
         var reinstated = 0
+        // Only the newest folder may be put back, whatever became of it: when
+        // it was a restore that held (removed) or an older build's (left
+        // alone), an older unverified folder holds an earlier state.
+        var newestSeen = false
         for folder in rollbackFolders(in: rootURL) {
+            let isNewest = !newestSeen
+            newestSeen = true
             switch phase(in: folder) {
             case .verified:
                 try? fm.removeItem(at: folder)
             case nil:
                 let live = rootURL.appendingPathComponent("mednotes.db")
-                if reinstated == 0, !fm.fileExists(atPath: live.path) {
+                if isNewest, !fm.fileExists(atPath: live.path) {
                     try reinstate(from: folder, rootURL: rootURL)
                     reinstated += 1
                 }
             default:
-                if reinstated == 0 {
+                if isNewest {
                     try reinstate(from: folder, rootURL: rootURL)
                     reinstated += 1
                 }

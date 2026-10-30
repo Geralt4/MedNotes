@@ -334,6 +334,9 @@ final class GreekSearchTests: XCTestCase {
         try makeLegacy(root)
         Database.failFTSFoldingForTesting = true
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)
@@ -604,6 +607,9 @@ final class GreekSearchTests: XCTestCase {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)

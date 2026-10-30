@@ -407,10 +407,11 @@ final class SQLStoreTests: XCTestCase {
         try await db.savePatient(samplePatient())
         try await db.checkpoint()
         let walPath = tempDir.appendingPathComponent("test.db-wal").path
-        if FileManager.default.fileExists(atPath: walPath) {
-            let size = try FileManager.default.attributesOfItem(atPath: walPath)[.size] as? Int ?? -1
-            XCTAssertEqual(size, 0)
-        }
+        // No log file is as clean as an empty one.
+        let size = FileManager.default.fileExists(atPath: walPath)
+            ? try FileManager.default.attributesOfItem(atPath: walPath)[.size] as? Int ?? -1
+            : 0
+        XCTAssertEqual(size, 0, "nothing is left in the write-ahead log after a checkpoint")
     }
 
     private func medNotesTitles(_ notes: [Note]) -> [String] {

@@ -90,9 +90,9 @@ enum TemplateError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .builtInCannotBeDeleted:
-            return "Built-in templates cannot be deleted; reset one to its shipped copy instead."
+            return String(localized: "Built-in templates cannot be deleted; reset one to its shipped copy instead.")
         case .notBuiltIn:
-            return "Only a built-in template has a shipped copy to reset to."
+            return String(localized: "Only a built-in template has a shipped copy to reset to.")
         }
     }
 }

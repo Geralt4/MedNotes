@@ -19,6 +19,11 @@ struct NoteDetailView: View {
     /// This editor's registration with the session, so a lock saves the
     /// draft before the store closes; see `OpenEditorDraft`.
     @State private var lockToken = UUID()
+    /// A tag typed in the footer's tag field and not yet added. Kept here so
+    /// saving, leaving the note and a lock add it to the draft, and it does not
+    /// stay in the field for the next note; see `TagEditor`.
+    @State private var pendingTag = ""
+    @State private var pendingEditToken = UUID()
 
     private var loadId: String {
         "\(session.selectedNoteId?.uuidString ?? "none")-\(session.noteEpoch)"
@@ -84,9 +89,18 @@ struct NoteDetailView: View {
             if let id = session.selectedNoteId { Task { await session.refreshLinks(noteId: id) } }
         }
         .onAppear {
-            let draft = $draft, original = $original
+            let draft = $draft, original = $original, tag = $pendingTag
             session.registerOpenEditor(lockToken) {
                 draft.wrappedValue.map { .note($0, edited: $0 != original.wrappedValue) }
+            }
+            // A lock or restore reads the draft after this has run.
+            session.registerPendingEdit(pendingEditToken) {
+                guard var d = draft.wrappedValue else { return }
+                if let merged = PendingTag.merged(tag.wrappedValue, into: d.tags) {
+                    d.tags = merged
+                    draft.wrappedValue = d
+                }
+                tag.wrappedValue = ""
             }
             if let id = session.selectedNoteId {
                 Task { await session.refreshLinks(noteId: id) }
@@ -136,6 +150,9 @@ struct NoteDetailView: View {
         .onChange(of: draft?.content, initial: true) { bodyEditor.restyleSoon(draft) }
         .onChange(of: "\(draft?.id.uuidString ?? "")-\(isPreviewing)") { bodyEditor.restyleSoon(draft) }
         .onDisappear {
+            // Before the draft is read: a tag typed and not added is added.
+            session.flushPendingEdits()
+            session.unregisterPendingEdit(pendingEditToken)
             // False when a lock or restore already saved or discarded this draft.
             guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
@@ -249,6 +266,9 @@ struct NoteDetailView: View {
         // cancelled and ends late must not uncover the previous record.
         defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedNoteId
+        // Leaving a note: the tag typed for it is added before its edits are
+        // read below, and does not carry over to the next one.
+        if draft?.id != selectedId { session.flushPendingEdits() }
         if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take pin state from the store so a
             // list-side pin toggle is not overwritten on the next save.
@@ -370,7 +390,7 @@ struct NoteDetailView: View {
                 TagEditor(tags: Binding(
                     get: { draft?.tags ?? [] },
                     set: { draft?.tags = $0 }
-                ), collapsesField: true)
+                ), collapsesField: true, pendingText: $pendingTag)
                 if let created = draft?.createdAt, let updated = draft?.updatedAt {
                     HStack(spacing: Chrome.Space.xs) {
                         Text("Created \(created.formatted(date: .abbreviated, time: .shortened))")
@@ -438,6 +458,7 @@ struct NoteDetailView: View {
     }
 
     private func save() {
+        session.flushPendingEdits()
         guard let d = draft else { return }
         Task {
             // Only refresh the editor from the store when the user hasn't

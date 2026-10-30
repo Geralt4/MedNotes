@@ -74,8 +74,7 @@ final class ObsidianCoreTests: XCTestCase {
         // Reopening runs migrateV2, which must sweep it. (`note_links` is the
         // superseded v2 table: nothing reads it any more, but the sweep stays.)
         let reopened = try Database.testDatabase(path: dbPath)
-        let links = try await reopened.linksFromNote(noteId: note.id)
-        XCTAssertTrue(links.isEmpty, "orphaned edge survived migration: \(links)")
+        await reopened.close()
         let verify = try SQLConnection.testConnection(path: dbPath)
         let remaining = try verify.prepare("SELECT COUNT(*) FROM note_links")
         XCTAssertTrue(try remaining.step())
@@ -185,6 +184,7 @@ final class ObsidianCoreTests: XCTestCase {
     /// The one-time export writes one file per note and leaves nothing else.
     func testMarkdownExportWritesOneFilePerNote() async throws {
         let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
         var note = Note(title: "exported", content: "revision 5")
         try await store.notes.save(note)
@@ -198,9 +198,8 @@ final class ObsidianCoreTests: XCTestCase {
         let entries = try FileManager.default.contentsOfDirectory(
             at: exportDir, includingPropertiesForKeys: nil)
         XCTAssertEqual(entries.count, 1)
-        let text = try String(contentsOf: entries[0], encoding: .utf8)
+        let text = try String(contentsOf: try XCTUnwrap(entries.first), encoding: .utf8)
         XCTAssertEqual(MarkdownVaultDecoder.decode(text)?.content, "tiny")
-        try? FileManager.default.removeItem(at: root.rootURL)
     }
 
     /// A lock cancels the export's task: no note is started after it, and the
@@ -267,6 +266,17 @@ final class ObsidianCoreTests: XCTestCase {
         }
     }
 
+    /// Another editor may save a mirror file with Windows line endings. `"\r\n"`
+    /// is one Character, so the front matter used to be unreadable.
+    func testMarkdownDecoderReadsAFileWithWindowsLineEndings() {
+        let note = Note(title: "crlf", content: "line one\nline two")
+        let crlf = MarkdownExportService.encode(note: note).replacingOccurrences(of: "\n", with: "\r\n")
+        let decoded = MarkdownVaultDecoder.decode(crlf)
+        XCTAssertEqual(decoded?.id, note.id)
+        XCTAssertEqual(decoded?.title, "crlf")
+        XCTAssertEqual(decoded?.content, "line one\r\nline two", "the body keeps its own line endings")
+    }
+
     func testMarkdownDecoderRejectsFilesWithoutFrontMatter() {
         XCTAssertNil(MarkdownVaultDecoder.decode("just some text"))
         XCTAssertNil(MarkdownVaultDecoder.decode("---\ntitle: no id"))
@@ -296,6 +306,7 @@ final class ObsidianCoreTests: XCTestCase {
     /// The upgrade reads the retired mirror once and classifies every note.
     func testVaultReconciliationClassifiesAgainstTheDatabase() async throws {
         let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
         let dbOnly = Note(title: "db only", content: "b")
         try await store.notes.save(dbOnly)
@@ -319,7 +330,6 @@ final class ObsidianCoreTests: XCTestCase {
         XCTAssertEqual(report.vaultOnly.map(\.title), ["file only"])
         XCTAssertEqual(report.divergent.map(\.title), ["divergent"])
         XCTAssertEqual(report.databaseOnly.map(\.title), ["db only"])
-        try? FileManager.default.removeItem(at: root.rootURL)
     }
 
     /// The mirror carries patient mentions and the pin flag too. A note that
@@ -349,6 +359,7 @@ final class ObsidianCoreTests: XCTestCase {
     /// backlinks and the graph until something re-saved the note.
     func testVaultDerivedNoteKeepsItsOwnID() async throws {
         let root = try DataRoot.temporary()
+        defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let store = try AppStore.testStore(dataRoot: root)
         let existing = Note(title: "existing", content: "e")
         try await store.notes.save(existing)
@@ -361,7 +372,6 @@ final class ObsidianCoreTests: XCTestCase {
 
         let scan = VaultReconciliation.scan(root: root.vaultURL)
         XCTAssertEqual(scan.notes.first?.note.id, fileNote.id)
-        try? FileManager.default.removeItem(at: root.rootURL)
     }
 
     func testGraphNodeIDsCarryParsableUUIDAfterPrefix() async throws {

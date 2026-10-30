@@ -247,17 +247,23 @@ enum VaultReconciliation {
 enum MarkdownVaultDecoder {
     static func decode(_ text: String) -> Note? {
         guard text.hasPrefix("---") else { return nil }
-        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard lines.first == "---" else { return nil }
+        // Split on the "\n" scalar: "\r\n" is one Character, so a file another
+        // editor re-saved with Windows line endings would never split by
+        // Character. The front matter drops the CR it is left with; the body
+        // keeps its own line endings.
+        var lines = text.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { String(String.UnicodeScalarView($0)) }
+        func withoutCR(_ line: String) -> String { line.hasSuffix("\r") ? String(line.dropLast()) : line }
+        guard lines.first.map(withoutCR) == "---" else { return nil }
         lines.removeFirst()
         var fields: [String: String] = [:]
         var closeIndex: Int?
-        for (index, line) in lines.enumerated() where line == "---" {
+        for (index, line) in lines.enumerated() where withoutCR(line) == "---" {
             closeIndex = index
             break
         }
         guard let end = closeIndex else { return nil }
-        for line in lines[0..<end] {
+        for line in lines[0..<end].map(withoutCR) {
             guard let colon = line.firstIndex(of: ":") else { continue }
             let key = line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces).lowercased()
             let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)

@@ -77,6 +77,13 @@ struct NoteLinksSection: View {
     @EnvironmentObject private var session: AppSession
     @State private var expanded = true
 
+    /// The mentions found for the open note. The scan for a newly opened note
+    /// starts a moment after it, and the previous note's results must not be
+    /// listed under it meanwhile.
+    private var unlinkedMentions: [(noteId: UUID, title: String)] {
+        session.unlinkedMentionsNoteId == session.selectedNoteId ? session.unlinkedMentions : []
+    }
+
     var body: some View {
         let resolvedLinks = session.linksOut.filter { $0.kind == .note || $0.kind == .patient }
         let openLinks = session.linksOut.filter { $0.kind == .unresolved || $0.kind == .ambiguous }
@@ -85,7 +92,7 @@ struct NoteLinksSection: View {
             title: "Linked mentions", systemImage: "link",
             count: session.linksOut.count + session.backlinks.count, expanded: $expanded
         ) {
-            if !hasLinks && session.unlinkedMentions.isEmpty {
+            if !hasLinks && unlinkedMentions.isEmpty {
                 Text("Type [[ to link this note to another note or a patient.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -128,12 +135,12 @@ struct NoteLinksSection: View {
                 }
                 .buttonStyle(.plain)
             }
-            if !session.unlinkedMentions.isEmpty {
+            if !unlinkedMentions.isEmpty {
                 Text("Unlinked mentions")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 2)
-                ForEach(session.unlinkedMentions, id: \.noteId) { mention in
+                ForEach(unlinkedMentions, id: \.noteId) { mention in
                     Button {
                         Task { await session.jumpToNote(mention.noteId) }
                     } label: {
@@ -301,6 +308,9 @@ struct NotePropertiesSection: View {
         .task(id: note.id) {
             known = (try? await session.store?.notes.propertyKeys()) ?? []
         }
+        // A half-filled "New property…" form belongs to the note it was opened
+        // on: it must not carry over and add to the next one.
+        .onChange(of: note.id) { _, _ in adding = false }
     }
 
     @ViewBuilder
@@ -313,7 +323,7 @@ struct NotePropertiesSection: View {
                 }, onCancel: { adding = false })
             } else {
                 Menu {
-                    ForEach(known.filter { !existing.contains($0.key.lowercased()) }, id: \.key) { usage in
+                    ForEach(known.filter { !existing.contains($0.key.lowercased()) }) { usage in
                         Button {
                             apply(note.id, .set(key: usage.key, value: PropertyKindChoice(kind: usage.kind).defaultValue), nil)
                         } label: {
@@ -382,7 +392,13 @@ enum PropertyDates {
     }
 
     static func date(from text: String, time: Bool) -> Date? {
-        formatter(time: time).date(from: text)
+        if let date = formatter(time: time).date(from: text) { return date }
+        // A stored date-time may carry seconds (`FrontMatterYAML.isDateTime`
+        // accepts them); the picker shows the minute.
+        guard time else { return nil }
+        let withSeconds = formatter(time: true)
+        withSeconds.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return withSeconds.date(from: text)
     }
 }
 
@@ -439,6 +455,8 @@ private struct PropertyRowView: View {
     @EnvironmentObject private var session: AppSession
     @State private var text: String
     @State private var date: Date
+    /// A tag typed into a list property's field and not yet added.
+    @State private var pendingTag = ""
     @State private var pendingToken = UUID()
     @FocusState private var focused: Bool
 
@@ -521,7 +539,8 @@ private struct PropertyRowView: View {
                 .disabled(!property.isEditable)
                 .onChange(of: date) { _, new in set(.dateTime(PropertyDates.string(from: new, time: true))) }
         case .list(let items):
-            TagEditor(tags: Binding(get: { items }, set: { set(.list($0)) }), collapsesField: true)
+            TagEditor(tags: Binding(get: { items }, set: { set(.list($0)) }), collapsesField: true,
+                      pendingText: $pendingTag)
                 .disabled(!property.isEditable)
         case .unsupported:
             Text("Complex value; edit it in the text.")
@@ -550,9 +569,14 @@ private struct PropertyRowView: View {
     /// Writes typed text that focus has not yet committed. A lock or restore calls
     /// this before it reads the note.
     private func flushPendingText() {
-        guard property.isEditable, text != shownText else { return }
+        guard property.isEditable else { return }
         switch property.value {
-        case .text, .number, .empty: commitText()
+        case .text, .number, .empty:
+            if text != shownText { commitText() }
+        case .list(let items):
+            // A tag typed in the list's field and not added.
+            if let merged = PendingTag.merged(pendingTag, into: items) { set(.list(merged)) }
+            pendingTag = ""
         default: return
         }
     }

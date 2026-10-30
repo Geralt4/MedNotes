@@ -60,7 +60,16 @@ struct EventSummary: Equatable {
             formatter.calendar = calendar
             formatter.dateTimeStyle = .named
             formatter.unitsStyle = .full
-            relative = formatter.localizedString(for: event.startDate, relativeTo: now)
+            if event.isAllDay {
+                // Whole days from today, not hours from midnight: at 22:00 an
+                // all-day event tomorrow is "tomorrow", not "in 2 hours".
+                let days = calendar.dateComponents(
+                    [.day], from: calendar.startOfDay(for: now),
+                    to: calendar.startOfDay(for: event.startDate)).day ?? 0
+                relative = formatter.localizedString(from: DateComponents(day: days))
+            } else {
+                relative = formatter.localizedString(for: event.startDate, relativeTo: now)
+            }
         }
     }
 }

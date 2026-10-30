@@ -2,8 +2,9 @@ import CommonCrypto
 import CryptoKit
 import Foundation
 
-/// The container written by File › Back Up…: a small header and one
-/// AES-256-GCM sealed box over the serialised backup directory.
+/// The version 1 backup container: a small header and one AES-256-GCM sealed
+/// box over the serialised backup directory. File › Back Up… now writes
+/// `BackupArchiveV2`; this writer is kept to build v1 files for the tests.
 /// See `docs/adr/0001-encryption-at-rest.md`.
 ///
 /// Layout, version 1:

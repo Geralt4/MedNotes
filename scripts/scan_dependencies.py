@@ -2,7 +2,7 @@
 """Verifies the pinned dependency inventory in Package.resolved.
 
 Fails when a package outside the recorded allowlist is resolved, or when a
-pinned revision drifts. The release pipeline and CI both run this.
+pinned revision drifts. `scripts/release.sh` runs this.
 """
 
 import json

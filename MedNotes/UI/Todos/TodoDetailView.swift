@@ -7,6 +7,9 @@ struct TodoDetailView: View {
     @State private var isLoading = true
     @State private var loads = LoadGeneration()
     @State private var showDeleteConfirm = false
+    /// The record the open delete dialog is about, taken from the editor the
+    /// button was pressed in; never whatever is selected when it is confirmed.
+    @State private var deleteTargetId: UUID?
     /// The record whose title takes focus when its editor appears: only ever
     /// the todo the user just created, never one they arrowed to.
     @State private var autofocusTodoId: UUID?
@@ -16,6 +19,11 @@ struct TodoDetailView: View {
     /// This editor's registration with the session, so a lock saves the
     /// draft before the store closes; see `OpenEditorDraft`.
     @State private var lockToken = UUID()
+    /// A tag typed in the editor's Add field and not yet added. Kept here, not
+    /// in the field, so Done, leaving the todo and a lock add it to the draft
+    /// instead of dropping it; see `commitPendingTag`.
+    @State private var pendingTag = ""
+    @State private var pendingEditToken = UUID()
 
     private var loadId: String {
         "\(session.selectedTodoId?.uuidString ?? "none")-\(session.todoEpoch)"
@@ -38,12 +46,24 @@ struct TodoDetailView: View {
             await loadTodo()
         }
         .onAppear {
-            let draft = $draft, original = $original
+            let draft = $draft, original = $original, tag = $pendingTag
             session.registerOpenEditor(lockToken) {
                 draft.wrappedValue.map { .todo($0, edited: $0 != original.wrappedValue) }
             }
+            // A lock or restore reads the draft after this has run.
+            session.registerPendingEdit(pendingEditToken) {
+                guard var d = draft.wrappedValue else { return }
+                if let merged = PendingTag.merged(tag.wrappedValue, into: d.tags) {
+                    d.tags = merged
+                    draft.wrappedValue = d
+                }
+                tag.wrappedValue = ""
+            }
         }
         .onDisappear {
+            // Before the draft is read: a tag typed and not added is added.
+            session.flushPendingEdits()
+            session.unregisterPendingEdit(pendingEditToken)
             // False when a lock or restore already saved or discarded this draft.
             guard session.unregisterOpenEditor(lockToken), let d = draft else { return }
             if hasChanges {
@@ -64,7 +84,7 @@ struct TodoDetailView: View {
         }
         .confirmationDialog("Delete this todo?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                Task { await session.deleteSelectedTodo() }
+                if let id = deleteTargetId { Task { await session.deleteTodo(id: id) } }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -78,6 +98,9 @@ struct TodoDetailView: View {
         // cancelled and ends late must not uncover the previous record.
         defer { if loads.isCurrent(generation) { isLoading = false } }
         let selectedId = session.selectedTodoId
+        // Leaving a todo: the tag typed for it is added before its edits are
+        // read below, and does not carry over to the next one.
+        if draft?.id != selectedId { session.flushPendingEdits() }
         if let d = draft, d.id == selectedId, hasChanges {
             // Keep local edits, but take completion from the store so a
             // list-side toggle is not overwritten on the next save.
@@ -203,7 +226,8 @@ struct TodoDetailView: View {
                         patientOptions: session.assignmentPatients(including: todo.patientId),
                         isKnownPatient: { session.patientName(for: $0) != nil },
                         onSetCompleted: setCompleted,
-                        focusesTitleOnAppear: todo.id == autofocusTodoId
+                        focusesTitleOnAppear: todo.id == autofocusTodoId,
+                        pendingTag: $pendingTag
                     )
                 } else {
                     let known = todo.patientId.flatMap { session.patientName(for: $0) }
@@ -231,10 +255,14 @@ struct TodoDetailView: View {
                     onEdit: { isEditing = true },
                     onCancel: {
                         draft = original
+                        pendingTag = ""
                         isEditing = false
                     },
                     onDone: save,
-                    onDelete: { showDeleteConfirm = true })
+                    onDelete: {
+                        deleteTargetId = draft?.id
+                        showDeleteConfirm = true
+                    })
             }
         }
     }
@@ -242,6 +270,9 @@ struct TodoDetailView: View {
     /// Saves and returns to the record. Stays in the editor when the save
     /// fails, so the fields are still in front of the user.
     private func save() {
+        // A tag typed and not added is part of what Done saves: a tag has no
+        // setting nobody chose, so adding it is not a surprise.
+        session.flushPendingEdits()
         guard let d = draft else { return }
         guard hasChanges else {
             isEditing = false

@@ -93,6 +93,7 @@ extension AppSession {
             searchText = ""
             searchTask?.cancel()
         }
+        if noteTagFilter != nil { noteTagFilter = nil }
         await reload()
         guard canUseStore else { return }
         selectedModule = .notes

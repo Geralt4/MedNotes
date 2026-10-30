@@ -108,8 +108,10 @@ final class MarkdownParserTests: XCTestCase {
         guard case .comment = blocks[0].kind else { return XCTFail("\(blocks)") }
         XCTAssertEqual(substring(text, blocks[0].range), "%% hidden\nacross lines %%")
         guard case .paragraph(let inlines) = blocks[1].kind else { return XCTFail() }
-        XCTAssertEqual(shape(inlines), "T(before  after)".replacingOccurrences(of: "  ", with: " ") == "" ? "" : shape(inlines))
-        XCTAssertFalse(shape(inlines).contains("inline"), "an inline comment is not shown")
+        let shown = shape(inlines)
+        XCTAssertTrue(shown.hasPrefix("T(before"), shown)
+        XCTAssertTrue(shown.hasSuffix("after)"), shown)
+        XCTAssertFalse(shown.contains("inline"), "an inline comment is not shown")
         guard case .comment = blocks[2].kind else { return XCTFail() }
         guard case .paragraph(let tail) = blocks[3].kind else { return XCTFail() }
         XCTAssertTrue(shape(tail).contains("never closed"), "an unterminated comment is text")
@@ -237,6 +239,14 @@ final class MarkdownParserTests: XCTestCase {
         XCTAssertEqual(pipes.header.map(shape), ["T(x)", "T(y|z)", "C(a|b)"])
     }
 
+    func testAHeaderWithMoreCellsThanTheDelimiterRowIsNotATable() {
+        for text in ["Πίεση | Σφύξεις\n---", "a | b\n-"] {
+            for block in parse(text) {
+                if case .table = block.kind { XCTFail("not a table: \(text.debugDescription)") }
+            }
+        }
+    }
+
     func testALineWithAPipeButNoDelimiterRowIsAParagraph() {
         guard case .paragraph? = parse("a | b\nc | d").first?.kind else { return XCTFail() }
     }
@@ -353,6 +363,15 @@ final class MarkdownParserTests: XCTestCase {
         XCTAssertNil(section(["Missing"]))
     }
 
+    func testASectionIsNotFoundThroughAnEarlierParentOfAnotherSection() {
+        let text = "# Plan\n### X\n# Other\n### Doses\nd\n"
+        XCTAssertNil(MarkdownSections.headingSection(path: ["Plan", "Doses"], in: text),
+                     "Doses sits under Other, whatever Plan holds")
+        XCTAssertNotNil(MarkdownSections.headingSection(path: ["Other", "Doses"], in: text))
+        XCTAssertNotNil(MarkdownSections.headingSection(path: ["Plan", "X"], in: text),
+                        "a skipped level is still the same parent")
+    }
+
     func testBlockExtentsAreTheParagraphOrTheListItemWithItsChildren() {
         let text = "Para one ^p1\n\n- item\n  - child ^c1\n- other\n  more ^i2\n"
         let doc = MarkdownParser.parse(text)
@@ -364,7 +383,8 @@ final class MarkdownParserTests: XCTestCase {
 
     // MARK: - Hostile input
 
-    func testDeepNestingStopsAtTheCap() {
+    func testDeepNestingStopsAtTheCap() throws {
+        try XCTSkipIf(TestEnvironment.isSanitized, "a wall-clock limit")
         let quotes = String(repeating: "> ", count: 5_000) + "deep"
         let list = String(repeating: "- ", count: 5_000) + "deep"
         for text in [quotes, list] {

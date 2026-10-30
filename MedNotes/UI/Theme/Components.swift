@@ -574,10 +574,17 @@ struct TagEditor: View {
     /// Shows a "+" chip in place of the always-visible field, for a footer
     /// where adding a tag is occasional; the field opens on demand.
     var collapsesField = false
+    /// The text typed and not yet added, when the editor's owner holds it: Done,
+    /// leaving the record and a lock cannot reach a `@State` in here, so the
+    /// owner commits it (`PendingTag`) wherever the editor is left. Without an
+    /// owner the field keeps its own.
+    var pendingText: Binding<String>?
 
-    @State private var newTag = ""
+    @State private var ownNewTag = ""
     @State private var isAdding = false
     @FocusState private var fieldFocused: Bool
+
+    private var newTag: Binding<String> { pendingText ?? $ownNewTag }
 
     var body: some View {
         if collapsesField {
@@ -589,7 +596,7 @@ struct TagEditor: View {
                         chips
                     }
                 }
-                EditorAddRow(prompt: prompt, text: $newTag, action: add)
+                EditorAddRow(prompt: prompt, text: newTag, action: add)
             }
         }
     }
@@ -606,7 +613,7 @@ struct TagEditor: View {
         FlowLayout {
             chips
             if isAdding {
-                TextField(prompt, text: $newTag)
+                TextField(prompt, text: newTag)
                     .textFieldStyle(.plain)
                     .font(.caption.weight(.medium))
                     .frame(width: 140)
@@ -619,7 +626,7 @@ struct TagEditor: View {
                     .onSubmit(add)
                     .onExitCommand { close() }
                     .onChange(of: fieldFocused) { _, focused in
-                        if !focused, newTag.trimmingCharacters(in: .whitespaces).isEmpty { close() }
+                        if !focused, newTag.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty { close() }
                     }
             } else {
                 Button {
@@ -644,15 +651,25 @@ struct TagEditor: View {
     }
 
     private func close() {
-        newTag = ""
+        newTag.wrappedValue = ""
         isAdding = false
     }
 
     private func add() {
-        let tag = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tag.isEmpty, !tags.contains(tag) else { return }
-        tags.append(tag)
-        newTag = ""
+        guard let merged = PendingTag.merged(newTag.wrappedValue, into: tags) else { return }
+        tags = merged
+        newTag.wrappedValue = ""
+    }
+}
+
+/// A tag typed into a tag field and not yet added.
+enum PendingTag {
+    /// `tags` with `text` added as a tag, or nil when there is nothing to add:
+    /// the text is empty once trimmed, or already a tag.
+    static func merged(_ text: String, into tags: [String]) -> [String]? {
+        let tag = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tag.isEmpty, !tags.contains(tag) else { return nil }
+        return tags + [tag]
     }
 }
 

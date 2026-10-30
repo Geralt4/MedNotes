@@ -41,6 +41,9 @@ final class SessionFlowTests: XCTestCase {
         let root = try DataRoot.temporary()
         roots.append(root)
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)
@@ -489,12 +492,15 @@ final class SessionFlowTests: XCTestCase {
             ("patient_full", "Patients"), ("note_simple", "Notes"),
             ("todo_high", "Todos"), ("event_appointment", "CalendarEvents")
         ]
-        for fixture in fixtures {
+        // A fixture that has dropped out of the test bundle fails the test
+        // instead of skipping it, and is found before any folder is made.
+        let urls = try fixtures.map { fixture in
+            try XCTUnwrap(bundle.url(forResource: fixture.name, withExtension: "json"),
+                          "fixture \(fixture.name) is missing from the test bundle")
+        }
+        for (fixture, url) in zip(fixtures, urls) {
             let directory = source.appendingPathComponent(fixture.folder, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            guard let url = bundle.url(forResource: fixture.name, withExtension: "json") else {
-                throw XCTSkip("fixture \(fixture.name) is missing from the test bundle")
-            }
             try Data(contentsOf: url).write(to: directory.appendingPathComponent("\(fixture.name).json"))
         }
         return source

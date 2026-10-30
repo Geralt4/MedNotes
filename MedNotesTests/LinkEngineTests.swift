@@ -420,15 +420,20 @@ final class LinkEngineTests: XCTestCase {
         let base = Note(title: "S", content: "[[T0]]")
         try await store.notes.save(base)
 
-        await withTaskGroup(of: Void.self) { group in
+        var saved = 0
+        await withTaskGroup(of: Bool.self) { group in
             for i in 0..<16 {
                 group.addTask {
                     var note = base
                     note.content = (0...(i % 4)).map { "[[T\($0)]]" }.joined(separator: " ")
-                    try? await store.notes.save(note)
+                    return (try? await store.notes.save(note)) != nil
                 }
             }
+            for await ok in group where ok { saved += 1 }
         }
+        // If every save failed the stored text would stay `[[T0]]` and the
+        // comparison below would hold without testing anything.
+        XCTAssertEqual(saved, 16, "every concurrent save goes through")
 
         let loaded = try await store.notes.load(id: base.id)
         let stored = try XCTUnwrap(loaded)

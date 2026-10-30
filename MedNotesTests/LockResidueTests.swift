@@ -73,8 +73,11 @@ final class LockResidueTests: XCTestCase {
         XCTAssertNil(session.pendingFocusRecordId)
 
         await session.unlock()
-        let notes = try await session.store?.notes.loadAll() ?? []
-        XCTAssertTrue(notes.filter { $0.title == "New Note" }.isEmpty,
+        let store = try XCTUnwrap(session.store, "unlock failed: \(session.initError ?? "")")
+        let notes = try await store.notes.loadAll()
+        // The title a new note is given, in whatever language the app runs.
+        let untouchedTitle = Note.newRecord().title
+        XCTAssertTrue(notes.filter { $0.title == untouchedTitle }.isEmpty,
                       "the untouched row was left behind: \(notes.map(\.title))")
     }
 

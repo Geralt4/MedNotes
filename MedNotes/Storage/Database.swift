@@ -24,6 +24,9 @@ actor Database {
     /// opened (the old ones and the old indexes are still there): the app says
     /// so and Rebuild Indexes repairs it.
     private(set) var searchIndexNeedsRebuild = false
+    /// `searchIndexNeedsRebuild` as it was when `replaceDatabaseFile(…preservingOriginalIn:)`
+    /// set the original aside, put back if that original is reinstated.
+    private var searchIndexNeedsRebuildBeforeReplace: Bool?
     /// The raw database key, kept so `replaceDatabaseFile` and
     /// `reinstateDatabaseFile` can rebuild the connection without another
     /// Keychain round-trip.
@@ -196,6 +199,9 @@ actor Database {
         let targetKey = databaseKey
         // Fold the WAL into the main file first, so the kept copy is whole.
         try checkpoint()
+        // The original's flag, for a rollback: the incoming copy's `migrate`
+        // sets its own.
+        searchIndexNeedsRebuildBeforeReplace = searchIndexNeedsRebuild
         transactionDepth = 0
         conn.close()
         do {
@@ -240,6 +246,9 @@ actor Database {
             conn = try Self.open(path: dest, key: databaseKey)
             try Self.configure(conn)
             return
+        }
+        defer {
+            if let flag = searchIndexNeedsRebuildBeforeReplace { searchIndexNeedsRebuild = flag }
         }
         // A `-journal` is what an interrupted rekey leaves; replayed into the
         // original it would damage it.
@@ -1011,11 +1020,37 @@ actor Database {
 
     /// Removes a row whose file the migration could not find. Only for the
     /// encrypted copy being built: the plaintext original is not touched.
+    ///
+    /// The patient's `files_json` is what `decodePatient` reads once no
+    /// `patient_files` row is left, so the file is taken out of that copy too;
+    /// otherwise a patient whose only file was dropped would list it again,
+    /// with nothing behind it.
     func dropAttachmentRecord(patientId: UUID, fileId: UUID) throws {
         let s = try conn.prepare("DELETE FROM patient_files WHERE patient_id = ? AND id = ?")
         s.bind(1, patientId.uuidString)
         s.bind(2, fileId.uuidString)
         _ = try s.step()
+
+        var remaining: [[String: Any]]?
+        do {
+            let read = try conn.prepare("SELECT files_json FROM patients WHERE id = ?")
+            read.bind(1, patientId.uuidString)
+            if try read.step(),
+               let text = read.columnText(0), let data = text.data(using: .utf8),
+               let files = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+                let kept = files.filter {
+                    ($0["id"] as? String)?.caseInsensitiveCompare(fileId.uuidString) != .orderedSame
+                }
+                if kept.count != files.count { remaining = kept }
+            }
+        }
+        guard let remaining,
+              let data = try? JSONSerialization.data(withJSONObject: remaining),
+              let text = String(data: data, encoding: .utf8) else { return }
+        let update = try conn.prepare("UPDATE patients SET files_json = ? WHERE id = ?")
+        update.bind(1, text)
+        update.bind(2, patientId.uuidString)
+        _ = try update.step()
     }
 
     /// Every attachment row that still lacks an encrypted storage ID. The

@@ -190,9 +190,10 @@ enum LegacyBackupReader {
 
     // MARK: - Tree parsing
 
-    /// The v1 payload is a binary plist from `FileWrapper.serializedRepresentation`.
-    /// Rather than rehydrating it, the plist is walked as data and each
-    /// `NSFileWrapper` node is inspected for the keys that make it dangerous.
+    /// A property-list payload is walked as data rather than rehydrated, and
+    /// each `NSFileWrapper` node is inspected for the keys that make it
+    /// dangerous. The usual v1 payload is the flat form that
+    /// `FileWrapper.serializedRepresentation` writes, which is read below.
     private static func parseTree(_ payload: Data) throws -> Contents {
         guard let plist = try? PropertyListSerialization.propertyList(
             from: payload, options: [], format: nil) as? [String: Any] else {

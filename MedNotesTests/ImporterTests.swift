@@ -206,6 +206,32 @@ final class ImporterTests: XCTestCase {
         XCTAssertTrue(report.warnings.contains { $0.contains("references missing patient") })
     }
 
+    /// The same person exported twice, under two ids and two ways of typing the
+    /// AMKA. The unique column used to fail the whole import (same text) or the
+    /// editor's duplicate check saw two patients (different text).
+    func testTwoPatientsWithOneAMKAInTheFolderImportOnce() async throws {
+        let db = try makeDB()
+        let url = sourceDir.appendingPathComponent("Patients/patient_full.json")
+        var json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var profile = try XCTUnwrap(json["profile"] as? [String: Any])
+        let digits = AMKA.normalized(try XCTUnwrap(profile["amka"] as? String))
+        XCTAssertFalse(digits.isEmpty, "precondition: the fixture has an AMKA")
+        profile["amka"] = "\(digits.prefix(3))-\(digits.dropFirst(3))"
+        json["profile"] = profile
+        json["id"] = UUID().uuidString
+        try JSONSerialization.data(withJSONObject: json)
+            .write(to: sourceDir.appendingPathComponent("Patients/patient_again.json"))
+
+        let report = try await JSONImporter(directoryURL: sourceDir).importAll(into: db)
+
+        XCTAssertTrue(report.errors.isEmpty, "\(report.errors)")
+        XCTAssertEqual(report.patientsImported, 1)
+        XCTAssertEqual(report.patientsAlreadyPresent, 1)
+        let patients = try await db.loadAllPatients()
+        XCTAssertEqual(patients.count, 1)
+        XCTAssertEqual(patients.first?.profile.amka, digits, "stored in the normalised form")
+    }
+
     /// The dry run imports into a scratch database but is checked against the
     /// live store, so it reports what the real import will add.
     func testTheDryRunReportsAgainstTheStoreItIsFor() async throws {

@@ -53,7 +53,6 @@ enum StoreKeyContext {
     static let database = "mn.db.v1"
     static let attachments = "mn.fs.v1"
     static let restorePoints = "mn.rp.v1"
-    static let archive = "mn.arc.v1"
 
     /// A fresh random root key.
     static func newRootKey() -> Data {

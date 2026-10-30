@@ -107,6 +107,7 @@ extension AppSession {
         // A lock may have come in while the store was read: nothing of it is shown.
         guard store === self.store else { return }
         graphData = data
+        graphGeneration &+= 1
         // Notes may have changed since the last pass: ask again, then filter.
         graphQueryTask?.cancel()
         await refreshGraphQuerySets()

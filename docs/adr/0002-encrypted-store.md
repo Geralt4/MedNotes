@@ -52,8 +52,9 @@ explicit.**
 - Stored under opaque random UUIDs (`Attachments/<storageID>`), never
   patient-derived paths.
 - Plaintext exists only in memory. "Open Externally" is the single exception:
-  an explicit disclosure, a 0600 temporary file, removed when focus returns,
-  the app locks, or it exits.
+  an explicit disclosure, a 0600 temporary file, removed when the app locks
+  or exits (or at the next launch after a crash). Losing focus does not remove
+  it: see `docs/security.md`.
 
 ### Session
 
@@ -115,7 +116,8 @@ explicit.**
 - App-created objects carry an opaque marker; only objects in the chosen
   destination that are mapped or marked are read or written. A missing remote
   object is a conflict, never a silent local delete.
-- Sync stays off until a manual pass succeeds and the user enables it, pauses
+- Nothing is written before a destination is confirmed (automatic passes are
+  on by default, but they have nothing to write to until then); sync pauses
   while locked, and suspends after a restore until reconfirmed.
 
 ### Vault
@@ -144,7 +146,7 @@ explicit.**
 ## Consequences
 
 - The app gains two audited dependencies (SQLCipher, swift-sodium), pinned by
-  revision in `Package.resolved` and scanned in CI.
+  revision in `Package.resolved` and scanned by `scripts/release.sh`.
 - The database key never leaves the Keychain, so a lost Keychain item means the
   data needs a portable backup to recover; the UI says exactly that.
 - Losing a backup passphrase loses that backup; there is no escrow.

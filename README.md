@@ -156,13 +156,15 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
   with custom templates in Settings › Templates
 - **Apple Calendar two-way sync** (`AppleCalendarService`): a destination the
   user confirms in a wizard (a new "MedNotes" calendar in a chosen account, or
-  an existing calendar); push dirty rows, pull external drift with
-  content-based last-writer-wins (`CalendarSyncCore.decide`, conflicts logged +
+  an existing calendar); push dirty rows, pull external drift; when both
+  sides changed a row the Apple copy wins, and an Apple change counts only
+  when it is more than 60 s newer than the last sync, since a CalDAV server
+  may stamp MedNotes' own push (`CalendarSyncCore.decide`, conflicts logged +
   surfaced); debounced `EKEventStoreChanged`; sync pill + "Sync Now" (⌘⇧R)
 - **Apple Reminders two-way sync** (`AppleRemindersService`): the same
   destination wizard for a reminders list; a todo's title, notes, due day,
   completion and priority travel, the patient link and tags never leave
-  MedNotes; the same content-based last-writer-wins
+  MedNotes; the same rule when both sides changed a reminder
   (`ReminderSyncCore.decide`, conflicts surfaced) and change-driven pull; sync
   pill in the Todos toolbar + "Sync Now" (⌘⇧T).
   Automatic passes of either bridge never raise the permission dialog; only
@@ -177,6 +179,11 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
 - Schema v4 additive migration (`migrations` row `4.0-encrypted-store`):
   `sync_destinations` and `sync_object_map`, plus `patient_files` encryption
   metadata (`storage_id`, `plaintext_length`, `content_digest`)
+- Schema v5 additive migration (`migrations` row `5.0-link-tables`): the link
+  tables the link engine derives from note text
+- Schema v6 additive migration (`migrations` row `6.0-note-metadata`): the
+  derived metadata tables and `wikilinks.head_key`; every note is derived
+  again once
 - Schema v7 additive migration (`migrations` row `7.0-app-state`): `app_state`
   (key, JSON value, updated_at) for small named settings; not derived, so Rebuild
   Indexes leaves it alone, and a backup carries it with the rest of the database
@@ -186,6 +193,9 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
   refilled once, in one savepoint. A restored older database is upgraded the
   same way before it serves a search. An older build cannot restore a v8
   backup, and running one over a v8 store searches accented words less well.
+- Schema v9 additive migration (`migrations` row `9.0-sync-tombstones`):
+  `sync_tombstones`, so a record deleted in MedNotes is not brought back by the
+  next pull. An older build cannot restore a backup of a newer schema.
 - Neither bridge writes before a destination is confirmed, and a missing or
   changed destination stops the bridge rather than matching by title
 
@@ -209,8 +219,10 @@ by `scripts/scan_dependencies.py` and recorded in `docs/dependencies.md`.
 ## Layout
 
 - `MedNotes/Models/` — Patient, Note, TodoItem, CalendarEvent + nested medical types
-- `MedNotes/Storage/` — SQLConnection (SQLCipher), Schema v1–v4, Database actor,
-  KeyManager, SecureStoreCoordinator, EncryptedFileStore, StoreMigrator
+- `MedNotes/Storage/` — SQLConnection (SQLCipher), Schema v1–v9, Database actor,
+  SecureStoreCoordinator, EncryptedFileStore, StoreMigrator
+- `MedNotes/Support/` — KeyManager, backup archive format and readers, parsers
+  (Markdown, front matter, wiki links), search query, sample data
 - `MedNotes/Import/` — JSONImporter (reads the legacy iCloud folder layout)
 - `MedNotes/Services/` — Audit, Patient, Note, Todo, CalendarEvent, Backup,
   SyncDestination and MarkdownExport services

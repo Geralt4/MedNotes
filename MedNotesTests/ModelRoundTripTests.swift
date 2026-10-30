@@ -636,6 +636,11 @@ final class ModelRoundTripTests: XCTestCase {
         """.data(using: .utf8)!
         let med = try decodeJSONData(Medication.self, from: json)
         XCTAssertTrue(med.isActive)
+        // The flag alone is "true" whenever the key is missing; the date is
+        // what must keep a medication ending today current.
+        XCTAssertFalse(med.hasLapsed, "ending today is not yet over")
+        XCTAssertFalse(med.isStopped)
+        XCTAssertTrue(med.isCurrentlyActive)
         let endParts = Calendar.current.dateComponents([.year, .month, .day], from: med.endDate!)
         XCTAssertEqual(endParts.year, parts.year)
         XCTAssertEqual(endParts.month, parts.month)

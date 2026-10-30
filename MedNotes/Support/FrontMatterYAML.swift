@@ -433,11 +433,19 @@ enum FrontMatterYAML {
         while i < scalars.count {
             let c = scalars[i]
             if let q = quote {
-                if q == "\"", c == "\\" { i += 1 } else if c == q { quote = nil }
+                if q == "\"", c == "\\" {
+                    i += 1
+                } else if q == "'", c == "'", i + 1 < scalars.count, scalars[i + 1] == "'" {
+                    i += 1   // `''` is a quote inside the scalar, not its end
+                } else if c == q {
+                    quote = nil
+                }
             } else if c == "\"" || c == "'" {
-                // A quote only opens a quoted scalar at the start of a value.
-                let before = rest.unicodeScalars.prefix(i)
-                if before.allSatisfy({ $0 == " " || $0 == "\t" || $0 == "[" || $0 == "," }) { quote = c }
+                // A quote opens a quoted scalar at the start of a value, or of
+                // an item in a flow list.
+                let before = scalars[0..<i].filter { $0 != " " && $0 != "\t" }
+                let inFlowList = before.first == "["
+                if before.isEmpty || (inFlowList && (before.last == "[" || before.last == ",")) { quote = c }
             } else if c == "#", i == 0 || scalars[i - 1] == " " || scalars[i - 1] == "\t" {
                 let value = String(String.UnicodeScalarView(scalars[0..<i]))
                 let comment = String(String.UnicodeScalarView(scalars[(i + 1)...]))

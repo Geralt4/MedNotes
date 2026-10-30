@@ -20,6 +20,22 @@ final class BackendFixTests: XCTestCase {
         try Database.testDatabase(path: tempDir.appendingPathComponent(name).path)
     }
 
+    /// A store that refuses to insert the patient named "B", so an import dies
+    /// after it has written "A". (A shared AMKA no longer does: the importer
+    /// leaves the second patient out.)
+    private func makeDBRejectingPatientB() async throws -> Database {
+        let path = tempDir.appendingPathComponent("rejecting.db").path
+        let seed = try Database.testDatabase(path: path)
+        await seed.close()
+        let raw = try SQLConnection(path: path, key: TestKeys.database(forPath: path))
+        try raw.exec("""
+            CREATE TRIGGER reject_b BEFORE INSERT ON patients WHEN NEW.first_name = 'B'
+            BEGIN SELECT RAISE(ABORT, 'rejected'); END
+            """)
+        raw.close()
+        return try Database.testDatabase(path: path)
+    }
+
     private func samplePatient(name: String = "Test", amka: String = "12345678901") -> Patient {
         var profile = PatientProfile(
             firstName: name,
@@ -58,7 +74,8 @@ final class BackendFixTests: XCTestCase {
                 createRestorePoint: false)
             XCTFail("a tampered archive must not restore")
         } catch {
-            // expected
+            XCTAssertNotNil(error as? BackupArchiveV2.ArchiveError,
+                            "it is the archive's own check that refuses it, not a wrong argument: \(error)")
         }
         let patients = try await store.patients.loadAll()
         XCTAssertEqual(patients.count, 2, "a failed restore must leave the live store untouched")
@@ -233,14 +250,14 @@ final class BackendFixTests: XCTestCase {
         }
         try encodeJSONData(samplePatient(name: "A", amka: "11111111111")).write(
             to: sourceDir.appendingPathComponent("Patients/a.json"))
-        try encodeJSONData(samplePatient(name: "B", amka: "11111111111")).write(
+        try encodeJSONData(samplePatient(name: "B", amka: "22222222222")).write(
             to: sourceDir.appendingPathComponent("Patients/b.json"))
 
-        let db = try makeDB()
+        let db = try await makeDBRejectingPatientB()
         let importer = JSONImporter(directoryURL: sourceDir)
         do {
             _ = try await importer.importAll(into: db)
-            XCTFail("duplicate AMKA must fail the import")
+            XCTFail("a failed insert must fail the import")
         } catch {
             XCTAssertTrue(true)
         }
@@ -531,14 +548,14 @@ final class BackendFixTests: XCTestCase {
         }
         try encodeJSONData(samplePatient(name: "A", amka: "11111111111")).write(
             to: sourceDir.appendingPathComponent("Patients/a.json"))
-        try encodeJSONData(samplePatient(name: "B", amka: "11111111111")).write(
+        try encodeJSONData(samplePatient(name: "B", amka: "22222222222")).write(
             to: sourceDir.appendingPathComponent("Patients/b.json"))
 
-        let db = try makeDB()
+        let db = try await makeDBRejectingPatientB()
         let importer = JSONImporter(directoryURL: sourceDir)
         do {
             _ = try await importer.importAll(into: db)
-            XCTFail("duplicate AMKA must fail the import")
+            XCTFail("a failed insert must fail the import")
         } catch {
             XCTAssertTrue(true)
         }

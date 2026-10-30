@@ -77,9 +77,13 @@ final class SearchSnippetTests: XCTestCase {
         XCTAssertEqual(marked(cut), ["fever"])
     }
 
-    func testAHugeNoteWithoutAMatchStaysQuick() {
+    func testAHugeNoteWithoutAMatchStaysQuick() throws {
+        // `measure` without a stored baseline never fails; this does.
+        try XCTSkipIf(TestEnvironment.isSanitized, "a wall-clock limit")
         let content = String(repeating: "word ", count: 40_000)
-        measure { _ = SearchSnippet.make(content: content, terms: ["zzz"]) }
+        let started = Date()
+        _ = SearchSnippet.make(content: content, terms: ["zzz"])
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2.0)
     }
 
     func testTheRowHighlightMarksTheSameWords() throws {
@@ -102,6 +106,7 @@ final class SearchSnippetTests: XCTestCase {
         try XCTSkipIf(spread < 0.3, "the system accent colour is grey")
         func colouredPixels(snippet: SearchSnippet?) throws -> Int {
             let host = OffscreenHost()
+            defer { host.tearDown() }
             let view = host.host(
                 NoteRowView(note: Note(title: "T", content: "chest pain today"), snippet: snippet)
                     .padding(8), width: 320, height: 90)

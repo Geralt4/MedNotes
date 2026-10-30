@@ -325,16 +325,21 @@ private struct RecoveryChooser: View {
                     .font(.callout)
                     .lineLimit(1)
                     .truncationMode(.middle)
-            } else {
-                Button("Choose Backup…") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = false
-                    panel.allowsMultipleSelection = false
-                    panel.allowedContentTypes = [.data]
-                    panel.message = String(localized: "Choose a portable backup (.mednotesbackup) to recover this store.")
-                    if panel.runModal() == .OK { backupURL = panel.url }
+            }
+            // Still offered once a file is picked: the wrong one (an old
+            // backup, another passphrase) must not need a relaunch to replace.
+            Button(backupURL == nil ? "Choose Backup…" : "Choose Another…") {
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = false
+                panel.allowsMultipleSelection = false
+                panel.allowedContentTypes = [.data]
+                panel.message = String(localized: "Choose a portable backup (.mednotesbackup) to recover this store.")
+                if panel.runModal() == .OK {
+                    backupURL = panel.url
+                    failure = nil
                 }
             }
+            .disabled(isWorking)
             SecureField("Backup passphrase", text: $passphrase)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 320)
@@ -381,15 +386,18 @@ private struct MigrationWizard: View {
                     .font(.callout)
                     .lineLimit(1)
                     .truncationMode(.middle)
-            } else {
-                Button("Choose Backup Location…") {
-                    let panel = NSSavePanel()
-                    panel.canCreateDirectories = true
-                    panel.nameFieldStringValue = "\(String(localized: "MedNotes Encryption Backup")).\(BackupArchiveV2.fileExtension)"
-                    panel.message = String(localized: "MedNotes will write a portable backup here and verify it before encrypting anything.")
-                    if panel.runModal() == .OK { backupURL = panel.url }
+            }
+            Button(backupURL == nil ? "Choose Backup Location…" : "Choose Another…") {
+                let panel = NSSavePanel()
+                panel.canCreateDirectories = true
+                panel.nameFieldStringValue = "\(String(localized: "MedNotes Encryption Backup")).\(BackupArchiveV2.fileExtension)"
+                panel.message = String(localized: "MedNotes will write a portable backup here and verify it before encrypting anything.")
+                if panel.runModal() == .OK {
+                    backupURL = panel.url
+                    failure = nil
                 }
             }
+            .disabled(isWorking)
             SecureField("Backup passphrase (16+ characters)", text: $passphrase)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 320)

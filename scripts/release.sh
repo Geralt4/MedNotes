@@ -66,6 +66,7 @@ xcodebuild \
   -project MedNotes.xcodeproj \
   -scheme MedNotes \
   -derivedDataPath "$DERIVED" \
+  -onlyUsePackageVersionsFromResolvedFile \
   test | tee "$OUT/tests.log"
 if ! grep -q '\*\* TEST SUCCEEDED \*\*' "$OUT/tests.log"; then
   echo "tests did not pass; refusing to release" >&2
@@ -84,6 +85,7 @@ xcodebuild \
   -configuration Release \
   -derivedDataPath "$DERIVED" \
   -archivePath "$ARCHIVE" \
+  -onlyUsePackageVersionsFromResolvedFile \
   MARKETING_VERSION="$VERSION" \
   DEVELOPMENT_TEAM="$MEDNOTES_TEAM_ID" \
   CODE_SIGN_IDENTITY="$MEDNOTES_SIGN_IDENTITY" \

@@ -167,6 +167,51 @@ final class MigrationFixTests: XCTestCase {
         await migrated.close()
     }
 
+    func testADroppedOnlyAttachmentDoesNotComeBackFromTheLegacyCopy() async throws {
+        let root = try makeRoot()
+        let plain = try Database(path: root.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.files = [PatientFile(name: "missing.txt", type: .other, data: nil)]
+        try await plain.savePatient(patient)
+        await plain.close()
+
+        let archive = try await backup(of: root)
+        let keys = InMemoryKeyManager()
+        let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
+        let report = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
+        try await migrator.finishCleanup()
+
+        XCTAssertEqual(report.missingAttachments, ["missing.txt"])
+        let migrated = try openMigrated(root, key: try XCTUnwrap(keys.rootKey()))
+        let loaded = try await migrated.loadPatient(id: patient.id)
+        XCTAssertEqual(try XCTUnwrap(loaded).files, [],
+                       "the file that was dropped must not reappear from the patient's own copy of its list")
+        await migrated.close()
+    }
+
+    func testMigrationRefusesAStoreThatIsNotPlaintext() async throws {
+        // A missing store used to be created empty by the reader and "migrated",
+        // after which the swap discarded `Plaintext.old.db`, the only original.
+        let root = try makeRoot()
+        let plain = try Database(path: root.databaseURL.path)
+        await plain.close()
+        let archive = try await backup(of: root)
+        try FileManager.default.removeItem(at: root.databaseURL)
+        let leftover = root.rootURL.appendingPathComponent("Plaintext.old.db")
+        try Data("ORIGINAL".utf8).write(to: leftover)
+
+        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+        do {
+            _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
+            XCTFail("there is nothing to migrate")
+        } catch StoreMigrator.MigrationError.stagingFailed {
+            // expected
+        }
+        XCTAssertEqual(try Data(contentsOf: leftover), Data("ORIGINAL".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path),
+                       "no empty store may be created in its place")
+    }
+
     // MARK: - The last journal write
 
     #if DEBUG
@@ -206,14 +251,53 @@ final class MigrationFixTests: XCTestCase {
     }
     #endif
 
+    #if DEBUG
+    func testTheJournalHoldsPhasesAndCountsAndNoPatientText() async throws {
+        let root = try makeRoot()
+        let plain = try Database(path: root.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Zqmarker"
+        patient.profile.lastName = "Wxmarker"
+        try await plain.savePatient(patient)
+        try await plain.saveNote(Note(title: "Vqmarker", content: "Uqmarker body"))
+        await plain.close()
+        let archive = try await backup(of: root)
+
+        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+        let none = try await migrator.readJournal()
+        XCTAssertNil(none, "no journal before a migration starts")
+        // Stop the migration at validation, so the journal is what an
+        // interruption would leave.
+        StoreMigrator.failJournalWriteForTesting = { $0 == .validating }
+        do {
+            _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
+            XCTFail("the injected journal fault must stop the migration")
+        } catch {}
+        StoreMigrator.failJournalWriteForTesting = nil
+
+        // Recovery needs a journal that reads back, not just a file.
+        let journal = try await migrator.readJournal()
+        XCTAssertNotNil(journal, "an interrupted migration leaves a readable journal")
+        let text = try String(contentsOf: StoreMigrator.journalURL(in: root), encoding: .utf8)
+        for marker in ["Zqmarker", "Wxmarker", "Vqmarker", "Uqmarker"] {
+            XCTAssertFalse(text.contains(marker), "the journal must not carry patient or note text")
+        }
+    }
+    #endif
+
     // MARK: - One Keychain read
 
     private final class CountingKeyManager: KeyManager, @unchecked Sendable {
         private let inner = InMemoryKeyManager()
         private let lock = NSLock()
         private var creates = 0
+        private var reads = 0
         var createCalls: Int { lock.lock(); defer { lock.unlock() }; return creates }
-        func rootKey() throws -> Data? { try inner.rootKey() }
+        var readCalls: Int { lock.lock(); defer { lock.unlock() }; return reads }
+        func rootKey() throws -> Data? {
+            lock.lock(); reads += 1; lock.unlock()
+            return try inner.rootKey()
+        }
         func createRootKey() throws -> Data {
             lock.lock(); creates += 1; lock.unlock()
             return try inner.createRootKey()
@@ -234,7 +318,8 @@ final class MigrationFixTests: XCTestCase {
         XCTAssertEqual(manager.createCalls, 1)
         let migrator = StoreMigrator(dataRoot: root, keyManager: manager)
         _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase, rootKey: key)
-        XCTAssertEqual(manager.createCalls, 1, "a second read is a second user-presence prompt")
+        XCTAssertEqual(manager.createCalls, 1, "no second key is made")
+        XCTAssertEqual(manager.readCalls, 0, "a read of the Keychain is a second user-presence prompt")
         try await migrator.finishCleanup()
 
         let migrated = try openMigrated(root, key: key)
