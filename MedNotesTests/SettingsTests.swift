@@ -33,6 +33,9 @@ final class SettingsTests: XCTestCase {
         let root = try DataRoot.temporary()
         roots.append(root)
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while !session.isReady, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)
@@ -427,6 +430,9 @@ final class SettingsTests: XCTestCase {
         await db.close()
 
         let session = AppSession.testSession(dataRoot: root, defaults: makeDefaults())
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         let deadline = Date().addingTimeInterval(20)
         while session.integrityWarning == nil, session.initError == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 50_000_000)

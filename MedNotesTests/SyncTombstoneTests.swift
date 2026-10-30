@@ -119,10 +119,17 @@ final class SyncTombstoneTests: XCTestCase {
 
     func testTheTombstoneAndTheDeleteAreOneChange() async throws {
         let store = try AppStore.testStore(dataRoot: try makeRoot())
-        // Nothing to delete: no row is invented and nothing breaks.
-        try await store.db.deleteEvent(id: UUID())
+        let event = CalendarEvent.newRecord()
+        _ = try await store.events.save(event)
+        try await store.db.deleteEvent(id: event.id)
         let events = try await store.events.loadAll()
-        XCTAssertTrue(events.isEmpty)
+        let tombstones = try await store.db.syncTombstones(domain: SyncDestinationCore.calendarDomain)
+        XCTAssertTrue(events.isEmpty, "the row is gone")
+        XCTAssertEqual(tombstones, [event.id], "and its tombstone was written with it")
+        // Nothing to delete: nothing breaks, and no event appears.
+        try await store.db.deleteEvent(id: UUID())
+        let after = try await store.events.loadAll()
+        XCTAssertTrue(after.isEmpty)
         await store.close()
     }
 

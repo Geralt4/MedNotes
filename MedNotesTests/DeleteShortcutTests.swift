@@ -142,6 +142,9 @@ final class DeleteShortcutTests: XCTestCase {
         let root = try DataRoot.temporary()
         defer { try? FileManager.default.removeItem(at: root.rootURL) }
         let session = AppSession.testSession(dataRoot: root, defaults: defaults)
+        addTeardownBlock { @MainActor in
+            await session.lockNow(reason: "teardown")
+        }
         try await waitUntil("the session is ready") { session.isReady || session.initError != nil }
         XCTAssertNil(session.initError)
         session.selectedModule = .notes

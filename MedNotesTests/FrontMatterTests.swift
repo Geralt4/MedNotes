@@ -116,7 +116,8 @@ final class FrontMatterTests: XCTestCase {
             let blocks = MarkdownPreview.parseBlocks("---\(ending)created: 2026-10-01\(ending)---\(ending)Seen today.")
             guard blocks.count == 2, case let .frontMatter(lines) = blocks[0],
                   case .paragraph("Seen today.") = blocks[1] else {
-                return XCTFail("got \(blocks) for \(ending.debugDescription)")
+                XCTFail("got \(blocks) for \(ending.debugDescription)")
+                continue
             }
             XCTAssertEqual(lines, ["created: 2026-10-01"])
         }

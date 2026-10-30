@@ -60,7 +60,7 @@ final class AMKATests: XCTestCase {
         XCTAssertEqual(calendar.dateComponents([.year, .month, .day], from: born2000!),
                        DateComponents(year: 2000, month: 2, day: 29))
 
-        // Born later this year than today: still this century, not 1926.
+        // Born later this year than today: not the future, so the century before (1926).
         let bornDecember = AMKA.birthDate(from: "25122612345", now: now, calendar: calendar)
         XCTAssertEqual(calendar.component(.year, from: bornDecember!), 1926)
     }
