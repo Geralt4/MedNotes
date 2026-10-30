@@ -528,6 +528,16 @@
         }
       }
     },
+    "%lld old unencrypted item(s) could not be deleted and are still in MedNotes' folder: %@. MedNotes tries again at every launch." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Παλιά μη κρυπτογραφημένα στοιχεία (%lld) δεν μπόρεσαν να διαγραφούν και βρίσκονται ακόμα στον φάκελο του MedNotes: %@. Το MedNotes θα ξαναδοκιμάσει σε κάθε εκκίνηση."
+          }
+        }
+      }
+    },
     "%lld pending" : {
       "localizations" : {
         "el" : {
@@ -2938,6 +2948,16 @@
         }
       }
     },
+    "Encrypt MedNotes…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κρυπτογράφηση του MedNotes…"
+          }
+        }
+      }
+    },
     "Encrypt Store" : {
       "localizations" : {
         "el" : {
@@ -2994,6 +3014,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Κρυπτογράφηση…"
+          }
+        }
+      }
+    },
+    "Encryption did not finish" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η κρυπτογράφηση δεν ολοκληρώθηκε"
           }
         }
       }
@@ -5004,6 +5034,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Παλαιός αντικατοπτρισμός Markdown"
+          }
+        }
+      }
+    },
+    "Old unencrypted copy not fully removed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το παλιό μη κρυπτογραφημένο αντίγραφο δεν αφαιρέθηκε πλήρως"
           }
         }
       }

@@ -115,7 +115,11 @@ struct ContentView: View {
     private var content: some View {
         Group {
             if let initError = session.initError {
-                StartupErrorView(message: initError)
+                if session.canRetryMigration {
+                    MigrationPausedView(message: initError, onResume: session.returnToMigration)
+                } else {
+                    StartupErrorView(message: initError)
+                }
             } else if !session.isReady {
                 StartupProgressView()
             } else {
@@ -237,6 +241,23 @@ private struct SampleDataBanner: View {
 }
 
 #endif
+
+/// The encryption wizard was cancelled or stopped before it changed anything:
+/// not a failure to start, and the way back is on the screen.
+private struct MigrationPausedView: View {
+    let message: String
+    let onResume: () -> Void
+
+    var body: some View {
+        EmptyStateView(
+            title: "Encryption did not finish",
+            systemImage: "lock.open.fill",
+            message: message,
+            actionTitle: "Encrypt MedNotes…",
+            action: onResume
+        )
+    }
+}
 
 private struct StartupErrorView: View {
     let message: String

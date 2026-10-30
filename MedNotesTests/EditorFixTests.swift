@@ -183,6 +183,63 @@ final class EditorFixTests: XCTestCase {
         XCTAssertFalse(session.storeIsPlaintext, "a locked store is still an encrypted one")
     }
 
+    /// A plaintext store in a session that has reached the encryption wizard.
+    private func sessionAtTheWizard() async throws -> (AppSession, DataRoot) {
+        let root = try DataRoot.temporary()
+        roots.append(root)
+        let plaintext = try Database(path: root.databaseURL.path)
+        try await plaintext.saveNote(Note(title: "old", content: "plaintext era"))
+        await plaintext.close()
+        let session = AppSession(dataRoot: root, defaults: defaults, keyManager: InMemoryKeyManager())
+        addTeardownBlock { @MainActor in await session.lockNow(reason: "teardown") }
+        let deadline = Date().addingTimeInterval(20)
+        while !session.isMigrating, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(session.isMigrating, "precondition: the wizard owns the screen")
+        return (session, root)
+    }
+
+    func testTheEncryptionWizardCanBeOpenedAgainAfterCancelling() async throws {
+        let (session, root) = try await sessionAtTheWizard()
+        XCTAssertFalse(session.canRetryMigration)
+
+        session.cancelMigration()
+
+        XCTAssertFalse(session.isMigrating)
+        XCTAssertTrue(session.canRetryMigration)
+        XCTAssertNotNil(session.initError, "the screen says what happened")
+        XCTAssertTrue(SQLiteHeaderInspection.isPlaintextSQLite(at: root.databaseURL))
+
+        session.returnToMigration()
+
+        XCTAssertTrue(session.isMigrating)
+        XCTAssertNil(session.initError)
+        XCTAssertFalse(session.canRetryMigration)
+        session.returnToMigration()
+        XCTAssertTrue(session.isMigrating, "there is nothing to return to twice")
+    }
+
+    func testAMigrationThatFailsBeforeChangingAnythingCanBeTriedAgain() async throws {
+        let (session, root) = try await sessionAtTheWizard()
+        let missing = root.rootURL.appendingPathComponent("never-written.mednotesbackup")
+
+        do {
+            try await session.runMigration(backupURL: missing, passphrase: "a long enough passphrase")
+            XCTFail("a backup that does not exist cannot start the migration")
+        } catch {}
+
+        XCTAssertFalse(session.isMigrating)
+        XCTAssertTrue(session.canRetryMigration)
+        XCTAssertNotNil(session.initError)
+        XCTAssertTrue(SQLiteHeaderInspection.isPlaintextSQLite(at: root.databaseURL),
+                      "the original store is as it was")
+
+        session.returnToMigration()
+        XCTAssertTrue(session.isMigrating)
+        XCTAssertNil(session.initError)
+    }
+
     func testSettingsReportsAPlaintextStoreUntilItIsConverted() async throws {
         let root = try makeRoot()
         let plaintext = try Database(path: root.databaseURL.path)

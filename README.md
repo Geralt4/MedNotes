@@ -49,7 +49,9 @@ Reminders require an explicit destination before any write.
 - **Crash-safe migration.** A plaintext store is detected by its SQLite header
   and converted by a mandatory wizard: a verified v2 backup first, staged
   encrypted database and attachments, full validation, then an atomic swap.
-  A PHI-free journal makes interruption resumable or reversible. A missing
+  A PHI-free journal makes interruption resumable or reversible. If the old
+  plaintext copy cannot be deleted afterwards, the store still opens, says what
+  is left, and the next launch tries again. A missing
   device key is recovery, never a fresh store: `StoreRecovery` installs a
   portable backup under a new key.
 - **Bounded backups.** v2 archives are typed record streams (no paths or
