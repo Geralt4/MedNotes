@@ -238,6 +238,46 @@
         }
       }
     },
+    "%lld active patients" : {
+      "localizations" : {
+        "el" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ενεργός ασθενής"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ενεργοί ασθενείς"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active patient"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active patients"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld attachment(s) were already missing from disk and could not be carried over: %@. They are still in the backup made before encrypting." : {
       "localizations" : {
         "el" : {
@@ -254,16 +294,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld συνημμένα δεν κρυπτογραφήθηκαν"
-          }
-        }
-      }
-    },
-    "%lld attachments skipped" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld συνημμένα παραλείφθηκαν"
           }
         }
       }
@@ -301,9 +331,39 @@
     "%lld conflicts" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld συγκρούσεις"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld σύγκρουση"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld συγκρούσεις"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld conflict"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld conflicts"
+                }
+              }
+            }
           }
         }
       }
@@ -321,9 +381,39 @@
     "%lld files skipped" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld αρχεία παραλείφθηκαν"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld αρχείο παραλείφθηκε"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld αρχεία παραλείφθηκαν"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files skipped"
+                }
+              }
+            }
           }
         }
       }
@@ -371,9 +461,39 @@
     "%lld more tags" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld ακόμη ετικέτες"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ακόμη ετικέτα"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ακόμη ετικέτες"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more tag"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more tags"
+                }
+              }
+            }
           }
         }
       }
@@ -441,9 +561,39 @@
     "%lld warnings" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld προειδοποιήσεις"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld προειδοποίηση"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld προειδοποιήσεις"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld warning"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld warnings"
+                }
+              }
+            }
           }
         }
       }
@@ -451,9 +601,39 @@
     "%lld words" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld λέξεις"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld λέξη"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld λέξεις"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld word"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld words"
+                }
+              }
+            }
           }
         }
       }
@@ -461,9 +641,39 @@
     "%lld years old" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld ετών"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld έτους"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ετών"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld year old"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld years old"
+                }
+              }
+            }
           }
         }
       }
@@ -471,9 +681,39 @@
     "%lldy" : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld ετών"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld έτους"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ετών"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lldy"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lldy"
+                }
+              }
+            }
           }
         }
       }
@@ -553,7 +793,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας, γι' αυτό δεν άλλαξε τίποτα: %@"
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας, γι’ αυτό δεν άλλαξε τίποτα: %@"
           }
         }
       }
@@ -583,7 +823,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δεν δημιουργήθηκε σημείο επαναφοράς, επειδή αυτή η κλειδοθήκη δεν έχει κλειδί επαναφοράς."
+            "value" : "Δεν δημιουργήθηκε σημείο επαναφοράς, επειδή αυτή η βάση δεδομένων δεν έχει κλειδί επαναφοράς."
           }
         }
       }
@@ -608,32 +848,12 @@
         }
       }
     },
-    "A synced event's title, notes and dates go to the “MedNotes” calendar in Apple Calendar, and from there wherever that account syncs. The event type and patient link never leave MedNotes." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ο τίτλος, οι σημειώσεις και οι ημερομηνίες ενός συγχρονισμένου συμβάντος πηγαίνουν στο ημερολόγιο «MedNotes» του Ημερολογίου Apple, και από εκεί όπου συγχρονίζει ο λογαριασμός. Ο τύπος συμβάντος και ο σύνδεσμος ασθενούς δεν φεύγουν ποτέ από το MedNotes."
-          }
-        }
-      }
-    },
     "A synced todo's title, notes, due day, completion and priority go to the list you chose, and from there wherever that account syncs. The patient link and tags never leave MedNotes." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ο τίτλος, οι σημειώσεις, η ημέρα προθεσμίας, η ολοκλήρωση και η προτεραιότητα μιας συγχρονισμένης εκκρεμότητας πηγαίνουν στη λίστα που επιλέξατε και από εκεί οπουδήποτε συγχρονίζει ο λογαριασμός της. Ο σύνδεσμος ασθενούς και οι ετικέτες δεν φεύγουν ποτέ από το MedNotes."
-          }
-        }
-      }
-    },
-    "A synced todo's title, notes, due day, completion and priority go to the “MedNotes” list in Apple Reminders, and from there wherever that account syncs. The patient link and tags never leave MedNotes." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ο τίτλος, οι σημειώσεις, η ημέρα προθεσμίας, η ολοκλήρωση και η προτεραιότητα μιας συγχρονισμένης εκκρεμότητας πηγαίνουν στη λίστα «MedNotes» των Υπενθυμίσεων Apple, και από εκεί όπου συγχρονίζει ο λογαριασμός. Ο σύνδεσμος ασθενούς και οι ετικέτες δεν φεύγουν ποτέ από το MedNotes."
           }
         }
       }
@@ -924,16 +1144,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αλλεργίες"
-          }
-        }
-      }
-    },
-    "An attachment in the backup has the wrong length." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ένα συνημμένο στο αντίγραφο ασφαλείας έχει λάθος μήκος."
           }
         }
       }
@@ -1253,7 +1463,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Αντίγραφο ασφαλείας"
+            "value" : "Δημιουργία αντιγράφου ασφαλείας"
           }
         }
       }
@@ -1334,6 +1544,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ενσωματωμένο"
+          }
+        }
+      }
+    },
+    "Built-in templates cannot be deleted; reset one to its shipped copy instead." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα ενσωματωμένα πρότυπα δεν μπορούν να διαγραφούν· επαναφέρετε ένα στο αρχικό του αντίγραφο."
           }
         }
       }
@@ -1544,6 +1764,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Προληπτικός έλεγχος"
+          }
+        }
+      }
+    },
+    "Choose Another…" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επιλογή άλλου…"
           }
         }
       }
@@ -1783,7 +2013,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Σύνθετη τιμή· επεξεργαστείτε την στο κείμενο."
+            "value" : "Σύνθετη τιμή· επεξεργαστείτε τη στο κείμενο."
           }
         }
       }
@@ -2848,16 +3078,6 @@
         }
       }
     },
-    "Everything already in sync" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Όλα είναι ήδη συγχρονισμένα"
-          }
-        }
-      }
-    },
     "Existing %@" : {
       "localizations" : {
         "el" : {
@@ -2891,9 +3111,39 @@
     "Exported %lld notes as plaintext Markdown." : {
       "localizations" : {
         "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Εξήχθησαν %lld σημειώσεις ως μη κρυπτογραφημένα αρχεία Markdown."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Εξήχθη %lld σημείωση ως μη κρυπτογραφημένο αρχείο Markdown."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Εξήχθησαν %lld σημειώσεις ως μη κρυπτογραφημένα αρχεία Markdown."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exported %lld note as plaintext Markdown."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Exported %lld notes as plaintext Markdown."
+                }
+              }
+            }
           }
         }
       }
@@ -3003,7 +3253,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Προσαρμογή γράφου"
+            "value" : "Προσαρμογή γραφήματος"
           }
         }
       }
@@ -3013,7 +3263,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Προσαρμογή γράφου (⌘0)"
+            "value" : "Προσαρμογή γραφήματος (⌘0)"
           }
         }
       }
@@ -3643,7 +3893,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Κλειδώθηκε επειδή η επαναφορά δεν μπόρεσε να αναιρεθεί"
+            "value" : "Κλείδωσε επειδή η επαναφορά δεν μπόρεσε να αναιρεθεί"
           }
         }
       }
@@ -3988,16 +4238,6 @@
         }
       }
     },
-    "Mirror notes to Markdown files" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Αντικατοπτρισμός σημειώσεων σε αρχεία Markdown"
-          }
-        }
-      }
-    },
     "Mobile or landline" : {
       "localizations" : {
         "el" : {
@@ -4184,6 +4424,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Νέα εκκρεμότητα"
+          }
+        }
+      }
+    },
+    "No active patients" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Κανένας ενεργός ασθενής"
           }
         }
       }
@@ -4658,16 +4908,6 @@
         }
       }
     },
-    "Nothing is written to Apple Calendar or Reminders until you connect. With “Keep in sync automatically” on, edits here are pushed as they are saved and changes made in Apple's apps are pulled in as they happen; off, nothing moves until you press Sync Now. Deleting a synced record removes its copy either way." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Τίποτα δεν γράφεται στο Ημερολόγιο ή στις Υπενθυμίσεις Apple μέχρι να γίνει σύνδεση. Με ενεργή τη «Διατήρηση αυτόματου συγχρονισμού», οι αλλαγές εδώ στέλνονται μόλις αποθηκευτούν και οι αλλαγές στις εφαρμογές της Apple έρχονται μόλις γίνουν· με ανενεργή, τίποτα δεν μετακινείται μέχρι να πατήσετε Συγχρονισμός τώρα. Η διαγραφή μιας συγχρονισμένης εγγραφής αφαιρεί το αντίγραφό της σε κάθε περίπτωση."
-          }
-        }
-      }
-    },
     "Nothing matches" : {
       "localizations" : {
         "el" : {
@@ -4764,6 +5004,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Στο Mac μου"
+          }
+        }
+      }
+    },
+    "Only a built-in template has a shipped copy to reset to." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μόνο ένα ενσωματωμένο πρότυπο έχει αρχικό αντίγραφο για επαναφορά."
           }
         }
       }
@@ -5233,7 +5483,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ανανεώθηκαν οι σύνδεσμοι σημειώσεων"
+            "value" : "Ανακατασκευή συνδέσμων σημειώσεων"
           }
         }
       }
@@ -5284,16 +5534,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Εγγραφές"
-          }
-        }
-      }
-    },
-    "Records stay inside the app's container, which FileVault encrypts with the rest of the disk. Backups made with File › Back Up… are encrypted with the passphrase you enter; nothing readable leaves the container without it." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Τα αρχεία παραμένουν μέσα στον χώρο της εφαρμογής, τον οποίο το FileVault κρυπτογραφεί μαζί με τον υπόλοιπο δίσκο. Τα αντίγραφα ασφαλείας από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας… κρυπτογραφούνται με τη φράση πρόσβασης που εισάγετε· τίποτα αναγνώσιμο δεν φεύγει από τον χώρο της εφαρμογής χωρίς αυτήν."
           }
         }
       }
@@ -5648,16 +5888,6 @@
         }
       }
     },
-    "Restore points are plain copies MedNotes keeps inside its container before an import or a restore; the newest five are kept. Encrypted backups are made with File › Back Up… and saved where you choose." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Τα σημεία επαναφοράς είναι απλά αντίγραφα που το MedNotes κρατά μέσα στον φάκελό του πριν από μια εισαγωγή ή επαναφορά· διατηρούνται τα πέντε νεότερα. Τα κρυπτογραφημένα αντίγραφα ασφαλείας δημιουργούνται από το Αρχείο › Δημιουργία αντιγράφου ασφαλείας… και αποθηκεύονται όπου επιλέξετε."
-          }
-        }
-      }
-    },
     "Restore to the active list" : {
       "localizations" : {
         "el" : {
@@ -5749,12 +5979,11 @@
       }
     },
     "SAMPLE DATA — throwaway preview store, not your records" : {
-      "extractionState" : "stale",
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ΔΟΚΙΜΑΣΤΙΚΑ ΔΕΔΟΜΕΝΑ — προσωρινό αποθετήριο προεπισκόπησης, όχι τα αρχεία σας"
+            "value" : "ΔΟΚΙΜΑΣΤΙΚΑ ΔΕΔΟΜΕΝΑ — προσωρινή βάση δεδομένων προεπισκόπησης, όχι οι εγγραφές σας"
           }
         }
       }
@@ -5824,7 +6053,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Μέγεθος ανά συνδέσεις"
+            "value" : "Μέγεθος ανάλογα με τους συνδέσμους"
           }
         }
       }
@@ -5840,12 +6069,11 @@
       }
     },
     "Sample data. This window is running on a throwaway preview store." : {
-      "extractionState" : "stale",
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δοκιμαστικά δεδομένα. Αυτό το παράθυρο τρέχει σε προσωρινό αποθετήριο προεπισκόπησης."
+            "value" : "Δοκιμαστικά δεδομένα. Αυτό το παράθυρο τρέχει σε προσωρινή βάση δεδομένων προεπισκόπησης."
           }
         }
       }
@@ -6075,7 +6303,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ορισμός ημερομηνίας"
+            "value" : "Ορισμός ημερομηνίας γέννησης"
           }
         }
       }
@@ -6180,16 +6408,6 @@
         }
       }
     },
-    "Show Vault in Finder" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Εμφάνιση του Vault στο Finder"
-          }
-        }
-      }
-    },
     "Show in Finder" : {
       "localizations" : {
         "el" : {
@@ -6254,8 +6472,8 @@
       "localizations" : {
         "el" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Αποθήκευση"
+            "state" : "translated",
+            "value" : "Αποθηκευτικός χώρος"
           }
         }
       }
@@ -6545,7 +6763,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Το συνημμένο «%@» δεν μπόρεσε να αποθηκευτεί με ασφάλεια, γι' αυτό δεν εισήχθη τίποτα."
+            "value" : "Το συνημμένο «%@» δεν μπόρεσε να αποθηκευτεί με ασφάλεια, γι’ αυτό δεν εισήχθη τίποτα."
           }
         }
       }
@@ -6995,7 +7213,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ο φάκελος διαβάζεται πρώτα σε πρόχειρο αντίγραφο, ώστε η παρακάτω αναφορά να είναι ακριβώς αυτό που θα έκανε η εισαγωγή. Τίποτα δεν γράφεται στα αρχεία σας μέχρι να επιλέξετε Εισαγωγή, και πριν από αυτό διατηρείται σημείο επαναφοράς."
+            "value" : "Ο φάκελος διαβάζεται πρώτα σε πρόχειρο αντίγραφο, ώστε η παρακάτω αναφορά να είναι ακριβώς αυτό που θα έκανε η εισαγωγή. Τίποτα δεν γράφεται στις εγγραφές σας μέχρι να επιλέξετε Εισαγωγή, και πριν από αυτό διατηρείται σημείο επαναφοράς."
           }
         }
       }
@@ -7106,6 +7324,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Δεν υπάρχει %@ που να μπορεί να χρησιμοποιηθεί ως προορισμός."
+          }
+        }
+      }
+    },
+    "There is no unencrypted store to convert." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν υπάρχει μη κρυπτογραφημένη βάση δεδομένων για μετατροπή."
           }
         }
       }
@@ -7245,7 +7473,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Τα συνημμένα του ασθενούς άλλαξαν αφού ανοίξατε την εγγραφή. Χρησιμοποιήστε την Επαναφορά για να φορτώσετε τα τρέχοντα αρχεία και επαναλάβετε την αλλαγή."
+            "value" : "Τα συνημμένα του ασθενούς άλλαξαν αφού ανοίξατε την εγγραφή. Χρησιμοποιήστε την Επαναφορά αλλαγών για να φορτώσετε τα τρέχοντα αρχεία και επαναλάβετε την αλλαγή."
           }
         }
       }
@@ -7696,16 +7924,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Εκεί που σταμάτησα"
-          }
-        }
-      }
-    },
-    "Writes every note as a readable Markdown file in the Vault folder, so Obsidian can open them. The files are not encrypted, which is why this is off by default. Turning it off leaves the existing files in place." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Γράφει κάθε σημείωση ως αναγνώσιμο αρχείο Markdown στον φάκελο Vault, ώστε να ανοίγει από το Obsidian. Τα αρχεία δεν είναι κρυπτογραφημένα, γι’ αυτό η επιλογή είναι απενεργοποιημένη από προεπιλογή. Η απενεργοποίηση αφήνει τα υπάρχοντα αρχεία στη θέση τους."
           }
         }
       }
@@ -8447,7 +8665,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Οι ιδιότητες στην αρχή αυτής της σημείωσης δεν μπορούν να επεξεργαστούν εδώ. Επεξεργαστείτε τες μέσα στο κείμενο."
+            "value" : "Οι ιδιότητες στην αρχή αυτής της σημείωσης δεν μπορούν να επεξεργαστούν εδώ. Επεξεργαστείτε τις μέσα στο κείμενο."
           }
         }
       }
