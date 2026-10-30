@@ -117,15 +117,19 @@ actor StoreMigrator {
 
     /// Recover before inspecting or opening either half of the live store.
     /// A completed swap is retained; an interrupted swap is rolled back.
-    func recoverInterruptedMigration() throws {
+    ///
+    /// Returns what a finished migration left behind and could not be
+    /// deleted (see `finishCleanup`); empty when there is nothing, or when the
+    /// migration did not finish.
+    @discardableResult
+    func recoverInterruptedMigration() throws -> [String] {
         guard let journal = try readJournal() else {
-            try removeFinishedMigrationLeftovers()
-            return
+            return removeFinishedMigrationLeftovers()
         }
         let fm = FileManager.default
         switch journal.phase {
         case .complete, .cleanup:
-            try finishCleanup()
+            return finishCleanup()
         case .swapping:
             let oldDB = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
             let oldAttachments = dataRoot.rootURL.appendingPathComponent("Plaintext.old.Attachments", isDirectory: true)
@@ -153,6 +157,7 @@ actor StoreMigrator {
             }
             rollbackStaging()
         }
+        return []
     }
 
     private func writeJournal(_ journal: Journal) throws {
@@ -450,13 +455,13 @@ actor StoreMigrator {
     /// cleanup ran. The swaps are done, so the copy is removed. A database that
     /// is still plaintext, or missing, means no migration finished, and nothing
     /// is touched.
-    private func removeFinishedMigrationLeftovers() throws {
+    private func removeFinishedMigrationLeftovers() -> [String] {
         let fm = FileManager.default
         let leftover = dataRoot.rootURL.appendingPathComponent("Plaintext.old.db")
         guard fm.fileExists(atPath: leftover.path),
               fm.fileExists(atPath: dataRoot.databaseURL.path),
-              !SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else { return }
-        try finishCleanup()
+              !SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else { return [] }
+        return finishCleanup()
     }
 
     /// Deletes every remaining plaintext artifact and the journal. Runs after
@@ -466,7 +471,15 @@ actor StoreMigrator {
     /// that exist nowhere else, and the review that decides what to import
     /// needs the open encrypted store. Settings › Data offers that review and
     /// deletes the mirror only once nothing is left to decide.
-    func finishCleanup() throws {
+    ///
+    /// Every artifact is tried, and the names of those that could not be
+    /// removed (an immutable flag, a read-only folder, a file held open) are
+    /// returned instead of thrown: this runs at every launch, and one stuck
+    /// item must not keep the encrypted store from opening. The journal goes
+    /// only when nothing is left, so the next launch tries again; a pass that
+    /// finds no journal writes one for that.
+    @discardableResult
+    func finishCleanup() -> [String] {
         let fm = FileManager.default
         let artifacts: [URL] = [
             dataRoot.rootURL.appendingPathComponent("Plaintext.old.db"),
@@ -476,11 +489,21 @@ actor StoreMigrator {
             Self.stagingDirectory(in: dataRoot),
             dataRoot.filesURL
         ]
-        for url in artifacts {
-            if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        var leftovers: [String] = []
+        for url in artifacts where fm.fileExists(atPath: url.path) {
+            do {
+                try fm.removeItem(at: url)
+            } catch {
+                leftovers.append(url.lastPathComponent)
+            }
         }
         let journal = Self.journalURL(in: dataRoot)
-        if fm.fileExists(atPath: journal.path) { try fm.removeItem(at: journal) }
+        if leftovers.isEmpty {
+            try? fm.removeItem(at: journal)
+        } else if !fm.fileExists(atPath: journal.path) {
+            try? writeJournal(makeJournal(phase: .cleanup))
+        }
+        return leftovers
     }
 
     /// Rollback on a failure before the swap: the staging tree and the journal

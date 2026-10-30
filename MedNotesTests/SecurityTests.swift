@@ -411,7 +411,7 @@ final class SecurityTests: XCTestCase {
             backupDestination: backupURL, passphrase: "a long enough passphrase")
         XCTAssertEqual(report.patients, 1)
         XCTAssertEqual(report.notes, 1)
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         // The live database is now encrypted and still holds the records.
         let bytes = try Data(contentsOf: root.databaseURL)

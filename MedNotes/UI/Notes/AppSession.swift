@@ -329,6 +329,13 @@ final class AppSession: ObservableObject {
         }
     }
     @Published private(set) var isMigrating = false
+    /// The encryption wizard was left (Cancel) or failed before it changed
+    /// anything, so the plaintext store is as it was and the wizard can be
+    /// opened again from the screen that explains it; see `returnToMigration`.
+    @Published private(set) var canRetryMigration = false
+    /// What a finished migration left behind and could not delete, until
+    /// `finishOpening` tells the user.
+    private var cleanupLeftovers: [String] = []
     /// Whether bootstrap found a store that is still plaintext, until its
     /// conversion has finished. Settings reads this, not `isReady`: a locked
     /// or recovering store is encrypted all the same.
@@ -1094,6 +1101,12 @@ final class AppSession: ObservableObject {
         initError = nil
         storeIsPlaintext = false
         isReady = true
+        if !cleanupLeftovers.isEmpty {
+            // The store opens either way; the user is told what is still on disk.
+            let names = cleanupLeftovers.joined(separator: ", ")
+            notice = String(localized: "\(cleanupLeftovers.count) old unencrypted item(s) could not be deleted and are still in MedNotes' folder: \(names). MedNotes tries again at every launch.")
+            cleanupLeftovers = []
+        }
         restoreSelectionAfterLock()
         startIdleMonitor()
         startBridgeObservation()
@@ -1316,7 +1329,8 @@ final class AppSession: ObservableObject {
             // key or opens a store, and before the orphan sweep can see it.
             try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
             let keyManager = resolvedKeyManager()
-            try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager).recoverInterruptedMigration()
+            cleanupLeftovers = try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager)
+                .recoverInterruptedMigration()
             let coordinator = SecureStoreCoordinator(keyManager: keyManager, dataRoot: dataRoot)
             self.coordinator = coordinator
 
@@ -1409,6 +1423,7 @@ final class AppSession: ObservableObject {
         guard let dataRoot, let coordinator else { return }
         let lockRequestsAtStart = lockRequests
         isMigrating = true
+        canRetryMigration = false
         defer { isMigrating = false }
         let migrator = StoreMigrator(dataRoot: dataRoot, keyManager: coordinator.keyManager)
         var swapped = false
@@ -1425,7 +1440,9 @@ final class AppSession: ObservableObject {
                 databaseKey: coordinator.requireDatabaseKey(),
                 attachmentKey: coordinator.requireAttachmentKey(),
                 restorePointKey: coordinator.requireRestoreKey())
-            try await migrator.finishCleanup()
+            // Not a failure of the conversion if something cannot be deleted:
+            // `finishOpening` says what is left.
+            cleanupLeftovers = await migrator.finishCleanup()
             // The conversion is complete either way; only what is shown differs.
             guard lockRequests == lockRequestsAtStart else {
                 await abandon(store, published: false)
@@ -1439,13 +1456,19 @@ final class AppSession: ObservableObject {
             await finishOpening()
             if !report.missingAttachments.isEmpty {
                 let names = report.missingAttachments.prefix(5).joined(separator: ", ")
-                notice = String(localized: "\(report.missingAttachments.count) attachment(s) were already missing from disk and could not be carried over: \(names). They are still in the backup made before encrypting.")
+                let missing = String(localized: "\(report.missingAttachments.count) attachment(s) were already missing from disk and could not be carried over: \(names). They are still in the backup made before encrypting.")
+                notice = [notice, missing].compactMap { $0 }.joined(separator: "\n\n")
             }
         } catch {
-            if !swapped { try? await migrator.recoverInterruptedMigration() }
+            if !swapped {
+                try? await migrator.recoverInterruptedMigration()
+                // The plaintext store is as it was: the screen that explains
+                // the failure can open the wizard again.
+                canRetryMigration = true
+            }
             // The wizard is part of the curtain, which goes away with
             // `isMigrating`; without this the window would sit on the startup
-            // spinner with no explanation and no way to retry but relaunch.
+            // spinner with no explanation.
             initError = error.localizedDescription
             throw error
         }
@@ -1491,7 +1514,17 @@ final class AppSession: ObservableObject {
     /// left exactly as it was.
     func cancelMigration() {
         isMigrating = false
+        canRetryMigration = true
         initError = String(localized: "Encryption was cancelled. The store is unchanged and still plaintext.")
+    }
+
+    /// Opens the encryption wizard again after it was cancelled or failed
+    /// before changing anything.
+    func returnToMigration() {
+        guard canRetryMigration else { return }
+        canRetryMigration = false
+        initError = nil
+        isMigrating = true
     }
 
     // MARK: - Templates

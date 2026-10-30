@@ -115,7 +115,7 @@ final class LegacyVaultTests: XCTestCase {
         // The app closes it before the swap moves the file.
         await backupDB.close()
         _ = try await migrator.migrate(backupDestination: backupURL, passphrase: "a long enough passphrase")
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: mirrorFile.path),
                       "migration must not delete notes that may exist only in the mirror")

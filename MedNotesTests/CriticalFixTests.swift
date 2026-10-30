@@ -907,7 +907,7 @@ final class PreMigrationBackupTests: XCTestCase {
         let report = try await migrator.migrate(
             backupDestination: backupURL, passphrase: passphrase)
         XCTAssertEqual(report.patients, 1)
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         let rootKey = try XCTUnwrap(keyManager.rootKey())
         let databaseKey = try StoreKeyContext.subkey(

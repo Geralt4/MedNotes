@@ -522,7 +522,7 @@ final class LinkEngineTests: XCTestCase {
             name: "Pre-encryption", to: backupURL, passphrase: "a long enough passphrase")
         _ = try await migrator.migrate(
             backupDestination: backupURL, passphrase: "a long enough passphrase")
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         let rootKey = try XCTUnwrap(keyManager.rootKey())
         let databaseKey = try StoreKeyContext.subkey(rootKey: rootKey, context: StoreKeyContext.database)

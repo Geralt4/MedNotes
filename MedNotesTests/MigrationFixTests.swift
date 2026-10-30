@@ -63,7 +63,7 @@ final class MigrationFixTests: XCTestCase {
         let keys = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
         _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         let migrated = try openMigrated(root, key: try XCTUnwrap(keys.rootKey()))
         let templates = try await migrated.customTemplates()
@@ -157,7 +157,7 @@ final class MigrationFixTests: XCTestCase {
         let keys = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
         let report = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         XCTAssertEqual(report.attachments, 1)
         XCTAssertEqual(report.missingAttachments, ["missing.txt"], "the user is told the file's name")
@@ -179,7 +179,7 @@ final class MigrationFixTests: XCTestCase {
         let keys = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
         let report = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         XCTAssertEqual(report.missingAttachments, ["missing.txt"])
         let migrated = try openMigrated(root, key: try XCTUnwrap(keys.rootKey()))
@@ -210,6 +210,119 @@ final class MigrationFixTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: leftover), Data("ORIGINAL".utf8))
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path),
                        "no empty store may be created in its place")
+    }
+
+    // MARK: - Cleanup that cannot finish
+
+    /// A folder with something in it that cannot be deleted: the folder's own
+    /// permissions stop its contents being removed.
+    private func makeUndeletableLegacyFiles(in root: DataRoot) throws -> URL {
+        let stuck = root.filesURL.appendingPathComponent("patient", isDirectory: true)
+        try FileManager.default.createDirectory(at: stuck, withIntermediateDirectories: true)
+        try Data("LEGACY".utf8).write(to: stuck.appendingPathComponent("file"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: stuck.path)
+        return stuck
+    }
+
+    private func release(_ stuck: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stuck.path)
+    }
+
+    private func writeJournal(_ phase: StoreMigrator.Phase, in root: DataRoot) throws {
+        let journal = StoreMigrator.Journal(
+            phase: phase, schemaVersion: Schema.currentVersion, recordCounts: [:],
+            attachmentCount: 0, startedAt: Date(), updatedAt: Date())
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(journal).write(to: StoreMigrator.journalURL(in: root))
+    }
+
+    func testCleanupReportsWhatItCannotDeleteAndTriesAgainLater() async throws {
+        let root = try makeRoot()
+        let oldDatabase = root.rootURL.appendingPathComponent("Plaintext.old.db")
+        try Data("OLD".utf8).write(to: oldDatabase)
+        let stuck = try makeUndeletableLegacyFiles(in: root)
+        defer { release(stuck) }
+        try writeJournal(.complete, in: root)
+        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+
+        let leftovers = await migrator.finishCleanup()
+
+        XCTAssertEqual(leftovers, [root.filesURL.lastPathComponent])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldDatabase.path),
+                       "one stuck item does not keep the others")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: StoreMigrator.journalURL(in: root).path),
+                      "the journal stays, so the next launch tries again")
+
+        release(stuck)
+        let again = await migrator.finishCleanup()
+        XCTAssertEqual(again, [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.filesURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: StoreMigrator.journalURL(in: root).path))
+    }
+
+    func testLaunchRecoveryDoesNotThrowOverAnItemItCannotDelete() async throws {
+        let root = try makeRoot()
+        let stuck = try makeUndeletableLegacyFiles(in: root)
+        defer { release(stuck) }
+        try writeJournal(.complete, in: root)
+        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+
+        let leftovers = try await migrator.recoverInterruptedMigration()
+
+        XCTAssertEqual(leftovers, [root.filesURL.lastPathComponent])
+    }
+
+    func testAJournalLessLeftoverThatCannotBeDeletedIsRetriedAtTheNextLaunch() async throws {
+        let root = try makeRoot()
+        // What a finished migration whose journal was dropped leaves: an
+        // encrypted database (not a plaintext header) beside the plaintext copy.
+        try Data(repeating: 0xA5, count: 4096).write(to: root.databaseURL)
+        try Data("OLD".utf8).write(to: root.rootURL.appendingPathComponent("Plaintext.old.db"))
+        let stuck = try makeUndeletableLegacyFiles(in: root)
+        defer { release(stuck) }
+        let migrator = StoreMigrator(dataRoot: root, keyManager: InMemoryKeyManager())
+
+        let first = try await migrator.recoverInterruptedMigration()
+        XCTAssertEqual(first, [root.filesURL.lastPathComponent])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: StoreMigrator.journalURL(in: root).path),
+                      "with the old copy gone nothing else would bring the next launch back")
+
+        release(stuck)
+        let second = try await migrator.recoverInterruptedMigration()
+        XCTAssertEqual(second, [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.filesURL.path))
+    }
+
+    @MainActor
+    func testTheStoreOpensAndSaysSoWhenAFinishedMigrationLeftSomethingUndeletable() async throws {
+        let root = try makeRoot()
+        let plain = try Database(path: root.databaseURL.path)
+        try await plain.saveNote(Note(title: "n", content: "kept"))
+        await plain.close()
+        let archive = try await backup(of: root)
+        let keys = InMemoryKeyManager()
+        let migrator = StoreMigrator(dataRoot: root, keyManager: keys)
+        _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
+        // Nothing has cleaned up yet (the journal says `.complete`), and one
+        // item will not go.
+        let stuck = try makeUndeletableLegacyFiles(in: root)
+        defer { release(stuck) }
+
+        let defaultsName = "MedNotesTests.MigrationFix"
+        defer { TestDefaults.clear(defaultsName) }
+        let session = AppSession(
+            dataRoot: root, defaults: TestDefaults.suite(defaultsName), keyManager: keys)
+        addTeardownBlock { @MainActor in await session.lockNow(reason: "teardown") }
+        let deadline = Date().addingTimeInterval(20)
+        while !session.isReady, session.initError == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        XCTAssertNil(session.initError, "an item that cannot be deleted must not keep the store from opening")
+        XCTAssertTrue(session.isReady)
+        XCTAssertTrue(session.notice?.contains(root.filesURL.lastPathComponent) == true,
+                      "the user is told what is left: \(session.notice ?? "nil")")
     }
 
     // MARK: - The last journal write
@@ -320,7 +433,7 @@ final class MigrationFixTests: XCTestCase {
         _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase, rootKey: key)
         XCTAssertEqual(manager.createCalls, 1, "no second key is made")
         XCTAssertEqual(manager.readCalls, 0, "a read of the Keychain is a second user-presence prompt")
-        try await migrator.finishCleanup()
+        await migrator.finishCleanup()
 
         let migrated = try openMigrated(root, key: key)
         let count = try await migrated.counts()["notes"]
