@@ -194,6 +194,26 @@ final class BackupRestoreTests: XCTestCase {
         await assertReadFails(at: file, passphrase: "correct passphrase here")
     }
 
+    func testAFrameCutShortIsTruncatedWhileACleanCutIsAMissingFinalTag() async throws {
+        try await store.patients.save(samplePatient())
+        let file = tempDir.appendingPathComponent("cut.mednotesbackup")
+        _ = try await store.backups.createEncryptedBackup(
+            name: "x", to: file, passphrase: "correct passphrase here")
+        let whole = try Data(contentsOf: file)
+        // The end record is a 9-byte frame and a sealed empty chunk of 17 bytes.
+        for (cut, expected) in [(26, BackupArchiveV2.ArchiveError.missingFinalTag),
+                                (20, BackupArchiveV2.ArchiveError.truncated)] {
+            try whole.dropLast(cut).write(to: file)
+            do {
+                _ = try await BackupArchiveV2.read(
+                    at: file, passphrase: "correct passphrase here", sink: { _ in })
+                XCTFail("a cut archive must not read (\(cut) bytes removed)")
+            } catch {
+                XCTAssertEqual(error as? BackupArchiveV2.ArchiveError, expected, "\(cut) bytes removed")
+            }
+        }
+    }
+
     func testUnknownKDFProfileIsRejectedBeforeTheKDF() async throws {
         try await store.patients.save(samplePatient())
         let file = tempDir.appendingPathComponent("profile.mednotesbackup")
@@ -227,6 +247,24 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertEqual(pruned.count, 2)
         let remaining = try await store.backups.listRestorePoints()
         XCTAssertEqual(remaining.count, 5)
+    }
+
+    func testPruningRemovesAnAbandonedStagingFileButNotOneBeingWritten() async throws {
+        let folder = root.restorePointsURL
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let abandoned = folder.appendingPathComponent("restore_old.mnrp.staging")
+        let fresh = folder.appendingPathComponent("restore_new.mnrp.staging")
+        try Data("half".utf8).write(to: abandoned)
+        try Data("half".utf8).write(to: fresh)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -2 * 3600)], ofItemAtPath: abandoned.path)
+
+        _ = try await store.backups.pruneRestorePoints()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path),
+                       "a kill part-way through a copy must not leave it for good")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path),
+                      "a copy still being written is not touched")
     }
 
     func testMissingManifestInLegacyDirectoryIsIgnored() async throws {

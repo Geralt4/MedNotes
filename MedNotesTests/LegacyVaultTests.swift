@@ -106,11 +106,14 @@ final class LegacyVaultTests: XCTestCase {
         let backupURL = tempDir.appendingPathComponent("pre.mednotesbackup")
         let keyManager = InMemoryKeyManager()
         let migrator = StoreMigrator(dataRoot: root, keyManager: keyManager)
+        let backupDB = try Database(path: root.databaseURL.path)
         let backups = BackupService(
-            db: try Database(path: root.databaseURL.path),
+            db: backupDB,
             fileStore: nil, restorePointsRoot: root.restorePointsURL)
         _ = try await backups.createEncryptedBackup(
             name: "Pre-encryption", to: backupURL, passphrase: "a long enough passphrase")
+        // The app closes it before the swap moves the file.
+        await backupDB.close()
         _ = try await migrator.migrate(backupDestination: backupURL, passphrase: "a long enough passphrase")
         try await migrator.finishCleanup()
 

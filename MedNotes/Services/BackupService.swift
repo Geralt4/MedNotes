@@ -529,9 +529,6 @@ actor BackupService {
             throw BackupError.missingDatabase(fileURL)
         }
         try Task.checkCancellation()
-        if createRestorePoint {
-            try await takePreRestorePoint()
-        }
         let built = staging.appendingPathComponent("encrypted", isDirectory: true)
         let stagingStore = try await buildEncryptedStaging(
             from: snapshotURL,
@@ -540,6 +537,12 @@ actor BackupService {
         let stagedDatabase = built.appendingPathComponent("mednotes.db")
         try await validateStagedDatabase(
             at: stagedDatabase, key: databaseKey, attachments: stagingStore)
+        // After the backup has proved good, as in the v2 restore: a damaged
+        // file must not first cost a full copy of the store.
+        try Task.checkCancellation()
+        if createRestorePoint {
+            try await takePreRestorePoint()
+        }
         try await readyToInstall()
         try await installStaged(
             databaseAt: stagedDatabase, sourceKey: nil,
@@ -586,18 +589,25 @@ actor BackupService {
             name: name, createdAt: Date(), schemaVersion: Schema.currentVersion,
             counts: counts, attachmentCount: records.count)
 
-        try await BackupArchiveV2.seal(
-            manifest: manifest,
-            databaseSnapshot: { archiveKey in
-                try await self.databaseSnapshotData(archiveKey: archiveKey)
-            },
-            attachments: records,
-            attachmentReader: { record in
-                guard let store else { throw BackupError.invalidArchive }
-                return try await store.read(storageID: record.storageID)
-            },
-            sealing: .deviceKey(restorePointKey),
-            to: url)
+        do {
+            try await BackupArchiveV2.seal(
+                manifest: manifest,
+                databaseSnapshot: { archiveKey in
+                    try await self.databaseSnapshotData(archiveKey: archiveKey)
+                },
+                attachments: records,
+                attachmentReader: { record in
+                    guard let store else { throw BackupError.invalidArchive }
+                    return try await store.read(storageID: record.storageID)
+                },
+                sealing: .deviceKey(restorePointKey),
+                to: url,
+                isCancelled: { Task.isCancelled })
+        } catch BackupArchiveV2.ArchiveError.cancelled {
+            // A lock stops the copy between records; callers treat it as they
+            // treat any cancellation.
+            throw CancellationError()
+        }
         // A small sidecar so listing does not run Argon2 per point. It holds
         // only the generic point label and counts, never patient data.
         try Self.writeRestorePointSidecar(manifest, for: url)
@@ -629,6 +639,10 @@ actor BackupService {
             do {
                 try await upgrade(pointAt: url, restorePointKey: restorePointKey)
                 converted += 1
+            } catch BackupArchiveV2.ArchiveError.cancelled {
+                break   // a lock, not a failure
+            } catch is CancellationError {
+                break
             } catch {
                 SecurityLog.record(.restorePointUpgradeFailed)
             }
@@ -780,7 +794,22 @@ actor BackupService {
 
     static let restorePointsToKeep = 5
 
+    /// A restore point is sealed beside its final name and renamed when whole.
+    /// A kill part-way leaves the half-written file, which no listing or prune
+    /// sees. One that has not changed for an hour is not being written.
+    nonisolated func removeAbandonedRestorePointStaging(olderThan age: TimeInterval = 3600) {
+        let fm = FileManager.default
+        let entries = (try? fm.contentsOfDirectory(
+            at: restorePointsRoot, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for entry in entries where entry.lastPathComponent.hasSuffix(".mnrp.staging") {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if Date().timeIntervalSince(modified) > age { try? fm.removeItem(at: entry) }
+        }
+    }
+
     nonisolated func pruneRestorePoints(keeping: Int = BackupService.restorePointsToKeep) throws -> [BackupInfo] {
+        removeAbandonedRestorePointStaging()
         let stale = Array(try listRestorePoints().dropFirst(max(keeping, 1)))
         for info in stale {
             try FileManager.default.removeItem(at: info.url)
@@ -936,6 +965,9 @@ actor BackupService {
         from snapshotURL: URL, legacyFilesRoot: URL, into stagingRoot: URL,
         destinationKey: Data, attachmentKey: Data
     ) async throws -> EncryptedFileStore {
+        // Judged before `Database(path:)` migrates it: a trigger planted on a
+        // table the migration writes to would run then.
+        try Database.validateSnapshotFile(path: snapshotURL.path, key: nil)
         try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
         let encryptedURL = stagingRoot.appendingPathComponent("mednotes.db")
         let stagingAttachments = stagingRoot.appendingPathComponent("Attachments", isDirectory: true)
@@ -956,9 +988,15 @@ actor BackupService {
             for entry in try await plainReader.recentAuditLogs(limit: -1) {
                 try await encrypted.logAudit(entry)
             }
+            // `file_path` comes from the backup's own database: only a file
+            // inside `Files/` may be read, as in `legacyAttachments`.
+            let rootPath = legacyFilesRoot.resolvingSymlinksInPath().path
+            let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
             for file in try await encrypted.attachmentsNeedingEncryption() {
                 let source = legacyFilesRoot.appendingPathComponent(file.relativePath)
-                guard let plaintext = try? Data(contentsOf: source) else { continue }
+                    .resolvingSymlinksInPath()
+                guard source.path.hasPrefix(prefix),
+                      let plaintext = try? Data(contentsOf: source) else { continue }
                 let storageID = try await store.store(plaintext)
                 try await encrypted.setAttachmentEncryption(
                     patientId: UUID(uuidString: file.patientId) ?? UUID(),

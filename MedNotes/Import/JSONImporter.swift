@@ -338,19 +338,28 @@ struct JSONImporter {
     private static func dropAlreadyPresent(_ batch: inout Batch, stored: Database.StoredRecordKeys) {
         var present = 0
         var sharedAMKA = 0
-        batch.patients.removeAll { patient in
+        // The same person exported twice is two files with one AMKA: the second
+        // is left out like a stored match, and what is kept is written as
+        // `PatientService.save` writes it, so the unique column sees one form.
+        var seenAMKA = Set<String>()
+        var kept: [Patient] = []
+        for var patient in batch.patients {
             if stored.patientIDs.contains(patient.id) {
                 present += 1
-                return true
+                continue
             }
             let amka = AMKA.normalized(patient.profile.amka)
-            if !amka.isEmpty, stored.patientIDByAMKA[amka] != nil {
-                present += 1
-                sharedAMKA += 1
-                return true
+            if !amka.isEmpty {
+                if stored.patientIDByAMKA[amka] != nil || !seenAMKA.insert(amka).inserted {
+                    present += 1
+                    sharedAMKA += 1
+                    continue
+                }
+                patient.profile.amka = amka
             }
-            return false
+            kept.append(patient)
         }
+        batch.patients = kept
         batch.report.patientsAlreadyPresent = present
         batch.report.patientsImported -= present
 
