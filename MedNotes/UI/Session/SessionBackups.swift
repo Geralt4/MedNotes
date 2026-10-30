@@ -230,7 +230,27 @@ extension AppSession {
         // Replacing overwrites database notes with older text, and the mirror
         // is about to become deletable, so the current notes are kept first. No
         // copy, no replacement: there is no way to skip this step.
+        var openNoteEditors: [(token: UUID, noteID: UUID)] = []
         if choice == .useMirror, !targets.isEmpty {
+            // Replacing writes the mirror's text into notes that an editor may
+            // have open with edits not yet saved. They are saved first, as a
+            // restore saves them: the safety copy then holds them, and the
+            // editor is not left with a draft that would be written back over
+            // the mirror's version when the note is left. This comes after
+            // `targets` is decided, so only the notes the user reviewed are
+            // replaced, not one that an unsaved edit has just made differ.
+            let open = openEditorDrafts()
+            var noteDrafts: [OpenEditorDraft] = []
+            for (token, draft) in open {
+                if case let .note(note, _) = draft {
+                    noteDrafts.append(draft)
+                    openNoteEditors.append((token, note.id))
+                }
+            }
+            let unsaved = await saveDrafts(noteDrafts, into: store)
+            guard unsaved == 0 else { throw MirrorEditsNotSavedError(count: unsaved) }
+            // A lock while they were saved took the store with it.
+            guard canUseStore, self.store === store else { throw CancellationError() }
             do {
                 _ = try await store.backups.createEncryptedRestorePoint(name: "Pre-mirror snapshot")
             } catch let error as BackupError {
@@ -265,6 +285,14 @@ extension AppSession {
             try? await store.audit.log(
                 action: "legacy_vault_resolve", entityType: "vault", entityId: "vault",
                 details: "Resolved \(decided.count) note(s) from the plaintext mirror (\(choice.auditName))")
+            if choice == .useMirror {
+                // The editors open on a replaced note hold the text it had: they
+                // must not save it back, and the note opens afresh if it is
+                // selected.
+                let replaced = Set(decided)
+                settledEditors.formUnion(openNoteEditors.filter { replaced.contains($0.noteID) }.map(\.token))
+                if let selected = selectedNoteId, replaced.contains(selected) { selectedNoteId = nil }
+            }
             if choice != .keepDatabase {
                 noteEpoch += 1
                 await reload()
@@ -597,6 +625,16 @@ extension AppSession {
 
 /// A restore stops when an edit on screen cannot be saved first: the safety
 /// copy would not hold it, and the restore would then replace it.
+/// The open note editors' unsaved edits could not be saved before the mirror's
+/// versions replaced the notes, so nothing was replaced.
+private struct MirrorEditsNotSavedError: LocalizedError {
+    let count: Int
+
+    var errorDescription: String? {
+        String(localized: "\(count) edit(s) could not be saved, so no note was replaced.")
+    }
+}
+
 private struct EditsNotSavedError: LocalizedError {
     let count: Int
 

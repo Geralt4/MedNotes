@@ -244,6 +244,53 @@ final class LegacyVaultTests: XCTestCase {
         XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "DATABASE-VERSION")
     }
 
+    /// An open editor holds the note being replaced, with typing not yet saved.
+    /// Its edits go to the store first (so the safety copy holds them), the
+    /// mirror's text replaces the note, and the editor must not write its old
+    /// draft back over that when it is left.
+    func testReplacingANoteAnEditorHasOpenKeepsItsUnsavedEditsInTheSafetyCopyAndDoesNotWriteThemBack() async throws {
+        let f = try await fixture()
+        var draft = f.databaseVersion
+        draft.content = "UNSAVED-EDIT"
+        let token = UUID()
+        f.session.registerOpenEditor(token) { .note(draft, edited: true) }
+        f.session.selectedModule = .notes
+        f.session.selectedNoteId = f.divergent.id
+
+        let count = try await f.session.resolveLegacyVault(.useMirror)
+
+        XCTAssertEqual(count, 1)
+        var notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "MIRROR-VERSION")
+        XCTAssertNil(f.session.selectedNoteId, "a replaced note opens afresh, not on its old draft")
+        XCTAssertFalse(f.session.unregisterOpenEditor(token),
+                       "the editor is settled: it must not save its stale draft when it goes")
+
+        // The safety copy was taken after the edits were saved.
+        let points = await f.session.restorePoints()
+        let snapshot = try XCTUnwrap(points.first { $0.name == "Pre-mirror snapshot" })
+        try await f.session.restoreFromRestorePoint(snapshot)
+        notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.divergent.id }?.content, "UNSAVED-EDIT")
+    }
+
+    func testAnEditorOnANoteThatIsNotReplacedKeepsWorkingAndItsEditsAreSaved() async throws {
+        let f = try await fixture()
+        var draft = f.identical
+        draft.content = "TYPED-IN-ANOTHER-NOTE"
+        let token = UUID()
+        f.session.registerOpenEditor(token) { .note(draft, edited: true) }
+        f.session.selectedModule = .notes
+        f.session.selectedNoteId = f.identical.id
+
+        _ = try await f.session.resolveLegacyVault(.useMirror)
+
+        let notes = try await allNotes(f.session)
+        XCTAssertEqual(notes.first { $0.id == f.identical.id }?.content, "TYPED-IN-ANOTHER-NOTE")
+        XCTAssertEqual(f.session.selectedNoteId, f.identical.id, "an unrelated note stays open")
+        XCTAssertTrue(f.session.unregisterOpenEditor(token), "its editor is not settled")
+    }
+
     func testNothingIsReplacedWhenTheSafetyCopyCannotBeMade() async throws {
         let f = try await fixture()
         // A file where the restore point folder should be: no point can be written.

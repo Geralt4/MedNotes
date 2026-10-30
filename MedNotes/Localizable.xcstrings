@@ -368,6 +368,16 @@
         }
       }
     },
+    "%lld edit(s) could not be saved, so no note was replaced." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν αντικαταστάθηκε καμία σημείωση."
+          }
+        }
+      }
+    },
     "%lld file(s) could not be read." : {
       "localizations" : {
         "el" : {
