@@ -224,6 +224,7 @@ enum DisplayCopy {
         case "reminders_auto_sync_on": return String(localized: "Reminders auto-sync on")
         case "reminders_auto_sync_off": return String(localized: "Reminders auto-sync off")
         case "integrity_check": return String(localized: "Checked integrity")
+        case "migration_cleanup": return String(localized: "Old unencrypted copy not fully removed")
         case "restore_point_delete": return String(localized: "Deleted restore point")
         case "restore_point_prune": return String(localized: "Pruned restore points")
         case "template_save": return String(localized: "Saved template")

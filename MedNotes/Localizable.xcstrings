@@ -5038,6 +5038,16 @@
         }
       }
     },
+    "Old unencrypted copy not fully removed" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το παλιό μη κρυπτογραφημένο αντίγραφο δεν αφαιρέθηκε πλήρως"
+          }
+        }
+      }
+    },
     "On My Mac" : {
       "localizations" : {
         "el" : {

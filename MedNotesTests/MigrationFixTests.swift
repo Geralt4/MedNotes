@@ -323,6 +323,8 @@ final class MigrationFixTests: XCTestCase {
         XCTAssertTrue(session.isReady)
         XCTAssertTrue(session.notice?.contains(root.filesURL.lastPathComponent) == true,
                       "the user is told what is left: \(session.notice ?? "nil")")
+        let trail = await session.recentActivity()
+        XCTAssertTrue(trail.contains { $0.action == "migration_cleanup" }, "and it is on the audit trail")
     }
 
     // MARK: - The last journal write

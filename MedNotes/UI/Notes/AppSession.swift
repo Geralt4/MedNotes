@@ -1105,6 +1105,11 @@ final class AppSession: ObservableObject {
             // The store opens either way; the user is told what is still on disk.
             let names = cleanupLeftovers.joined(separator: ", ")
             notice = String(localized: "\(cleanupLeftovers.count) old unencrypted item(s) could not be deleted and are still in MedNotes' folder: \(names). MedNotes tries again at every launch.")
+            // On the trail like the other degraded launch states: folder names
+            // are all it carries.
+            try? await store?.audit.log(
+                action: "migration_cleanup", entityType: "store", entityId: "launch",
+                details: "\(cleanupLeftovers.count) item(s) not removed")
             cleanupLeftovers = []
         }
         restoreSelectionAfterLock()
