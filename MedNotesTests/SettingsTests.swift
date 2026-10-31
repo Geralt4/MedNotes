@@ -222,6 +222,40 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(actions.contains("template_delete"), "got \(actions)")
     }
 
+    func testAFailedTemplateSaveDoesNotCreateTheNextTemplate() async {
+        let untouched = NoteTemplate.newRecord()
+        var draft = untouched
+        draft.name = "Ward round"
+        var events: [String] = []
+
+        let failed = await TemplateAddFlow.perform(
+            draft: draft, original: untouched, hasChanges: true,
+            save: { _ in
+                events.append("save")
+                throw NSError(domain: "test", code: 1)
+            },
+            discardIfUntouched: { _ in events.append("discard") },
+            create: {
+                events.append("create")
+                return NoteTemplate.newRecord()
+            })
+        guard case .failure = failed else { return XCTFail("the failed save must stop the add") }
+        XCTAssertEqual(events, ["save"], "nothing may be created after a failed save")
+
+        let saved = await TemplateAddFlow.perform(
+            draft: draft, original: untouched, hasChanges: true,
+            save: { events.append("save:\($0.name)") },
+            discardIfUntouched: { _ in events.append("discard") },
+            create: {
+                events.append("create")
+                return NoteTemplate.newRecord()
+            })
+        guard case .success(let result) = saved else { return XCTFail("the add must succeed") }
+        XCTAssertEqual(events, ["save", "save:Ward round", "create"],
+                       "the open draft is saved before the next row is created")
+        XCTAssertEqual(result.created.name, NoteTemplate.newRecord().name)
+    }
+
     func testDefaultTemplateSeedsNewNotesAndKeepsTheDiscardRule() async throws {
         let defaults = makeDefaults()
         let session = try await makeSession(defaults: defaults)
