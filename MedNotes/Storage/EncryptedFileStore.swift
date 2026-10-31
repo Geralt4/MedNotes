@@ -33,6 +33,8 @@ actor EncryptedFileStore: AttachmentStore {
         case tooLarge
         case maliciousIdentifier
         case invalidLength
+        case unreadable
+        case externalCopyFailed
 
         var errorDescription: String? {
             switch self {
@@ -48,6 +50,10 @@ actor EncryptedFileStore: AttachmentStore {
                 return String(localized: "Refusing to use an unsafe storage identifier.")
             case .invalidLength:
                 return String(localized: "The attachment's length header is invalid.")
+            case .unreadable:
+                return String(localized: "The attachment file couldn't be read. Check that it still exists and that you have permission to open it.")
+            case .externalCopyFailed:
+                return String(localized: "The attachment couldn't be opened because its temporary copy couldn't be saved. Free up disk space or check that the folder is writable, then try again.")
             }
         }
     }
@@ -165,7 +171,7 @@ actor EncryptedFileStore: AttachmentStore {
     /// digest verifier; nothing writes plaintext to disk on this path.
     func read(storageID: String) throws -> Data {
         let source = try url(for: storageID)
-        guard let data = try? Data(contentsOf: source) else { throw StoreError.notAnAttachment }
+        guard let data = try? Data(contentsOf: source) else { throw StoreError.unreadable }
         return try decrypt(data)
     }
 
@@ -278,9 +284,13 @@ actor EncryptedFileStore: AttachmentStore {
     func openExternally(storageID: String, preferredName: String) throws -> URL {
         let data = try read(storageID: storageID)
         let directory = externalCopiesURL
-        try FileManager.default.createDirectory(
-            at: directory, withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
+        do {
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+        } catch {
+            throw StoreError.externalCopyFailed
+        }
         var safeName = preferredName
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
@@ -290,10 +300,16 @@ actor EncryptedFileStore: AttachmentStore {
         while safeName.utf8.count > 200 { safeName.removeFirst() }
         let file = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName)")
         let fd = open(file.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
-        guard fd >= 0 else { throw StoreError.corruptOrWrongKey }
+        guard fd >= 0 else { throw StoreError.externalCopyFailed }
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        try handle.write(contentsOf: data)
-        try handle.close()
+        do {
+            try handle.write(contentsOf: data)
+            try handle.close()
+        } catch {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: file)
+            throw StoreError.externalCopyFailed
+        }
         openTemporaries.insert(file)
         return file
     }

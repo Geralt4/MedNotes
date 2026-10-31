@@ -29,6 +29,10 @@ final class NoteBodyEditor: ObservableObject {
     /// body to style it must not count as the body being known, which
     /// decides how a link completion edits (through the view, or the draft).
     private weak var styledView: NSTextView?
+    /// An oversize body already cleared to plain text. Its old attributes are
+    /// removed once; after that only `typingAttributes` keeps new text plain,
+    /// so a long note does not pay a full-storage pass on every keystroke.
+    private weak var plainView: NSTextView?
     /// Left and right inset of the body's text, which holds it to the
     /// readable column while the text view spans the pane.
     private var horizontalInset: CGFloat = 0
@@ -282,13 +286,28 @@ final class NoteBodyEditor: ObservableObject {
         guard !view.hasMarkedText() else { return true }
         // Each change restyles the whole body, which a clinical note never
         // notices; past this size (an imported dump) it stays plain instead.
-        guard storage.length <= Self.styledLengthLimit else { return true }
+        // Attributes already applied below the limit must go too, or the old
+        // headings and emphasis stay on the text as it grows.
+        if storage.length > Self.styledLengthLimit {
+            if plainView !== view {
+                Self.apply([], to: storage)
+                plainView = view
+            }
+            view.typingAttributes = Self.baseAttributes
+            styledView = view
+            return true
+        }
+        plainView = nil
         styledView = view
         Self.apply(MarkdownStyler.spans(in: view.string), to: storage)
         return true
     }
 
     private static let styledLengthLimit = 60_000
+
+    private static var baseAttributes: [NSAttributedString.Key: Any] {
+        [.font: NSFont.preferredFont(forTextStyle: .body), .foregroundColor: NSColor.textColor]
+    }
 
     /// Sets the body's horizontal text inset, now on the text view showing
     /// `note` and on every one found after (a new note, leaving Preview).
@@ -321,7 +340,7 @@ final class NoteBodyEditor: ObservableObject {
         let full = NSRange(location: 0, length: storage.length)
         storage.beginEditing()
         // The editor's own defaults (measured): body font, text colour.
-        storage.addAttributes([.font: base, .foregroundColor: NSColor.textColor], range: full)
+        storage.addAttributes(baseAttributes, range: full)
         for span in spans {
             switch span.role {
             case .heading(let level):

@@ -225,6 +225,12 @@ final class AppSession: ObservableObject {
     var switcherTask: Task<Void, Never>?
     /// Supersedes a lookup still in flight when the query changes again.
     var switcherGeneration = 0
+    #if DEBUG
+    /// Test seam: a completed `[[` candidate lookup. The UI debounces and
+    /// then searches, which a test cannot observe otherwise. Not published:
+    /// a redraw here would itself disturb a composition.
+    var linkLookupGeneration = 0
+    #endif
 
     /// Test seam: runs after a quick-switcher lookup has read the store and before
     /// it publishes, so a test can land a lock at that point. Nothing in the app

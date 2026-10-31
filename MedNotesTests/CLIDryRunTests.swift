@@ -78,6 +78,47 @@ final class CLIDryRunTests: XCTestCase {
         XCTAssertTrue(output.contains("--source requires a path"), "got: \(output)")
     }
 
+    func testCLIInterruptRemovesTheDryRunStagingFolder() throws {
+        try requireRunnableCLI()
+
+        let source = tempDir.appendingPathComponent("InterruptSource", isDirectory: true)
+        let notes = source.appendingPathComponent("Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
+        let content = String(repeating: "x", count: 20_000)
+        for index in 0..<400 {
+            let json = "{\"id\":\"\(UUID().uuidString)\",\"title\":\"note \(index)\",\"content\":\"\(content)\"}"
+            try Data(json.utf8).write(
+                to: notes.appendingPathComponent("note-\(index).json"))
+        }
+
+        let temporary = FileManager.default.temporaryDirectory
+        let before = Set((try? FileManager.default.contentsOfDirectory(atPath: temporary.path)) ?? [])
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: cliPath)
+        process.arguments = ["--source", source.path, "--dry-run"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+
+        let deadline = Date().addingTimeInterval(20)
+        var staging: String?
+        while Date() < deadline {
+            let names = Set((try? FileManager.default.contentsOfDirectory(atPath: temporary.path)) ?? [])
+            staging = names.subtracting(before).first { $0.hasPrefix("mednotes-dryrun-") }
+            if staging != nil { break }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let found = try XCTUnwrap(staging, "the CLI did not start a dry-run staging folder")
+        process.interrupt()
+        process.waitUntilExit()
+        _ = pipe.fileHandleForReading.readDataToEndOfFile()
+
+        XCTAssertNotEqual(process.terminationStatus, 0, "the CLI was interrupted")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temporary.appendingPathComponent(found).path),
+                       "an interrupted dry run left its plaintext staging folder behind")
+    }
+
     func testCLIDryRunOnEmptySource() throws {
         try requireRunnableCLI()
 

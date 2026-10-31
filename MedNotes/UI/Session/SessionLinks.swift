@@ -33,6 +33,11 @@ extension AppSession {
     /// patients by name. An empty anchor offers the notes touched most
     /// recently; one character is too little to ask.
     func linkCandidates(anchor: String, excluding noteId: UUID?) async -> [LinkCandidate] {
+        #if DEBUG
+        // Counts completed lookups so a test can wait for the debounce and
+        // search instead of sleeping for a guessed time.
+        defer { linkLookupGeneration += 1 }
+        #endif
         guard let store else { return [] }
         let query = anchor.trimmingCharacters(in: .whitespacesAndNewlines)
         do {

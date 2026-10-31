@@ -45,8 +45,20 @@ final class EditorSwitchTests: XCTestCase {
         try await waitUntilNoField(in: window, value: "Alpha!", timeout: 15)
         XCTAssertTrue(Self.textFields(in: window.contentView).isEmpty,
                       "an editor is still showing after switching to the next todo")
-        // Let a runaway re-save loop show itself.
-        try await Task.sleep(nanoseconds: 700_000_000)
+        // Let a runaway re-save loop show itself: wait until the save counter
+        // has stopped moving, with a deadline, instead of sleeping a set time.
+        var lastEpoch = session.todoEpoch
+        var stableSince = Date()
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            if session.todoEpoch == lastEpoch {
+                if Date().timeIntervalSince(stableSince) >= 0.5 { break }
+            } else {
+                lastEpoch = session.todoEpoch
+                stableSince = Date()
+            }
+        }
         XCTAssertLessThanOrEqual(
             session.todoEpoch - epochBefore, 3,
             "switching away re-saved the edited todo over and over")

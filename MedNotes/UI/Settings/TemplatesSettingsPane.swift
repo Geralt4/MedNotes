@@ -14,6 +14,67 @@ struct TemplateActions {
     var discardIfUntouched: (NoteTemplate) async -> Void
 }
 
+/// Leaving the open template row before another row is selected or added.
+/// Kept apart from the view so the failure path can be tested without a store.
+enum TemplateDraftLeave {
+    enum Outcome: Equatable {
+        case none
+        case saved(NoteTemplate)
+        case discarded(NoteTemplate)
+    }
+
+    static func perform(
+        draft: NoteTemplate?, original: NoteTemplate?, hasChanges: Bool,
+        save: (NoteTemplate) async throws -> Void,
+        discardIfUntouched: (NoteTemplate) async -> Void
+    ) async -> Result<Outcome, Error> {
+        guard let draft else { return .success(.none) }
+        if hasChanges {
+            var leaving = draft
+            if leaving.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let original {
+                leaving.name = original.name
+            }
+            do {
+                try await save(leaving)
+                return .success(.saved(leaving))
+            } catch {
+                return .failure(error)
+            }
+        }
+        if draft.isUntouchedNewRecord {
+            await discardIfUntouched(draft)
+            return .success(.discarded(draft))
+        }
+        return .success(.none)
+    }
+}
+
+/// "+" first leaves the open row, then creates the next one. A failed save
+/// stops before `create`, so it cannot leave an untouched row behind.
+enum TemplateAddFlow {
+    static func perform(
+        draft: NoteTemplate?, original: NoteTemplate?, hasChanges: Bool,
+        save: (NoteTemplate) async throws -> Void,
+        discardIfUntouched: (NoteTemplate) async -> Void,
+        create: () async throws -> NoteTemplate
+    ) async -> Result<(created: NoteTemplate, leave: TemplateDraftLeave.Outcome), Error> {
+        let left = await TemplateDraftLeave.perform(
+            draft: draft, original: original, hasChanges: hasChanges,
+            save: save, discardIfUntouched: discardIfUntouched)
+        switch left {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let outcome):
+            do {
+                return .success((try await create(), outcome))
+            } catch {
+                return .failure(error)
+            }
+        }
+    }
+}
+
 /// Settings › Templates: the clinical templates behind the note editor's
 /// "Insert clinical template" menu. Built-ins are edited in place and reset
 /// to their shipped copy; custom templates are added and deleted.
@@ -251,19 +312,15 @@ struct TemplatesSettingsPane: View {
     /// editors do; a save that fails keeps the row selected with its edits.
     private func moveSelection(from previous: String?, to current: String?) async {
         if let leaving = draft, leaving.id != current {
-            if hasChanges {
-                let leaving = leavingVersion(of: leaving)
-                do {
-                    try await actions.save(leaving)
-                    replace(leaving)
-                } catch {
-                    failure = error.localizedDescription
-                    selectedId = leaving.id
-                    return
-                }
-            } else if leaving.isUntouchedNewRecord {
-                await actions.discardIfUntouched(leaving)
-                templates.removeAll { $0.id == leaving.id }
+            switch await TemplateDraftLeave.perform(
+                draft: leaving, original: original, hasChanges: hasChanges,
+                save: actions.save, discardIfUntouched: actions.discardIfUntouched) {
+            case .failure(let error):
+                failure = error.localizedDescription
+                selectedId = leaving.id
+                return
+            case .success(let outcome):
+                applyLeave(outcome)
             }
         }
         guard let current else {
@@ -272,6 +329,17 @@ struct TemplatesSettingsPane: View {
             return
         }
         showDraft(for: current)
+    }
+
+    private func applyLeave(_ outcome: TemplateDraftLeave.Outcome) {
+        switch outcome {
+        case .none:
+            break
+        case .saved(let saved):
+            replace(saved)
+        case .discarded(let gone):
+            templates.removeAll { $0.id == gone.id }
+        }
     }
 
     private func showDraft(for id: String) {
@@ -310,14 +378,18 @@ struct TemplatesSettingsPane: View {
     }
 
     private func addTemplate() async {
-        do {
-            let created = try await actions.create()
-            failure = nil
-            templates.append(created)
-            selectedId = created.id
-            isNameFocused = true
-        } catch {
+        switch await TemplateAddFlow.perform(
+            draft: draft, original: original, hasChanges: hasChanges,
+            save: actions.save, discardIfUntouched: actions.discardIfUntouched,
+            create: actions.create) {
+        case .failure(let error):
             failure = error.localizedDescription
+        case .success(let result):
+            applyLeave(result.leave)
+            failure = nil
+            templates.append(result.created)
+            selectedId = result.created.id
+            isNameFocused = true
         }
     }
 

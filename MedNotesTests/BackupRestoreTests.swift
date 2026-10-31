@@ -318,4 +318,27 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertTrue(BackupPassphrasePolicy.isAcceptable(decomposed))
         XCTAssertEqual(BackupPassphrasePolicy.normalized(decomposed).unicodeScalars.count, 16)
     }
+
+    @MainActor
+    func testPassphraseClipboardIsMarkedConfidentialAndClearsItself() async throws {
+        let name = NSPasteboard.Name("MedNotesTests.passphrase-\(UUID().uuidString)")
+        let pasteboard = NSPasteboard(name: name)
+        defer { pasteboard.releaseGlobally() }
+        let clipboard = PassphraseClipboard(pasteboard: pasteboard)
+        let passphrase = "TEST-PASSPHRASE-0123456789"
+
+        clipboard.copy(passphrase, after: 0.15)
+        XCTAssertEqual(pasteboard.string(forType: .string), passphrase)
+        XCTAssertNotNil(pasteboard.data(forType: PassphraseClipboard.concealedType),
+                        "a clipboard history must not display or store the passphrase")
+        XCTAssertNotNil(pasteboard.data(forType: PassphraseClipboard.transientType),
+                        "the copied passphrase is short-lived")
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, pasteboard.string(forType: .string) != nil {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertNil(pasteboard.string(forType: .string),
+                     "the passphrase must be cleared when its minute is up")
+    }
 }

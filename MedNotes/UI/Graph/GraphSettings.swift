@@ -136,11 +136,21 @@ enum GraphFilter {
                 keep.insert(node.id)
             }
         }
-        // Then events, through their patient.
+        // Events reach a shown note through their patient, whether or not
+        // that patient is itself shown: hiding patient nodes must not hide
+        // the events that belong to a matching note.
+        let patientsTiedToKeptNotes = Set(data.nodes.compactMap { node -> String? in
+            guard node.kind == .patient else { return nil }
+            return (neighbours[node.id] ?? []).contains(where: { isNote($0) && keep.contains($0) })
+                ? node.id : nil
+        })
         for node in data.nodes where node.kind == .event {
             if alwaysKeep.contains(node.id) { keep.insert(node.id); continue }
             guard settings.showEvents else { continue }
-            if matching == nil || (neighbours[node.id] ?? []).contains(where: { keep.contains($0) && !isNote($0) }) {
+            let reachesShownNotes = (neighbours[node.id] ?? []).contains {
+                patientsTiedToKeptNotes.contains($0) || (keep.contains($0) && !isNote($0))
+            }
+            if matching == nil || reachesShownNotes {
                 keep.insert(node.id)
             }
         }

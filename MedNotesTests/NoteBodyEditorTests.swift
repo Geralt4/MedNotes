@@ -334,6 +334,36 @@ final class NoteBodyEditorTests: XCTestCase {
         XCTAssertNil(editor.textAfterUndo(Notification(name: .NSUndoManagerDidUndoChange, object: undoManager), of: other))
     }
 
+    // MARK: - Styling
+
+    func testANoteGrownPastTheLimitDropsItsOldStylingAndTypesPlainly() throws {
+        let content = "# Assessment\n\nPatient reports **improved** dyspnea."
+        let (window, body, box) = try host(Note(title: "Long", content: content))
+        let editor = NoteBodyEditor()
+        editor.attach(to: window)
+        editor.track(body, showing: box.note)
+        settle(window)
+        let base = NSFont.preferredFont(forTextStyle: .body).pointSize
+        let styled = { (location: Int) -> CGFloat in
+            (body.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont)?.pointSize ?? 0
+        }
+        XCTAssertGreaterThan(styled(3), base, "precondition: the heading is styled")
+
+        // Grow the existing storage, as typing past the limit does: the old
+        // heading keeps its attributes unless the restyle clears them.
+        body.setSelectedRange(NSRange(location: (body.string as NSString).length, length: 0))
+        body.insertText(String(repeating: "x", count: 60_001),
+                        replacementRange: NSRange(location: NSNotFound, length: 0))
+        box.note.content = body.string
+        editor.restyleSoon(box.note)
+        settle(window)
+
+        XCTAssertEqual(styled(3), base, "the old heading stayed styled past the limit")
+        body.setSelectedRange(NSRange(location: 0, length: 0))
+        body.insertText("New ", replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertEqual(styled(1), base, "text typed past the limit inherited the old heading style")
+    }
+
     // MARK: - Properties and jumping
 
     private let withProperties = "---\nstatus: draft\nowner: Dr. Ana\n---\nBody text here"

@@ -59,7 +59,10 @@ final class GraphFilterTests: XCTestCase {
         var settings = GraphSettings()
         settings.showPatients = false
         let hidden = GraphFilter.apply(data, settings: settings, matching: ["n:A", "n:E"])
-        XCTAssertEqual(ids(hidden), ["n:A", "n:E"], "an event hangs on its patient, so it goes too")
+        XCTAssertEqual(ids(hidden), ["n:A", "n:E", "e:V"],
+                       "the event still hangs on its hidden patient, and on the matching note")
+        XCTAssertFalse(ids(hidden).contains("p:P"), "the patient itself stays hidden")
+        XCTAssertEqual(hidden.edges.count, 0, "an edge to a hidden patient goes with it")
     }
 
     func testTheFirstMatchingGroupColoursANote() {

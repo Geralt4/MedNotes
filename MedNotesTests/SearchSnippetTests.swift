@@ -45,6 +45,14 @@ final class SearchSnippetTests: XCTestCase {
         XCTAssertEqual(only.text, "status: urgent")
     }
 
+    func testALaterVisibleMatchIsUsedWhenTheFirstHitIsOnlyInSyntax() throws {
+        let snippet = try XCTUnwrap(SearchSnippet.make(
+            content: "see [docs](https://example.com/digoxin)\nPatient takes digoxin daily",
+            terms: ["digoxin"]))
+        XCTAssertEqual(snippet.text, "Patient takes digoxin daily")
+        XCTAssertEqual(marked(snippet), ["digoxin"])
+    }
+
     func testNoMatchInTheTextGivesNoSnippet() {
         XCTAssertNil(SearchSnippet.make(content: "nothing relevant", terms: ["digoxin"]))
         XCTAssertNil(SearchSnippet.make(content: "text", terms: []))

@@ -267,6 +267,12 @@ final class CriticalFixTests: XCTestCase {
 
     // MARK: - Recovering an install that a crash cut off
 
+    /// Recovery orders rollback folders by creation date; tests set it
+    /// explicitly so they do not depend on a wall-clock sleep.
+    private func setCreationDate(_ date: Date, of url: URL) throws {
+        try FileManager.default.setAttributes([.creationDate: date], ofItemAtPath: url.path)
+    }
+
     /// Moves the live database aside the way the install does, and writes the
     /// journal for `phase` (none for a folder an older build left).
     private func stageRollbackFolder(
@@ -412,11 +418,12 @@ final class CriticalFixTests: XCTestCase {
         let (target, root, original, keeper) = try await populatedTarget()
         await target.close()
         let older = try stageRollbackFolder(in: root, phase: .started)
-        try await Task.sleep(nanoseconds: 1_100_000_000)
+        try setCreationDate(Date(timeIntervalSince1970: 1_000), of: older)
         // The original of the newer install is what the live paths held when it began.
         let newer = root.rootURL.appendingPathComponent(
             "RestoreRollback-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: newer, withIntermediateDirectories: true)
+        try setCreationDate(Date(timeIntervalSince1970: 2_000), of: newer)
         try RestoreRecovery.writeJournal(.started, in: newer)
         try FileManager.default.moveItem(at: older.appendingPathComponent("mednotes.db"),
                                          to: newer.appendingPathComponent("mednotes.db"))
@@ -438,10 +445,11 @@ final class CriticalFixTests: XCTestCase {
         let (target, root, _, _) = try await populatedTarget()
         await target.close()
         let older = try stageRollbackFolder(in: root, phase: .attachmentsIn)
-        try await Task.sleep(nanoseconds: 1_100_000_000)
+        try setCreationDate(Date(timeIntervalSince1970: 1_000), of: older)
         let newer = root.rootURL.appendingPathComponent(
             "RestoreRollback-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: newer, withIntermediateDirectories: true)
+        try setCreationDate(Date(timeIntervalSince1970: 2_000), of: newer)
         try RestoreRecovery.writeJournal(.verified, in: newer)
         try await installIncoming(in: root, attachments: false)
         let liveBefore = try Data(contentsOf: root.databaseURL)

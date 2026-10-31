@@ -8719,6 +8719,36 @@
           }
         }
       }
+    },
+    "The attachment file couldn't be read. Check that it still exists and that you have permission to open it." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η ανάγνωση του συνημμένου αρχείου. Ελέγξτε ότι υπάρχει ακόμα και ότι έχετε άδεια να το ανοίξετε."
+          }
+        }
+      }
+    },
+    "The attachment couldn't be opened because its temporary copy couldn't be saved. Free up disk space or check that the folder is writable, then try again." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό το άνοιγμα του συνημμένου, επειδή δεν αποθηκεύτηκε το προσωρινό του αντίγραφο. Ελευθερώστε χώρο στον δίσκο ή ελέγξτε ότι ο φάκελος είναι εγγράψιμος και δοκιμάστε ξανά."
+          }
+        }
+      }
+    },
+    "The database file is damaged. Restore a backup or a restore point, and don't keep using this file." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αρχείο της βάσης δεδομένων είναι κατεστραμμένο. Επαναφέρετε ένα αντίγραφο ασφαλείας ή ένα σημείο επαναφοράς και μη συνεχίσετε να χρησιμοποιείτε αυτό το αρχείο."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
