@@ -34,14 +34,16 @@ struct SearchSnippet: Equatable, Sendable {
             bodyStart = NSMaxRange(block.range)
         }
         let body = NSRange(location: bodyStart, length: min(max(0, ns.length - bodyStart), scanLimit))
-        guard let hit = firstHit(ns, in: body, terms) ?? front.flatMap({ firstHit(ns, in: $0, terms) })
+        // A raw hit can be in syntax the plain line drops (a link address, say).
+        // Keep looking at later lines until one still shows a match.
+        guard let visible = firstVisibleLine(ns, in: body, terms)
+                ?? front.flatMap({ firstVisibleLine(ns, in: $0, terms) })
         else { return nil }
 
-        let line = ns.substring(with: ns.lineRange(for: hit)).trimmingCharacters(in: .newlines)
-        let cleaned = DisplayCopy.plainLine(line)
+        let cleaned = visible.cleaned
         let cleanedNS = cleaned as NSString
-        let all = matches(cleanedNS, in: NSRange(location: 0, length: cleanedNS.length), terms)
-        guard let first = all.first else { return nil }   // the match was in syntax, such as a link address
+        let all = visible.matches
+        guard let first = all.first else { return nil }
 
         guard cleanedNS.length > window else { return SearchSnippet(text: cleaned, highlights: all) }
 
@@ -77,6 +79,28 @@ struct SearchSnippet: Equatable, Sendable {
     }
 
     // MARK: - Matching
+
+    private struct VisibleLine {
+        let cleaned: String
+        let matches: [NSRange]
+    }
+
+    /// The first line in `range` whose plain text still contains a match.
+    private static func firstVisibleLine(_ ns: NSString, in range: NSRange, _ terms: [String]) -> VisibleLine? {
+        var search = range
+        while search.length > 0, let hit = firstHit(ns, in: search, terms) {
+            let line = ns.lineRange(for: hit)
+            let cleaned = DisplayCopy.plainLine(
+                ns.substring(with: line).trimmingCharacters(in: .newlines))
+            let cleanedNS = cleaned as NSString
+            let all = matches(cleanedNS, in: NSRange(location: 0, length: cleanedNS.length), terms)
+            if !all.isEmpty { return VisibleLine(cleaned: cleaned, matches: all) }
+            let next = max(NSMaxRange(line), hit.location + 1)
+            guard next < NSMaxRange(range) else { break }
+            search = NSRange(location: next, length: NSMaxRange(range) - next)
+        }
+        return nil
+    }
 
     private static func isWordStart(_ ns: NSString, _ location: Int) -> Bool {
         guard location > 0 else { return true }
