@@ -56,6 +56,10 @@ struct MarkdownPreview: View {
             if !properties.isEmpty { out.append(.frontMatter(properties)) }
             body = ns.substring(from: NSMaxRange(block.range))
         }
+        // Comments are not text, as in the editor and the index. The same
+        // scanner decides what is a comment (`%%…%%` or `<!--…-->`); code
+        // spans and fences are left for the block parser below.
+        body = removingComments(from: body)
         // A character that is a newline splits here, so CRLF is one break and
         // no line keeps a stray carriage return.
         let lines = body.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
@@ -122,6 +126,29 @@ struct MarkdownPreview: View {
             paragraph.append(trimmed)
         }
         flushParagraph()
+        return out
+    }
+
+    /// The body with comments removed; newlines inside a comment are kept so
+    /// a block comment does not run the lines on either side together.
+    private static func removingComments(from body: String) -> String {
+        let ns = body as NSString
+        let comments = WikiLinkParser.scan(body).protectedRanges.filter { range in
+            guard range.location < ns.length else { return false }
+            let first = ns.character(at: range.location)
+            return first == 0x25 || first == 0x3C       // % or <
+        }
+        guard !comments.isEmpty else { return body }
+        var out = ""
+        var location = 0
+        for range in comments {
+            if range.location > location {
+                out += ns.substring(with: NSRange(location: location, length: range.location - location))
+            }
+            out += ns.substring(with: range).filter { $0 == "\n" || $0 == "\r" }
+            location = NSMaxRange(range)
+        }
+        if location < ns.length { out += ns.substring(from: location) }
         return out
     }
 

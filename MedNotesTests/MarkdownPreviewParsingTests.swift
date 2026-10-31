@@ -89,4 +89,17 @@ final class MarkdownPreviewParsingTests: XCTestCase {
             describe("````\n```\n````\nout"),
             ["code:```", "p:out"])
     }
+
+    // MARK: - Comments
+
+    func testCommentsAreHiddenLikeTheEditorAndTheIndex() {
+        XCTAssertEqual(describe("before %%hidden%% after"), ["p:before  after"])
+        XCTAssertEqual(describe("%% hidden\nacross lines %%\nShown"),
+                       ["p:Shown"], "a block comment leaves no text behind")
+        XCTAssertEqual(describe("before <!-- hidden --> after"), ["p:before  after"])
+        XCTAssertEqual(describe("%% never closed"), ["p:%% never closed"],
+                       "an unterminated comment is text, as in the editor")
+        XCTAssertEqual(describe("```\n%% shown %%\n```"),
+                       ["code:%% shown %%"], "a fence is code, not a comment")
+    }
 }
