@@ -63,6 +63,8 @@ enum BackupPassphrasePolicy {
 @MainActor
 final class PassphraseClipboard {
     static let shared = PassphraseClipboard()
+    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     private var clearTask: Task<Void, Never>?
     private let pasteboard: NSPasteboard
 
@@ -73,6 +75,10 @@ final class PassphraseClipboard {
     func copy(_ passphrase: String, after seconds: TimeInterval = 60) {
         pasteboard.clearContents()
         pasteboard.setString(passphrase, forType: .string)
+        // Clipboard history tools honour these markers: the passphrase is
+        // confidential, and it is about to be replaced by the clear task.
+        pasteboard.setData(Data(), forType: Self.concealedType)
+        pasteboard.setData(Data(), forType: Self.transientType)
         clearTask?.cancel()
         clearTask = Task { [pasteboard] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
