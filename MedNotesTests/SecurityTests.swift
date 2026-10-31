@@ -70,6 +70,46 @@ final class SecurityTests: XCTestCase {
         }
     }
 
+    func testACorruptFirstPageStaysWrongKeyAndALaterPageIsReportedAsDamaged() async throws {
+        func errorAfterFlipping(page: Int) async throws -> Error? {
+            let root = try makeRoot("corrupt-page-\(page)")
+            let path = root.databaseURL.path
+            let db = try Database(path: path, key: TestKeys.database(for: root))
+            for index in 0..<20 {
+                try await db.saveNote(Note(
+                    title: "note \(index)", content: String(repeating: "x", count: 8_192)))
+            }
+            let pageSizeText = try await db.pragmaForTesting("page_size")
+            let pageSize = try XCTUnwrap(Int(pageSizeText ?? ""))
+            try await db.checkpoint()
+            await db.close()
+
+            var bytes = try Data(contentsOf: URL(fileURLWithPath: path))
+            XCTAssertGreaterThan(bytes.count, 3 * pageSize, "the test needs a page after the first")
+            let offset = (page - 1) * pageSize + pageSize / 2
+            bytes[offset] ^= 0x01
+            try bytes.write(to: URL(fileURLWithPath: path))
+
+            do {
+                _ = try Database(path: path, key: TestKeys.database(for: root))
+                XCTFail("a damaged database must not open")
+                return nil
+            } catch {
+                return error
+            }
+        }
+
+        // Both cases are a failed page HMAC. Page 1 cannot prove whether the
+        // key or the page is wrong; a later page proves the key opened page 1.
+        let first = try await errorAfterFlipping(page: 1)
+        XCTAssertEqual(first as? SQLiteError, .wrongKey)
+        let later = try await errorAfterFlipping(page: 3)
+        XCTAssertEqual(later as? SQLiteError, .corruptDatabase(page: 3))
+        XCTAssertEqual(later?.localizedDescription,
+                       String(localized: "The database file is damaged. Restore a backup or a restore point, and don't keep using this file."),
+                       "the page number stays in the error, not in the message")
+    }
+
     func testAbsentKeyCannotOpenAnEncryptedStore() throws {
         let root = try makeRoot()
         _ = try Database(path: root.databaseURL.path, key: TestKeys.database(for: root))

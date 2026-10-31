@@ -13,6 +13,7 @@ enum SQLiteError: Error, CustomStringConvertible, LocalizedError, Equatable {
     case wrongKey
     case plaintextDatabase(String)
     case invalidRawKey
+    case corruptDatabase(page: Int)
 
     var description: String {
         switch self {
@@ -24,6 +25,7 @@ enum SQLiteError: Error, CustomStringConvertible, LocalizedError, Equatable {
         case .wrongKey: return "The database key is wrong or the file is not an encrypted MedNotes store."
         case let .plaintextDatabase(path): return "Refusing to open a plaintext database in encrypted mode: \(path)"
         case .invalidRawKey: return "The database key must be 64 hex characters (a 256-bit raw key)."
+        case .corruptDatabase(let page): return "The database file is damaged (page \(page))."
         }
     }
 
@@ -46,6 +48,8 @@ enum SQLiteError: Error, CustomStringConvertible, LocalizedError, Equatable {
             return String(localized: "This database is not encrypted, so it cannot be opened in encrypted mode.")
         case .invalidRawKey:
             return String(localized: "The database key must be 64 hex characters (a 256-bit raw key).")
+        case let .corruptDatabase(page):
+            return String(localized: "The database file is damaged. Restore a backup or a restore point, and don't keep using this file.")
         }
     }
 }
@@ -241,8 +245,27 @@ final class SQLConnection {
     private func verifyCipherIntegrity() throws {
         let s = try prepare("PRAGMA cipher_integrity_check")
         if try s.step(), let detail = s.columnText(0), !detail.isEmpty {
+            // A wrong key always fails page 1. A later page failing means the
+            // first page decrypted under this key and the file is damaged.
+            if let page = Self.failedPage(in: detail), page > 1 {
+                // The page number stays out of the user-facing message; it is
+                // still useful in the system log, where the store cannot write
+                // an audit row because it did not open.
+                NSLog("MedNotes: database integrity check failed at page %d", page)
+                SecurityLog.record(.integrityFailed, count: page)
+                throw SQLiteError.corruptDatabase(page: page)
+            }
             throw SQLiteError.wrongKey
         }
+    }
+
+    /// SQLCipher reports a failed page HMAC as
+    /// "HMAC verification failed for page N".
+    private static func failedPage(in detail: String) -> Int? {
+        let marker = "failed for page "
+        guard let range = detail.range(of: marker) else { return nil }
+        let digits = detail[range.upperBound...].prefix(while: \.isNumber)
+        return Int(digits)
     }
 
     deinit {

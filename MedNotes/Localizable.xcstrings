@@ -8739,6 +8739,16 @@
           }
         }
       }
+    },
+    "The database file is damaged. Restore a backup or a restore point, and don't keep using this file." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αρχείο της βάσης δεδομένων είναι κατεστραμμένο. Επαναφέρετε ένα αντίγραφο ασφαλείας ή ένα σημείο επαναφοράς και μη συνεχίσετε να χρησιμοποιείτε αυτό το αρχείο."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
