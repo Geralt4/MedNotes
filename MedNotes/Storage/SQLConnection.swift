@@ -48,7 +48,7 @@ enum SQLiteError: Error, CustomStringConvertible, LocalizedError, Equatable {
             return String(localized: "This database is not encrypted, so it cannot be opened in encrypted mode.")
         case .invalidRawKey:
             return String(localized: "The database key must be 64 hex characters (a 256-bit raw key).")
-        case let .corruptDatabase(page):
+        case .corruptDatabase:
             return String(localized: "The database file is damaged. Restore a backup or a restore point, and don't keep using this file.")
         }
     }
