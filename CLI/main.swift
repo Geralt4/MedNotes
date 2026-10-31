@@ -1,5 +1,51 @@
 import Foundation
 
+/// Removes the dry run's plaintext staging folder if the process is stopped
+/// before its normal cleanup. A POSIX signal handler cannot use Foundation;
+/// a dispatch source can, and it runs on its own queue while the import is
+/// working or waiting in SQLite.
+private final class DryRunStaging {
+    private let lock = NSLock()
+    private var directory: URL?
+    private var sources: [DispatchSourceSignal] = []
+
+    init() {
+        for number in [SIGINT, SIGTERM, SIGHUP] {
+            signal(number, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(
+                signal: number, queue: .global(qos: .userInitiated))
+            source.setEventHandler { [weak self] in
+                self?.removeCurrent()
+                exit(128 + number)
+            }
+            source.resume()
+            sources.append(source)
+        }
+    }
+
+    func arm(_ directory: URL) {
+        lock.lock()
+        self.directory = directory
+        lock.unlock()
+    }
+
+    func disarm() {
+        lock.lock()
+        directory = nil
+        lock.unlock()
+    }
+
+    private func removeCurrent() {
+        lock.lock()
+        let directory = self.directory
+        self.directory = nil
+        lock.unlock()
+        if let directory {
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+}
+
 @main
 struct MedNotesImportCLI {
     static func main() async {
@@ -84,9 +130,11 @@ struct MedNotesImportCLI {
 
         let tempUUID = UUID().uuidString
         let stagingDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("mednotes-dryrun-\(tempUUID)")
+        let staging = DryRunStaging()
 
         do {
             try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+            staging.arm(stagingDir)
             let stagingDBPath = stagingDir.appendingPathComponent("mednotes.db").path
 
             print("Staging Database: \(stagingDBPath)")
@@ -178,10 +226,12 @@ struct MedNotesImportCLI {
             await db.close()
 
             if keepStaging {
+                staging.disarm()
                 print("\n💾 Staging database PRESERVED at:")
                 print("   \(stagingDBPath)")
             } else {
                 try FileManager.default.removeItem(at: stagingDir)
+                staging.disarm()
                 print("\n🧹 Staging database deleted successfully. No changes made to live storage.")
             }
             print("================================================================\n")
@@ -194,10 +244,12 @@ struct MedNotesImportCLI {
         } catch {
             print("\n❌ Unexpected error during import: \(error)")
             if keepStaging {
+                staging.disarm()
                 print("💾 Staging database PRESERVED at:")
                 print("   \(stagingDir.path)")
             } else {
                 try? FileManager.default.removeItem(at: stagingDir)
+                staging.disarm()
             }
             fflush(stdout)
             exit(1)
