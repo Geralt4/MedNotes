@@ -207,6 +207,38 @@ final class SecurityTests: XCTestCase {
                        "locking must remove the plaintext temporary")
     }
 
+    func testAttachmentReadAndCopyFailuresAreNotReportedAsBadCiphertext() async throws {
+        let root = try makeRoot("attachment-failures")
+        let key = TestKeys.attachment(for: root)
+        let store = try EncryptedFileStore(root: root.attachmentsURL, key: key)
+        let missing = try await store.store(Data("missing".utf8))
+        try FileManager.default.removeItem(at: try store.url(for: missing))
+        do {
+            _ = try await store.read(storageID: missing)
+            XCTFail("a missing attachment must not read")
+        } catch {
+            XCTAssertEqual(error as? EncryptedFileStore.StoreError, .unreadable)
+            XCTAssertEqual(error.localizedDescription,
+                           String(localized: "The attachment file couldn't be read. Check that it still exists and that you have permission to open it."))
+        }
+
+        // A plain file where the external-copy folder should be makes the
+        // directory creation fail, as a full disk or a permission error would.
+        let blocker = tempDir.appendingPathComponent("not-a-copy-folder-\(UUID().uuidString)")
+        try Data("occupied".utf8).write(to: blocker)
+        let blocked = try EncryptedFileStore(
+            root: root.attachmentsURL, key: key, externalCopiesURL: blocker)
+        let stored = try await blocked.store(Data("scan".utf8))
+        do {
+            _ = try await blocked.openExternally(storageID: stored, preferredName: "scan.pdf")
+            XCTFail("a copy that cannot be written must not be opened")
+        } catch {
+            XCTAssertEqual(error as? EncryptedFileStore.StoreError, .externalCopyFailed)
+            XCTAssertEqual(error.localizedDescription,
+                           String(localized: "The attachment couldn't be opened because its temporary copy couldn't be saved. Free up disk space or check that the folder is writable, then try again."))
+        }
+    }
+
     func testAttachmentPaddingHidesLength() async throws {
         let root = try makeRoot()
         let store = try EncryptedFileStore(
