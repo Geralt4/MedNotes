@@ -416,13 +416,19 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(fresh?.hasRecords, false)
 
         let store = try XCTUnwrap(session.store)
-        try await store.audit.log(action: "backup_create", entityType: "backup",
-                                  entityId: "old.mednotesbackup", details: "0 patients")
-        try await Task.sleep(nanoseconds: 30_000_000)   // timestamps carry milliseconds
-        try await store.audit.log(action: "backup_create", entityType: "backup",
-                                  entityId: "practice.mednotesbackup", details: "0 patients")
-        try await store.audit.log(action: "backup_restore", entityType: "backup",
-                                  entityId: "other.mednotesbackup", details: "")
+        // Explicit timestamps: a sleep only made the two rows different by
+        // wall-clock luck and slowed the test down. Keep the newest one close
+        // to now, which the staleness assertion below also checks.
+        let now = Date()
+        try await store.db.logAudit(AuditLogEntry(
+            timestamp: now.addingTimeInterval(-60), action: "backup_create",
+            entityType: "backup", entityId: "old.mednotesbackup", details: "0 patients"))
+        try await store.db.logAudit(AuditLogEntry(
+            timestamp: now, action: "backup_create",
+            entityType: "backup", entityId: "practice.mednotesbackup", details: "0 patients"))
+        try await store.db.logAudit(AuditLogEntry(
+            timestamp: now.addingTimeInterval(1), action: "backup_restore",
+            entityType: "backup", entityId: "other.mednotesbackup", details: ""))
 
         let after = await session.storageSummary()
         let last = try XCTUnwrap(after?.lastBackup)

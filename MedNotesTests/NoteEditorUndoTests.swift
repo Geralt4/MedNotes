@@ -174,10 +174,11 @@ final class NoteEditorUndoTests: XCTestCase {
         let target = try await makeNote(in: session, title: "Cardiology follow-up", content: "Echo booked.")
         let plan = try await makeNote(in: session, title: "Plan", content: "Discussed.\nSee [[cardio")
         session.select(plan.id)
+        let lookups = session.linkLookupGeneration
         let window = host(NoteDetailView().environmentObject(session))
         let body = try await textView(in: window, showing: plan.content)
         let undoManager = try XCTUnwrap(window.undoManager)
-        try await Task.sleep(nanoseconds: 800_000_000)   // the lookup's debounce and search
+        try await waitForLookup(after: lookups, in: session)
 
         try await click(Self.popoverRow(above: body), in: window)
         let completed = "Discussed.\nSee [[Cardiology follow-up]]"
@@ -230,6 +231,15 @@ final class NoteEditorUndoTests: XCTestCase {
 
     /// Waits for main-queue work (the styling is deferred a turn) by
     /// suspending, which a nested run loop would not let run.
+    private func waitForLookup(after generation: Int, in session: AppSession) async throws {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, session.linkLookupGeneration <= generation {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertGreaterThan(session.linkLookupGeneration, generation,
+                             "the link candidate lookup never completed")
+    }
+
     private func poll(_ condition: () -> Bool, _ message: String) async throws {
         for _ in 0..<100 where !condition() {
             try await Task.sleep(nanoseconds: 20_000_000)
@@ -263,11 +273,12 @@ final class NoteEditorUndoTests: XCTestCase {
         let undoManager = try XCTUnwrap(window.undoManager)
         undoManager.groupsByEvent = false
         XCTAssertTrue(window.makeFirstResponder(body))
+        let lookups = session.linkLookupGeneration
         body.setSelectedRange(NSRange(location: ("Plan: " as NSString).length, length: 0))
         undoManager.beginUndoGrouping()
         body.insertText("[[cardio", replacementRange: NSRange(location: NSNotFound, length: 0))
         undoManager.endUndoGrouping()
-        try await Task.sleep(nanoseconds: 800_000_000)   // the lookup's debounce and search
+        try await waitForLookup(after: lookups, in: session)
         if titleFocused {
             let title = try XCTUnwrap(Self.textFields(in: window.contentView).first { $0.stringValue == plan.title })
             XCTAssertTrue(window.makeFirstResponder(title))

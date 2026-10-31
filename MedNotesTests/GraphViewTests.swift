@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import XCTest
 @testable import MedNotes
@@ -123,14 +124,12 @@ final class GraphViewTests: XCTestCase {
         await session.loadGraph()
         session.graphPanelShown = true
         let view = host.host(GraphView().environmentObject(session), width: 900, height: 520)
-        try await Task.sleep(nanoseconds: 600_000_000)
+        try await wait(until: { OffscreenHost.placeholders(under: view).contains("Search notes") })
         XCTAssertTrue(OffscreenHost.hasInk(view))
-        XCTAssertTrue(OffscreenHost.placeholders(under: view).contains("Search notes"), "the panel is open")
         XCTAssertEqual(session.filteredGraph.nodes.map(\.label).sorted(), ["Source", "Target"])
 
         session.graphPanelShown = false
-        try await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertFalse(OffscreenHost.placeholders(under: view).contains("Search notes"), "the panel is closed")
+        try await wait(until: { !OffscreenHost.placeholders(under: view).contains("Search notes") })
     }
 
     func testTheLocalGraphSectionIsReadOnlyWhenOpenAndFollowsTheDepth() async throws {
@@ -142,21 +141,35 @@ final class GraphViewTests: XCTestCase {
         let d = Note(title: "D", content: "end")
         for note in [a, b, c, d] { try await store.notes.save(note) }
 
-        // Closed: the graph is not read for it.
+        // Closed: the graph is not read for it. Wait on an actual change,
+        // inverted, rather than sleeping for a fixed time.
         let closed = host.host(NoteGraphSection(noteID: b.id).environmentObject(session), width: 280, height: 420)
-        try await Task.sleep(nanoseconds: 400_000_000)
+        let changed = expectation(description: "a closed section read the graph")
+        changed.isInverted = true
+        let observation = session.$graphData.dropFirst().sink { _ in changed.fulfill() }
+        await fulfillment(of: [changed], timeout: 0.5)
+        observation.cancel()
         XCTAssertTrue(session.graphData.nodes.isEmpty, "a closed section reads nothing")
         _ = closed
 
         let open = host.host(NoteGraphSection(noteID: b.id, initiallyExpanded: true).environmentObject(session),
                              width: 280, height: 420)
-        try await Task.sleep(nanoseconds: 800_000_000)
-        XCTAssertEqual(session.graphData.nodes.count, 4)
+        try await wait(until: { session.graphData.nodes.count == 4 })
         XCTAssertTrue(OffscreenHost.hasInk(open))
         let local = GraphFilter.local(of: "n:\(b.id.uuidString)", depth: 1, data: session.graphData, settings: GraphSettings())
         XCTAssertEqual(Set(local.nodes.map(\.label)), ["A", "B", "C"])
         let deeper = GraphFilter.local(of: "n:\(b.id.uuidString)", depth: 2, data: session.graphData, settings: GraphSettings())
         XCTAssertEqual(Set(deeper.nodes.map(\.label)), ["A", "B", "C", "D"])
+    }
+
+    private func wait(until condition: @escaping () -> Bool, timeout: TimeInterval = 10,
+                      file: StaticString = #filePath, line: UInt = #line) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTFail("the condition was not met within \(timeout) seconds", file: file, line: line)
     }
 
     func testTheLayoutWorkStopsWhenItIsCancelled() {
