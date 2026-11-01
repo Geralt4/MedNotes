@@ -8,9 +8,13 @@ struct GraphSettingsPanel: View {
 
     @EnvironmentObject private var session: AppSession
     @State private var filtersOpen = true
-    @State private var groupsOpen = false
+    @State private var groupsOpen: Bool
     @State private var displayOpen = false
     @State private var forcesOpen = false
+
+    init(groupsOpen: Bool = false) {
+        _groupsOpen = State(initialValue: groupsOpen)
+    }
 
     var body: some View {
         ScrollView {
@@ -43,10 +47,10 @@ struct GraphSettingsPanel: View {
 
     private var groups: some View {
         VStack(alignment: .leading, spacing: Chrome.Space.sm) {
-            ForEach($session.graphSettings.groups) { $group in
+            ForEach(session.graphSettings.groups) { group in
                 VStack(alignment: .leading, spacing: Chrome.Space.xs) {
                     HStack(spacing: Chrome.Space.xs) {
-                        queryField("Group search", text: $group.query)
+                        queryField("Group search", text: groupQuery(group.id))
                         Button {
                             session.graphSettings.groups.removeAll { $0.id == group.id }
                         } label: {
@@ -57,7 +61,7 @@ struct GraphSettingsPanel: View {
                         .help("Remove group")
                         .accessibilityLabel("Remove group")
                     }
-                    colorRow(selection: $group.colorIndex)
+                    colorRow(selection: groupColour(group.id))
                 }
             }
             if session.graphSettings.groups.count < GraphSettings.maxGroups {
@@ -101,6 +105,30 @@ struct GraphSettingsPanel: View {
     }
 
     // MARK: - Pieces
+
+    /// The group's query, found by the group's id on every read and write.
+    /// `ForEach($groups)` hands each row a binding that reads `groups[position]`,
+    /// and a row's text field still reads it when a key reaches it just after
+    /// the group was removed: the position is past the end and the app traps
+    /// (or, when a later group has moved into it, the text lands in that group).
+    /// Here a removed group reads as empty and a write to it is dropped.
+    private func groupQuery(_ id: UUID) -> Binding<String> {
+        Binding(
+            get: { session.graphSettings.groups.first { $0.id == id }?.query ?? "" },
+            set: { value in
+                guard let index = session.graphSettings.groups.firstIndex(where: { $0.id == id }) else { return }
+                session.graphSettings.groups[index].query = value
+            })
+    }
+
+    private func groupColour(_ id: UUID) -> Binding<Int> {
+        Binding(
+            get: { session.graphSettings.groups.first { $0.id == id }?.colorIndex ?? 0 },
+            set: { value in
+                guard let index = session.graphSettings.groups.firstIndex(where: { $0.id == id }) else { return }
+                session.graphSettings.groups[index].colorIndex = value
+            })
+    }
 
     private func section<Content: View>(
         _ title: LocalizedStringKey, isOpen: Binding<Bool>, @ViewBuilder content: () -> Content
