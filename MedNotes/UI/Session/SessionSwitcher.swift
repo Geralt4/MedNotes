@@ -68,6 +68,32 @@ extension AppSession {
         }
     }
 
+    /// What was chosen in the switcher.
+    enum SwitcherChoice: Equatable {
+        /// A click on a row. `position` is where the row was drawn and `hit`
+        /// what it showed. The results are replaced as the search catches up,
+        /// so a click can land on a row still drawn from the older ones: it
+        /// opens what the row showed, not whatever sits at its position now.
+        case clicked(position: Int, hit: SwitcherHit)
+        /// Enter: the highlighted position, which restarts with every new
+        /// list of results, so it is read from the current ones.
+        case highlighted(position: Int)
+
+        func resolve(in current: [SwitcherHit]) -> SwitcherHit? {
+            switch self {
+            case .clicked(_, let hit):
+                return hit
+            case .highlighted(let position):
+                return current.indices.contains(position) ? current[position] : nil
+            }
+        }
+    }
+
+    func choose(_ choice: SwitcherChoice) async {
+        guard let hit = choice.resolve(in: switcherResults) else { return }
+        await open(hit)
+    }
+
     func open(_ hit: SwitcherHit) async {
         showSwitcher = false
         switch hit.kind {
