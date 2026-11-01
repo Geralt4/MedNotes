@@ -302,6 +302,48 @@ final class SyncFixTests: XCTestCase {
                                     long.endDate.addingTimeInterval(CalendarSyncCore.lookupMargin))
     }
 
+    /// The event editor takes any date, and each window is a synchronous
+    /// EventKit query on the main actor: a silly date must cost a bounded number.
+    func testASillyDateCostsABoundedNumberOfLookups() throws {
+        let year9999 = Date(timeIntervalSince1970: 253_370_764_800)
+        let year1 = Date(timeIntervalSince1970: -62_135_596_800)
+        let created = CalendarEvent(title: "x", startDate: anchor.addingTimeInterval(400 * day), endDate: year9999)
+        let created9999 = CalendarSyncCore.lookupWindows(for: [created], beyond: near)
+        XCTAssertLessThanOrEqual(created9999.count, CalendarSyncCore.mostLookups)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(created9999.last).end,
+                                 near.end.addingTimeInterval(CalendarSyncCore.farthestLookup))
+
+        let wholeHistory = CalendarEvent(title: "x", startDate: year1, endDate: year9999)
+        let everything = CalendarSyncCore.lookupWindows(for: [wholeHistory], beyond: near)
+        XCTAssertLessThanOrEqual(everything.count, CalendarSyncCore.mostLookups)
+        XCTAssertFalse(everything.isEmpty, "the years around now are still looked for")
+
+        // Wholly beyond what is looked for, or not a number at all: nothing, and no hang.
+        XCTAssertEqual(CalendarSyncCore.lookupWindows(for: [CalendarEvent(
+            title: "x", startDate: year9999, endDate: year9999)], beyond: near), [])
+        XCTAssertEqual(CalendarSyncCore.lookupWindows(for: [CalendarEvent(
+            title: "x", startDate: Date(timeIntervalSinceReferenceDate: 1e25),
+            endDate: Date(timeIntervalSinceReferenceDate: 1e25))], beyond: near), [])
+        XCTAssertEqual(CalendarSyncCore.lookupWindows(for: [CalendarEvent(
+            title: "x", startDate: Date(timeIntervalSinceReferenceDate: .nan),
+            endDate: Date(timeIntervalSinceReferenceDate: .infinity))], beyond: near), [])
+    }
+
+    func testRowsScatteredOverManyYearsCostABoundedNumberOfLookups() {
+        // 100 rows a month apart from two years out: none overlaps another.
+        let rows = (0..<100).map { event(at: 730 + Double($0) * 30) }
+        let windows = CalendarSyncCore.lookupWindows(for: rows, beyond: near)
+        XCTAssertEqual(windows.count, CalendarSyncCore.mostLookups)
+        XCTAssertEqual(windows.sorted { $0.start < $1.start }, windows, "nearest to the year around now first")
+    }
+
+    func testAnEventAtTheEdgeOfWhatIsLookedForIsStillFound() throws {
+        let inside = event(at: 366 + 24 * 366)    // 24 years past the near year
+        XCTAssertFalse(CalendarSyncCore.lookupWindows(for: [inside], beyond: near).isEmpty)
+        let outside = event(at: 366 + 26 * 366)
+        XCTAssertTrue(CalendarSyncCore.lookupWindows(for: [outside], beyond: near).isEmpty)
+    }
+
     func testAnAllDayEventKeepsItsMargin() throws {
         var allDay = event(at: 900)
         allDay.isAllDay = true

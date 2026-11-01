@@ -73,16 +73,34 @@ enum CalendarSyncCore {
     /// so a longer span is asked for in pieces of this length.
     static let longestLookup: TimeInterval = 3 * 366 * 24 * 3600
 
+    /// How far beyond `near` a lookup goes. The event editor accepts any date,
+    /// and every window is a synchronous EventKit query on the main actor, so
+    /// a year 9999 end date must not cost thousands of them. A date further
+    /// out than this is not looked for (it is no worse off than before the
+    /// lookups existed).
+    static let farthestLookup: TimeInterval = 25 * 366 * 24 * 3600
+    /// The most windows one call returns, for rows scattered over many years.
+    static let mostLookups = 24
+
     /// The date spans to ask Apple Calendar about to find the objects made
     /// from `events`, outside `near`, the span every pass already reads. Each
     /// event's own dates (with a margin) are the span, the part inside `near`
-    /// is left out, overlapping spans are merged and none is longer than
-    /// `longestLookup`. An event inside `near` adds nothing.
+    /// is left out, the part beyond `farthestLookup` from it is left out,
+    /// overlapping spans are merged and none is longer than `longestLookup`.
+    /// An event inside `near` adds nothing, and at most `mostLookups` windows
+    /// come back.
     static func lookupWindows(for events: [CalendarEvent], beyond near: DateInterval) -> [DateInterval] {
+        let horizon = DateInterval(
+            start: near.start.addingTimeInterval(-farthestLookup),
+            end: near.end.addingTimeInterval(farthestLookup))
         var pieces: [DateInterval] = []
         for event in events {
-            let low = min(event.startDate, event.endDate).addingTimeInterval(-lookupMargin)
-            let high = max(event.startDate, event.endDate).addingTimeInterval(lookupMargin)
+            // A date that is not a usable number cannot be looked for.
+            guard event.startDate.timeIntervalSinceReferenceDate.isFinite,
+                  event.endDate.timeIntervalSinceReferenceDate.isFinite else { continue }
+            let low = max(min(event.startDate, event.endDate).addingTimeInterval(-lookupMargin), horizon.start)
+            let high = min(max(event.startDate, event.endDate).addingTimeInterval(lookupMargin), horizon.end)
+            guard low <= high else { continue }   // wholly beyond the horizon
             if low < near.start { pieces.append(DateInterval(start: low, end: min(high, near.start))) }
             if high > near.end { pieces.append(DateInterval(start: max(low, near.end), end: high)) }
         }
@@ -97,8 +115,9 @@ enum CalendarSyncCore {
         var windows: [DateInterval] = []
         for span in merged {
             var start = span.start
-            while start < span.end {
+            while start < span.end, windows.count < mostLookups {
                 let end = min(span.end, start.addingTimeInterval(longestLookup))
+                guard end > start else { break }
                 windows.append(DateInterval(start: start, end: end))
                 start = end
             }
