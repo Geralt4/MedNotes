@@ -97,6 +97,9 @@ enum BackupArchiveV2 {
         case unknownKDFProfile(UInt8)
         case wrongPassphraseOrCorrupt
         case tooManyRecords
+        /// Writing: the archive would need more records than one can hold. Said
+        /// before any key is derived or file made, with the numbers.
+        case tooManyRecordsToBackUp(needed: Int, limit: Int)
         case oversizedField
         case truncated
         case badRecordOrder
@@ -119,6 +122,8 @@ enum BackupArchiveV2 {
                 return String(localized: "The passphrase is wrong, or the backup file is damaged.")
             case .tooManyRecords:
                 return String(localized: "The backup contains too many records to process safely.")
+            case .tooManyRecordsToBackUp(let needed, let limit):
+                return String(localized: "This backup would need \(needed) records, but a backup can hold at most \(limit). The store has too many attachments, or too much attachment data, for one backup. Nothing was written.")
             case .oversizedField:
                 return String(localized: "The backup contains a field that is too large.")
             case .truncated:
@@ -204,6 +209,20 @@ enum BackupArchiveV2 {
 
     // MARK: - Seal
 
+    /// How many records `seal` writes for these attachments and a database
+    /// snapshot of `snapshotBytes`: the manifest, the snapshot header, one
+    /// record per 1 MiB of snapshot, one metadata record per attachment, one
+    /// record per 1 MiB of each attachment's bytes (none for an empty one) and
+    /// the end marker. Everything but the snapshot is known before any work
+    /// starts, so passing 0 gives a lower bound that is checkable up front.
+    static func projectedRecordCount(snapshotBytes: Int, attachments: [AttachmentRecord]) -> Int {
+        // Written so that no length, however corrupt, overflows: a length near
+        // Int.max must give a huge count, not stop the app.
+        func chunks(_ bytes: Int) -> Int { bytes > 0 ? (bytes - 1) / maxChunkBytes + 1 : 0 }
+        let inAttachments = attachments.reduce(0) { min($0 + chunks($1.plaintextLength), Int.max / 2) }
+        return 3 + chunks(snapshotBytes) + attachments.count + inAttachments
+    }
+
     /// Writes a v2 archive.
     ///
     /// `databaseSnapshot` receives the derived archive key and must return a
@@ -240,7 +259,21 @@ enum BackupArchiveV2 {
            let policyError = BackupPassphrasePolicy.validate(passphrase) {
             throw ArchiveError.passphrasePolicy(policyError)
         }
-        guard attachments.count <= maxRecords else { throw ArchiveError.tooManyRecords }
+        // An attachment over the size limit is refused as it always was, but
+        // now before any work, and before its length is used to count records.
+        guard !attachments.contains(where: { $0.plaintextLength > maxAttachmentBytes }) else {
+            throw ArchiveError.oversizedField
+        }
+        // The attachments alone may already need more records than an archive
+        // holds. That is known now, so it is said now: after the key
+        // derivation, the database export and the first gigabytes of
+        // encrypted attachments it would be the same error, much later. This
+        // is a lower bound (the snapshot adds to it), so it never refuses a
+        // backup that would fit.
+        let attachmentRecords = projectedRecordCount(snapshotBytes: 0, attachments: attachments)
+        guard attachmentRecords <= maxRecords else {
+            throw ArchiveError.tooManyRecordsToBackUp(needed: attachmentRecords, limit: maxRecords)
+        }
 
         let sodium = Sodium()
         let salt = Data(sodium.randomBytes.buf(length: saltLength) ?? [])
@@ -304,6 +337,12 @@ enum BackupArchiveV2 {
         // sliced into ≤1 MiB records inside the archive stream.
         let snapshot = try await databaseSnapshot(Self.snapshotKey(from: key))
         guard snapshot.count <= maxSnapshotBytes else { throw ArchiveError.oversizedField }
+        // Now the count is exact: nothing more is written to an archive that
+        // cannot be finished.
+        let needed = projectedRecordCount(snapshotBytes: snapshot.count, attachments: attachments)
+        guard needed <= maxRecords else {
+            throw ArchiveError.tooManyRecordsToBackUp(needed: needed, limit: maxRecords)
+        }
         let chunkCount = max(1, (snapshot.count + maxChunkBytes - 1) / maxChunkBytes)
         let snapshotHeader = SnapshotHeader(totalLength: snapshot.count, chunkCount: chunkCount)
         try writeRecord(.databaseSnapshot, try encoder.encode(snapshotHeader), final: false)

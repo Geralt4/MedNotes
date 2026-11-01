@@ -89,7 +89,11 @@ explicit.**
 - Argon2id v1.3, 64 MiB, three operations, selected by a fixed profile
   identifier; the profile is validated before the KDF runs.
 - Bounded before any work: 4 KiB header, 1 MiB chunk, 100,000 records, 100 GiB
-  archive, checked arithmetic, free-space staging.
+  archive, checked arithmetic, free-space staging. When writing, the records
+  the attachments need (one per attachment plus one per started MiB) are
+  counted before the key is derived, and the database snapshot's share as soon
+  as the snapshot exists; an archive over the limit is refused with the counts
+  and nothing is written.
 - The database snapshot is a temporary SQLCipher database keyed from the
   archive key, so no plaintext database is written while backing up.
 - v1 archives stay readable with containment: header validated first, PBKDF2

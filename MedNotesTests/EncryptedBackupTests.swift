@@ -322,6 +322,188 @@ final class EncryptedBackupTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch.path), [])
     }
 
+    // MARK: - The record limit
+
+    /// What a `seal` attempt called, so a test can say nothing was done.
+    private final class Calls: @unchecked Sendable {
+        private(set) var snapshots = 0
+        private(set) var reads = 0
+        private(set) var progress = 0
+        private(set) var cancelChecks = 0
+        func snapshot() -> Data { snapshots += 1; return Data(repeating: 2, count: 128) }
+        func read() -> Data { reads += 1; return Data(count: 1) }
+        func reported() { progress += 1 }
+        func check() -> Bool { cancelChecks += 1; return false }
+    }
+
+    private func smallAttachments(_ count: Int) -> [BackupArchiveV2.AttachmentRecord] {
+        (0..<count).map { index in
+            var record = attachment(index)
+            record.plaintextLength = 1
+            return record
+        }
+    }
+
+    private func sealAttempt(
+        _ attachments: [BackupArchiveV2.AttachmentRecord], snapshotBytes: Int = 128,
+        calls: Calls, to file: URL
+    ) async throws {
+        try await BackupArchiveV2.seal(
+            manifest: BackupArchiveV2.Manifest(
+                name: "x", createdAt: Date(), schemaVersion: Schema.currentVersion,
+                counts: [:], attachmentCount: attachments.count),
+            databaseSnapshot: { _ in _ = calls.snapshot(); return Data(repeating: 2, count: snapshotBytes) },
+            attachments: attachments,
+            attachmentReader: { _ in calls.read() },
+            passphrase: "a long enough passphrase",
+            to: file,
+            progress: { _, _ in calls.reported() },
+            isCancelled: { calls.check() })
+    }
+
+    /// 50,000 one-byte attachments are 100,003 records at least: the metadata
+    /// and the one chunk of each, with the manifest, snapshot header and end
+    /// marker. That is known before anything is done, so it is said before: no
+    /// key is derived, no snapshot taken, no attachment read, no file made.
+    func testABackupOverTheRecordLimitFailsBeforeAnyWork() async throws {
+        let calls = Calls()
+        let file = scratch.appendingPathComponent("toomany.mednotesbackup")
+        do {
+            try await sealAttempt(smallAttachments(50_000), calls: calls, to: file)
+            XCTFail("a backup over the record limit must not be written")
+        } catch BackupArchiveV2.ArchiveError.tooManyRecordsToBackUp(let needed, let limit) {
+            XCTAssertEqual(needed, 100_003)
+            XCTAssertEqual(limit, BackupArchiveV2.maxRecords)
+        }
+        XCTAssertEqual(calls.snapshots, 0, "the database must not be exported first")
+        XCTAssertEqual(calls.reads, 0, "no attachment may be read first")
+        XCTAssertEqual(calls.progress, 0)
+        XCTAssertEqual(calls.cancelChecks, 0, "no record may have been started")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch.path), [],
+                       "no staging file and no destination")
+    }
+
+    /// The error carries both numbers, and is not the restore-side wording.
+    func testTheRecordLimitErrorSaysWhatIsTooMany() {
+        let message = BackupArchiveV2.ArchiveError
+            .tooManyRecordsToBackUp(needed: 100_003, limit: 100_000).errorDescription ?? ""
+        // The numbers are grouped for reading ("100.003" or "100,003"), so
+        // compare the digits.
+        let digits = message.filter(\.isNumber)
+        XCTAssertTrue(digits.contains("100003"), message)
+        XCTAssertTrue(digits.contains("100000"), message)
+        XCTAssertNotEqual(
+            message, BackupArchiveV2.ArchiveError.tooManyRecords.errorDescription,
+            "the writer's message is not the reader's")
+    }
+
+    /// When the attachments fit on their own and the database snapshot is what
+    /// tips it over, the archive stops as soon as the snapshot exists, before
+    /// any record of it or of an attachment is written, and takes its
+    /// staging file with it.
+    func testASnapshotThatTipsTheCountOverTheLimitStopsBeforeAnyRecordAfterIt() async throws {
+        let calls = Calls()
+        let file = scratch.appendingPathComponent("tipped.mednotesbackup")
+        // 3 + 49,998 + 49,998 = 99,999 without the snapshot; 2 MiB adds two.
+        do {
+            try await sealAttempt(smallAttachments(49_998), snapshotBytes: 2 << 20, calls: calls, to: file)
+            XCTFail("a backup over the record limit must not be written")
+        } catch BackupArchiveV2.ArchiveError.tooManyRecordsToBackUp(let needed, _) {
+            XCTAssertEqual(needed, 100_001)
+        }
+        XCTAssertEqual(calls.snapshots, 1)
+        XCTAssertEqual(calls.reads, 0, "no attachment may be read")
+        XCTAssertEqual(calls.cancelChecks, 1, "only the manifest, written before the snapshot, was started")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch.path), [])
+    }
+
+    /// A corrupt length must not stop the app: the old code reached the size
+    /// guard and threw, the projection in front of it must not trap first.
+    func testACorruptAttachmentLengthIsRefusedWithoutTrapping() async throws {
+        var corrupt = attachment(1)
+        corrupt.plaintextLength = Int.max
+        XCTAssertGreaterThan(BackupArchiveV2.projectedRecordCount(snapshotBytes: Int.max, attachments: [corrupt, corrupt]),
+                             BackupArchiveV2.maxRecords)
+        var negative = attachment(2)
+        negative.plaintextLength = -5
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: -1, attachments: [negative]), 3 + 1)
+
+        let calls = Calls()
+        let file = scratch.appendingPathComponent("corrupt.mednotesbackup")
+        do {
+            try await sealAttempt([attachment(0), corrupt], calls: calls, to: file)
+            XCTFail("an attachment over the size limit must not be written")
+        } catch BackupArchiveV2.ArchiveError.oversizedField {
+            // expected, and before any work
+        }
+        XCTAssertEqual(calls.snapshots, 0)
+        XCTAssertEqual(calls.cancelChecks, 0)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch.path), [])
+    }
+
+    /// Exactly at the limit is written; one over is refused. This pins `<=`.
+    func testABackupOfExactlyTheLimitIsWritten() async throws {
+        // 3 records + 49,999 metadata records + 49,998 chunks (one attachment is empty).
+        var attachments = smallAttachments(49_998)
+        var empty = attachment(99_999)
+        empty.plaintextLength = 0
+        attachments.append(empty)
+        XCTAssertEqual(
+            BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: attachments),
+            BackupArchiveV2.maxRecords)
+        let calls = Calls()
+        let file = scratch.appendingPathComponent("exact.mednotesbackup")
+        try await BackupArchiveV2.seal(
+            manifest: BackupArchiveV2.Manifest(
+                name: "x", createdAt: Date(), schemaVersion: Schema.currentVersion,
+                counts: [:], attachmentCount: attachments.count),
+            databaseSnapshot: { _ in Data() },
+            attachments: attachments,
+            attachmentReader: { Data(count: $0.plaintextLength) },
+            passphrase: "a long enough passphrase",
+            to: file,
+            isCancelled: { calls.check() })
+        XCTAssertEqual(calls.cancelChecks - 1, BackupArchiveV2.maxRecords)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    /// The projection is exactly what a real seal writes (so the early check
+    /// neither refuses a backup that fits nor lets one through that does not).
+    func testTheProjectedRecordCountMatchesWhatSealWrites() async throws {
+        func record(_ length: Int) -> BackupArchiveV2.AttachmentRecord {
+            var record = attachment(length)
+            record.plaintextLength = length
+            return record
+        }
+        let mib = BackupArchiveV2.maxChunkBytes
+        // Empty: only its metadata. 1 byte and 1 MiB: one chunk. 1 MiB + 1: two.
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: [record(0)]), 3 + 1)
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: [record(1)]), 3 + 2)
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: [record(mib)]), 3 + 2)
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: [record(mib + 1)]), 3 + 3)
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: mib + 1, attachments: []), 3 + 2)
+        XCTAssertEqual(BackupArchiveV2.projectedRecordCount(snapshotBytes: 0, attachments: []), 3)
+
+        // What a real seal writes: every record asks `isCancelled` once, and
+        // the move to the destination asks once more.
+        let calls = Calls()
+        let attachments = [record(0), record(64), record(mib + 1)]
+        let file = scratch.appendingPathComponent("counted.mednotesbackup")
+        try await BackupArchiveV2.seal(
+            manifest: BackupArchiveV2.Manifest(
+                name: "x", createdAt: Date(), schemaVersion: Schema.currentVersion,
+                counts: [:], attachmentCount: attachments.count),
+            databaseSnapshot: { _ in Data(repeating: 2, count: mib + 5) },
+            attachments: attachments,
+            attachmentReader: { Data(count: $0.plaintextLength) },
+            passphrase: "a long enough passphrase",
+            to: file,
+            isCancelled: { calls.check() })
+        XCTAssertEqual(
+            calls.cancelChecks - 1,
+            BackupArchiveV2.projectedRecordCount(snapshotBytes: mib + 5, attachments: attachments))
+    }
+
     // MARK: - Cancelling part-way
 
     /// Counts `seal`'s cancellation checks and answers true from the

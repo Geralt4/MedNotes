@@ -74,6 +74,87 @@ final class GraphViewTests: XCTestCase {
         XCTAssertEqual(session.graphSettings.groups.map(\.query), ["tag:b"])
     }
 
+    // MARK: - Removing a group while typing in it
+
+    private func pump(_ seconds: TimeInterval = 0.2) {
+        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    /// The panel's "Group search" fields in reading order.
+    private func groupFields(in root: NSView) -> [NSTextField] {
+        var found: [NSTextField] = []
+        var pending: [NSView] = [root]
+        while let view = pending.popLast() {
+            if let field = view as? NSTextField, field.placeholderString == "Group search" { found.append(field) }
+            pending.append(contentsOf: view.subviews.reversed())
+        }
+        return found
+    }
+
+    private func focus(_ field: NSTextField, in window: TypingWindow) -> Bool {
+        window.makeKey()
+        let focused = window.makeFirstResponder(field)
+        pump(0.05)
+        return focused && field.currentEditor() != nil
+    }
+
+    /// A key that reaches a group's text field just after the group was removed
+    /// (typing while the minus button is pressed, a repeating key) must be
+    /// dropped. The field read its group by position, past the end of the
+    /// list, and the app trapped with "Index out of range".
+    func testAKeyReachingARemovedGroupsFieldDoesNotCrash() async throws {
+        let session = try await makeSession()
+        session.graphSettings.groups = [GraphGroup(query: "", colorIndex: 0)]
+        let window = try host.hostForTyping(
+            GraphSettingsPanel(groupsOpen: true).environmentObject(session), width: GraphSettingsPanel.width, height: 700)
+        let view = try XCTUnwrap(window.contentView)
+        for round in 0..<3 {
+            if session.graphSettings.groups.isEmpty {
+                session.graphSettings.groups = [GraphGroup(query: "", colorIndex: 0)]
+                pump(0.4)
+            }
+            let field = try XCTUnwrap(groupFields(in: view).first, "round \(round): the group's field")
+            XCTAssertTrue(focus(field, in: window), "round \(round)")
+            try window.type("a")
+            XCTAssertEqual(session.graphSettings.groups.first?.query, "a",
+                           "round \(round): text typed into a group is kept")
+            let id = session.graphSettings.groups[0].id
+            session.graphSettings.groups.removeAll { $0.id == id }
+            try window.type("b")      // before SwiftUI has drawn the list again
+            pump(0.3)
+            XCTAssertTrue(session.graphSettings.groups.isEmpty, "round \(round): the group stays removed")
+        }
+    }
+
+    /// The same key must not be written into the group that took the removed
+    /// one's place in the list.
+    func testTextTypedIntoARemovedGroupDoesNotLandInAnotherGroup() async throws {
+        let session = try await makeSession()
+        session.graphSettings.groups = [GraphGroup(query: "first", colorIndex: 0), GraphGroup(query: "second", colorIndex: 1)]
+        let window = try host.hostForTyping(
+            GraphSettingsPanel(groupsOpen: true).environmentObject(session), width: GraphSettingsPanel.width, height: 700)
+        let view = try XCTUnwrap(window.contentView)
+        for round in 0..<3 {
+            if session.graphSettings.groups.count < 2 {
+                session.graphSettings.groups = [GraphGroup(query: "first", colorIndex: 0), GraphGroup(query: "second", colorIndex: 1)]
+                pump(0.4)
+            }
+            let fields = groupFields(in: view)
+            XCTAssertEqual(fields.count, 2, "round \(round)")
+            guard fields.count == 2 else { return }
+            XCTAssertTrue(focus(fields[0], in: window), "round \(round)")
+            try window.type("x")
+            let removed = session.graphSettings.groups[0].id
+            let kept = session.graphSettings.groups[1]
+            session.graphSettings.groups.removeAll { $0.id == removed }
+            try window.type("y")      // before SwiftUI has drawn the list again
+            pump(0.3)
+            XCTAssertEqual(session.graphSettings.groups.map(\.id), [kept.id], "round \(round)")
+            XCTAssertEqual(session.graphSettings.groups.first?.query, kept.query,
+                           "round \(round): the other group's text is unchanged")
+        }
+    }
+
     // MARK: - The canvas
 
     func testAGroupColourAndTheOpenNoteMarkAreDrawn() throws {

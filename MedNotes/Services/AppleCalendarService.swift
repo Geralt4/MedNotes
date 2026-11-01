@@ -63,6 +63,79 @@ enum CalendarSyncCore {
         return .update(conflict: dirty && local.syncStatus != .localOnly)
     }
 
+    // MARK: Finding an object whose identifier was lost
+
+    /// A margin either side of an event's own dates, so an all-day event or a
+    /// time-zone shift cannot fall just outside the lookup.
+    static let lookupMargin: TimeInterval = 24 * 3600
+    /// The longest span asked of EventKit at once. Its date-range predicate
+    /// covers four years at most and truncates beyond that without saying so,
+    /// so a longer span is asked for in pieces of this length.
+    static let longestLookup: TimeInterval = 3 * 366 * 24 * 3600
+
+    /// How far beyond `near` a lookup goes. The event editor accepts any date,
+    /// and every window is a synchronous EventKit query on the main actor, so
+    /// a year 9999 end date must not cost thousands of them. A date further
+    /// out than this is not looked for (it is no worse off than before the
+    /// lookups existed).
+    static let farthestLookup: TimeInterval = 25 * 366 * 24 * 3600
+    /// The most windows one call returns, for rows scattered over many years.
+    static let mostLookups = 24
+
+    /// The date spans to ask Apple Calendar about to find the objects made
+    /// from `events`, outside `near`, the span every pass already reads. Each
+    /// event's own dates (with a margin) are the span, the part inside `near`
+    /// is left out, the part beyond `farthestLookup` from it is left out,
+    /// overlapping spans are merged and none is longer than `longestLookup`.
+    /// An event inside `near` adds nothing, and at most `mostLookups` windows
+    /// come back.
+    static func lookupWindows(for events: [CalendarEvent], beyond near: DateInterval) -> [DateInterval] {
+        let horizon = DateInterval(
+            start: near.start.addingTimeInterval(-farthestLookup),
+            end: near.end.addingTimeInterval(farthestLookup))
+        var pieces: [DateInterval] = []
+        for event in events {
+            // A date that is not a usable number cannot be looked for.
+            guard event.startDate.timeIntervalSinceReferenceDate.isFinite,
+                  event.endDate.timeIntervalSinceReferenceDate.isFinite else { continue }
+            let low = max(min(event.startDate, event.endDate).addingTimeInterval(-lookupMargin), horizon.start)
+            let high = min(max(event.startDate, event.endDate).addingTimeInterval(lookupMargin), horizon.end)
+            guard low <= high else { continue }   // wholly beyond the horizon
+            if low < near.start { pieces.append(DateInterval(start: low, end: min(high, near.start))) }
+            if high > near.end { pieces.append(DateInterval(start: max(low, near.end), end: high)) }
+        }
+        var merged: [DateInterval] = []
+        for piece in pieces.sorted(by: { $0.start < $1.start }) {
+            if let last = merged.last, piece.start <= last.end {
+                merged[merged.count - 1] = DateInterval(start: last.start, end: max(last.end, piece.end))
+            } else {
+                merged.append(piece)
+            }
+        }
+        var windows: [DateInterval] = []
+        for span in merged {
+            var start = span.start
+            while start < span.end, windows.count < mostLookups {
+                let end = min(span.end, start.addingTimeInterval(longestLookup))
+                guard end > start else { break }
+                windows.append(DateInterval(start: start, end: end))
+                start = end
+            }
+        }
+        return windows
+    }
+
+    /// The rows whose Apple object is not accounted for yet: no stored
+    /// identifier, or one that no longer finds an owned object (`resolved`),
+    /// and no object found by its marker (`found`, row ids).
+    static func rowsNeedingALookup(_ events: [CalendarEvent], resolved: Set<String>, found: Set<UUID>) -> [CalendarEvent] {
+        events.filter { event in
+            guard !found.contains(event.id) else { return false }
+            guard let identifier = event.ekEventIdentifier else { return true }
+            return !resolved.contains(identifier)
+        }
+    }
+
     static func fields(of event: CalendarEvent) -> EventFields {
         EventFields(
             title: event.title,
@@ -341,7 +414,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         if route == .movedElsewhere { return .movedElsewhere }
         if route == .useFound, let found = identified {
             ek = found
-        } else if let made = objectMade(from: event.id, in: targetCalendar, destination: destination) {
+        } else if let made = objectMade(for: event, in: targetCalendar, destination: destination) {
             // The row lost the identifier of an object it already made (a full
             // sync changes them, or a save was skipped): reuse it, never make
             // a second one.
@@ -381,17 +454,31 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         return synced
     }
 
-    /// An event in the destination that MedNotes made from row `id`, if any.
-    private func objectMade(from id: UUID, in calendar: EKCalendar, destination: SyncDestination) -> EKEvent? {
-        let start = Date().addingTimeInterval(-Self.pullWindow)
-        let end = Date().addingTimeInterval(Self.pullWindow)
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [calendar])
-        return store.events(matching: predicate).first { ek in
-            SyncDestinationCore.recordID(from: ek.url) == id
-                && SyncDestinationCore.ownsRemoteObject(
-                    marker: SyncDestinationCore.marker(from: ek.url),
-                    destination: destination, inDestination: true)
+    /// The span every pass reads: a year either side of now.
+    private func nearWindow(now: Date = Date()) -> DateInterval {
+        DateInterval(start: now.addingTimeInterval(-Self.pullWindow), end: now.addingTimeInterval(Self.pullWindow))
+    }
+
+    private func events(in window: DateInterval, calendar: EKCalendar) -> [EKEvent] {
+        let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar])
+        return store.events(matching: predicate)
+    }
+
+    /// An event in the destination that MedNotes made from `event`, if any.
+    /// The year around now is read first; an event further away is then looked
+    /// for around its own dates, which is where its object is.
+    private func objectMade(for event: CalendarEvent, in calendar: EKCalendar, destination: SyncDestination) -> EKEvent? {
+        let near = nearWindow()
+        for window in [near] + CalendarSyncCore.lookupWindows(for: [event], beyond: near) {
+            let made = events(in: window, calendar: calendar).first { ek in
+                SyncDestinationCore.recordID(from: ek.url) == event.id
+                    && SyncDestinationCore.ownsRemoteObject(
+                        marker: SyncDestinationCore.marker(from: ek.url),
+                        destination: destination, inDestination: true)
+            }
+            if let made { return made }
         }
+        return nil
     }
 
     /// Removes the Apple event made from `event`, if it can be found.
@@ -412,7 +499,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             inDestination: true) {
             target = item
         } else if let calendar = calendar(for: destination) {
-            target = objectMade(from: event.id, in: calendar, destination: destination)
+            target = objectMade(for: event, in: calendar, destination: destination)
         }
         guard let item = target else { return }
         do {
@@ -457,17 +544,41 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 
         // The destination's objects, read once: re-binding a lost identifier
         // and importing both need them.
-        let start = Date().addingTimeInterval(-Self.pullWindow)
-        let end = Date().addingTimeInterval(Self.pullWindow)
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: [targetCalendar])
-        let windowEvents = store.events(matching: predicate)
+        let near = nearWindow()
+        let windowEvents = events(in: near, calendar: targetCalendar)
         var madeFrom: [UUID: EKEvent] = [:]
-        for ek in windowEvents {
-            guard let record = SyncDestinationCore.recordID(from: ek.url), madeFrom[record] == nil,
-                  SyncDestinationCore.ownsRemoteObject(
-                    marker: SyncDestinationCore.marker(from: ek.url),
-                    destination: destination, inDestination: true) else { continue }
-            madeFrom[record] = ek
+        func index(_ found: [EKEvent]) {
+            for ek in found {
+                guard let record = SyncDestinationCore.recordID(from: ek.url), madeFrom[record] == nil,
+                      SyncDestinationCore.ownsRemoteObject(
+                        marker: SyncDestinationCore.marker(from: ek.url),
+                        destination: destination, inDestination: true) else { continue }
+                madeFrom[record] = ek
+            }
+        }
+        index(windowEvents)
+
+        // Each stored identifier is looked up once.
+        var ownedByIdentifier: [String: EKEvent] = [:]
+        for identifier in byEKID.keys {
+            if let ek = store.calendarItem(withIdentifier: identifier) as? EKEvent,
+               ek.calendar?.calendarIdentifier == destination.calendarIdentifier,
+               SyncDestinationCore.ownsRemoteObject(
+                marker: SyncDestinationCore.marker(from: ek.url),
+                destination: destination,
+                inDestination: true) {
+                ownedByIdentifier[identifier] = ek
+            }
+        }
+        // A row whose object the year around now does not hold and whose
+        // identifier finds nothing may have its object further away. It is
+        // looked for around the row's own dates, and only to re-bind the row:
+        // what is found there is never imported, so the conflict rule and the
+        // import rules see exactly what they saw before.
+        let lost = CalendarSyncCore.rowsNeedingALookup(
+            localEvents, resolved: Set(ownedByIdentifier.keys), found: Set(madeFrom.keys))
+        for window in CalendarSyncCore.lookupWindows(for: lost, beyond: near) {
+            index(events(in: window, calendar: targetCalendar))
         }
         // A row that never stored its object's identifier (its save was
         // skipped because the row had been edited again) has the object but
@@ -477,13 +588,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         }
 
         for (identifier, local) in byEKID {
-            let item = store.calendarItem(withIdentifier: identifier) as? EKEvent
-            guard let ek = item,
-                  ek.calendar?.calendarIdentifier == destination.calendarIdentifier,
-                  SyncDestinationCore.ownsRemoteObject(
-                    marker: SyncDestinationCore.marker(from: ek.url),
-                    destination: destination,
-                    inDestination: true) else {
+            guard let ek = ownedByIdentifier[identifier] else {
                 // Its identifier finds nothing, but the object it made is
                 // there under another one: point the row at it.
                 if let made = madeFrom[local.id] {
