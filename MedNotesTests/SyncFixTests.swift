@@ -228,4 +228,108 @@ final class SyncFixTests: XCTestCase {
         XCTAssertEqual(reloadedTodo.title, "Chase labs")
         XCTAssertEqual(reloadedTodo.updatedAt, beforeTodo.updatedAt)
     }
+
+    // MARK: - Finding an object whose identifier was lost
+
+    // There is no fake EventKit store, so what is asked of Apple Calendar is
+    // decided by these pure helpers and tested here; the calls themselves need
+    // a real account.
+
+    private let day: TimeInterval = 86_400
+    private let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+    private var near: DateInterval {
+        DateInterval(start: anchor.addingTimeInterval(-366 * day), end: anchor.addingTimeInterval(366 * day))
+    }
+
+    private func event(at offsetDays: Double, lasting: TimeInterval = 3600) -> CalendarEvent {
+        let start = anchor.addingTimeInterval(offsetDays * day)
+        return CalendarEvent(title: "Visit", startDate: start, endDate: start.addingTimeInterval(lasting))
+    }
+
+    func testAnEventTwoYearsAwayIsLookedForAroundItsOwnDates() throws {
+        let far = event(at: 730)
+        let windows = CalendarSyncCore.lookupWindows(for: [far], beyond: near)
+        let window = try XCTUnwrap(windows.first)
+        XCTAssertEqual(windows.count, 1)
+        XCTAssertLessThanOrEqual(window.start, far.startDate.addingTimeInterval(-CalendarSyncCore.lookupMargin))
+        XCTAssertGreaterThanOrEqual(window.end, far.endDate.addingTimeInterval(CalendarSyncCore.lookupMargin))
+        XCTAssertGreaterThanOrEqual(window.start, near.end, "the year the pass already reads is not asked again")
+    }
+
+    func testAnEventBeforeTheYearAroundNowIsLookedForToo() throws {
+        let past = event(at: -1100)
+        let window = try XCTUnwrap(CalendarSyncCore.lookupWindows(for: [past], beyond: near).first)
+        XCTAssertTrue(window.contains(past.startDate))
+        XCTAssertTrue(window.contains(past.endDate))
+        XCTAssertLessThanOrEqual(window.end, near.start)
+    }
+
+    func testAnEventInsideTheYearAroundNowAddsNoLookup() {
+        XCTAssertEqual(CalendarSyncCore.lookupWindows(for: [event(at: 30), event(at: -300)], beyond: near), [])
+        XCTAssertEqual(CalendarSyncCore.lookupWindows(for: [], beyond: near), [])
+    }
+
+    func testAnEventAcrossTheEdgeOnlyAddsTheOutsidePart() throws {
+        let edge = CalendarEvent(
+            title: "Long stay", startDate: near.end.addingTimeInterval(-day),
+            endDate: near.end.addingTimeInterval(3 * day))
+        let window = try XCTUnwrap(CalendarSyncCore.lookupWindows(for: [edge], beyond: near).first)
+        XCTAssertEqual(window.start, near.end)
+        XCTAssertEqual(window.end, edge.endDate.addingTimeInterval(CalendarSyncCore.lookupMargin))
+    }
+
+    func testEventsOnTopOfEachOtherShareOneLookupAndDistantOnesDoNot() {
+        let windows = CalendarSyncCore.lookupWindows(
+            for: [event(at: 730), event(at: 730.2), event(at: 2400)], beyond: near)
+        XCTAssertEqual(windows.count, 2)
+        XCTAssertLessThan(windows[0].end, windows[1].start)
+        XCTAssertTrue(windows[0].contains(event(at: 730.2).startDate))
+    }
+
+    func testALongSpanIsAskedForInPiecesEventKitCanAnswer() throws {
+        let long = event(at: 400, lasting: 5 * 365 * day)
+        let windows = CalendarSyncCore.lookupWindows(for: [long], beyond: near)
+        XCTAssertGreaterThan(windows.count, 1)
+        for window in windows {
+            XCTAssertLessThanOrEqual(window.duration, CalendarSyncCore.longestLookup)
+        }
+        for (earlier, later) in zip(windows, windows.dropFirst()) {
+            XCTAssertEqual(earlier.end, later.start, "no gap between pieces")
+        }
+        XCTAssertEqual(try XCTUnwrap(windows.first).start,
+                       long.startDate.addingTimeInterval(-CalendarSyncCore.lookupMargin))
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(windows.last).end,
+                                    long.endDate.addingTimeInterval(CalendarSyncCore.lookupMargin))
+    }
+
+    func testAnAllDayEventKeepsItsMargin() throws {
+        var allDay = event(at: 900)
+        allDay.isAllDay = true
+        allDay.endDate = allDay.startDate
+        let window = try XCTUnwrap(CalendarSyncCore.lookupWindows(for: [allDay], beyond: near).first)
+        XCTAssertEqual(window.duration, 2 * CalendarSyncCore.lookupMargin)
+    }
+
+    func testAnEventWhoseEndPrecedesItsStartIsStillCovered() throws {
+        let start = anchor.addingTimeInterval(900 * day)
+        let backwards = CalendarEvent(title: "x", startDate: start, endDate: start.addingTimeInterval(-3600))
+        let window = try XCTUnwrap(CalendarSyncCore.lookupWindows(for: [backwards], beyond: near).first)
+        XCTAssertTrue(window.contains(start))
+        XCTAssertTrue(window.contains(backwards.endDate))
+    }
+
+    func testOnlyRowsWithoutAnObjectAreLookedUpFor() {
+        let neverStored = event(at: 800)
+        var resolved = event(at: 810); resolved.ekEventIdentifier = "found-by-id"
+        var lost = event(at: 820); lost.ekEventIdentifier = "gone"
+        var foundByMarker = event(at: 830)
+        let rows = CalendarSyncCore.rowsNeedingALookup(
+            [neverStored, resolved, lost, foundByMarker],
+            resolved: ["found-by-id"], found: [foundByMarker.id])
+        XCTAssertEqual(rows.map(\.id), [neverStored.id, lost.id])
+        foundByMarker.ekEventIdentifier = "gone-too"
+        XCTAssertEqual(CalendarSyncCore.rowsNeedingALookup(
+            [foundByMarker], resolved: [], found: [foundByMarker.id]), [],
+            "an object found by its marker needs no further lookup, whatever the stored identifier")
+    }
 }
