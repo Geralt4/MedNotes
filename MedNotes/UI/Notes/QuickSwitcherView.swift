@@ -113,7 +113,7 @@ struct QuickSwitcherView: View {
     }
 
     private func choose(_ choice: AppSession.SwitcherChoice) {
-        Task { await session.choose(choice) }
+        session.choose(choice)
     }
 }
 

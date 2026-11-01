@@ -89,9 +89,15 @@ extension AppSession {
         }
     }
 
-    func choose(_ choice: SwitcherChoice) async {
-        guard let hit = choice.resolve(in: switcherResults) else { return }
-        await open(hit)
+    /// Opens what was chosen. It is decided now, from the results as they are
+    /// now, and not when the task that opens it runs: a newer list can be
+    /// published in between. Nothing is opened for a session that has locked
+    /// (a click still holds its result after the lock emptied the list).
+    /// Returns the task, for a test to wait on.
+    @discardableResult
+    func choose(_ choice: SwitcherChoice) -> Task<Void, Never>? {
+        guard canUseStore, let hit = choice.resolve(in: switcherResults) else { return nil }
+        return Task { await open(hit) }
     }
 
     func open(_ hit: SwitcherHit) async {

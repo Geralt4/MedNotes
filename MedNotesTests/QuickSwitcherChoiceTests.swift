@@ -65,16 +65,48 @@ final class QuickSwitcherChoiceTests: XCTestCase {
         // A newer search lands before the click is handled.
         session.switcherResults = [patientHit("Gamma"), patientHit("Delta")]
 
-        await session.choose(.clicked(position: 0, hit: alpha))
+        await session.choose(.clicked(position: 0, hit: alpha))?.value
 
         XCTAssertEqual(session.selectedPatientId, alpha.id)
         XCTAssertEqual(session.selectedModule, .patients)
     }
 
+    /// Enter is decided when it is pressed, from the results shown then: a
+    /// newer list published before the opening task runs must not change it.
+    func testEnterOpensTheResultHighlightedWhenItWasPressedEvenIfTheResultsChangeBeforeTheOpenRuns() async throws {
+        let session = try await makeSession()
+        let (alpha, gamma) = (patientHit("Alpha"), patientHit("Gamma"))
+        session.switcherResults = [alpha, patientHit("Beta")]
+
+        let task = session.choose(.highlighted(position: 0))
+        session.switcherResults = [gamma, patientHit("Delta")]   // lands before the task runs
+        await task?.value
+
+        XCTAssertEqual(session.selectedPatientId, alpha.id)
+    }
+
+    /// A click still holds its result after a lock emptied the list; it must
+    /// open nothing, and must not reset the filters under the curtain (a
+    /// reveal sets them before it checks the session).
+    func testAChoiceMadeAfterTheSessionLockedOpensNothing() async throws {
+        let session = try await makeSession()
+        let todo = AppSession.SwitcherHit(id: UUID(), kind: .todo, title: "Chase labs", subtitle: "Todo")
+        await session.lockNow(reason: "idle")
+        session.todoFilter = .completed
+
+        let task = session.choose(.clicked(position: 0, hit: todo))
+
+        XCTAssertNil(task)
+        XCTAssertEqual(session.todoFilter, .completed, "a reveal would have reset the filter")
+        XCTAssertNil(session.selectedTodoId)
+    }
+
     func testChoosingAHighlightPastTheEndOpensNothing() async throws {
         let session = try await makeSession()
         session.switcherResults = [patientHit("Gamma")]
-        await session.choose(.highlighted(position: 3))
+        let task = session.choose(.highlighted(position: 3))
+        XCTAssertNil(task, "nothing to open past the end")
+        await task?.value
         XCTAssertNil(session.selectedPatientId)
     }
 }

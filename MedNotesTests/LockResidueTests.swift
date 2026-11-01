@@ -105,13 +105,14 @@ final class LockResidueTests: XCTestCase {
         return (session, event.id)
     }
 
-    /// A lock that lands while the Apple copy is being looked up must stop the
-    /// delete before that copy is touched: past that point the copy would go
-    /// while the row, on a store that has closed, stayed with an identifier
-    /// that finds nothing. With the Apple account not reachable (as in every
-    /// test) the old code failed here with the reconnect message, under the
-    /// curtain, and reloaded the lists on the closed store.
-    func testALockDuringTheDeleteOfALinkedEventStopsItBeforeTheAppleCopyIsTouched() async throws {
+    /// A lock that lands after the event and its destination were read stops
+    /// the delete: the row keeps its identifier and nothing is reported.
+    /// What this covers: the old code failed here with the reconnect message,
+    /// under the curtain, and reloaded the lists on the closed store.
+    /// What it does not: the Apple account is never reachable in the test host
+    /// (and there is no fake EKEventStore), so `deleteRemote` is never reached
+    /// and the check that sits in front of it is not tested on its own.
+    func testALockDuringTheDeleteOfALinkedEventLeavesTheRowAndReportsNothing() async throws {
         let (session, id) = try await deleteAnEventWhileTheLockLands(linked: true)
 
         XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
@@ -176,11 +177,13 @@ final class LockResidueTests: XCTestCase {
         return (session, todo.id)
     }
 
-    /// As for an event: a lock that lands while the Apple copy is looked up
-    /// stops the delete before that copy is touched. With the Apple account not
-    /// reachable (as in every test) the old code failed here with the reconnect
-    /// message, under the curtain.
-    func testALockDuringTheDeleteOfALinkedTodoStopsItBeforeTheAppleCopyIsTouched() async throws {
+    /// As for an event: a lock after the todo and its destination were read
+    /// stops the delete, the row keeps its identifier and nothing is reported.
+    /// The old code failed here with the reconnect message, under the curtain.
+    /// The Apple account is never reachable in the test host, so `deleteRemote`
+    /// is not reached; and a lock during its own awaited reminder fetch (see
+    /// `removeTodo`) is not covered.
+    func testALockDuringTheDeleteOfALinkedTodoLeavesTheRowAndReportsNothing() async throws {
         let (session, id) = try await deleteATodoWhileTheLockLands(linked: true)
 
         XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
