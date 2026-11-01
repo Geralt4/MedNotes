@@ -1205,6 +1205,11 @@ final class AppSession: ObservableObject {
     /// container, so a test can land a lock there. Nothing in the app sets it.
     var outgoingWillBegin: @MainActor () async -> Void = {}
 
+    /// Test seam: runs in `removeEvent` after the event and its sync
+    /// destination have been read and before the Apple copy is touched, so a
+    /// test can land a lock there. Nothing in the app sets it.
+    var eventRemovalDidLookUpDestination: @MainActor () async -> Void = {}
+
     /// Test seam: told as each attachment is sealed into a backup, so a test
     /// can land a lock while the archive is being written. Nothing in the app
     /// sets it.

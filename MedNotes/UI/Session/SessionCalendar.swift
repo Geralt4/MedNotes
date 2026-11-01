@@ -122,8 +122,18 @@ extension AppSession {
         // Snapshot before deletion so a linked Apple Calendar copy can go too.
         do {
             if let snapshot = try await store.events.load(id: id) {
+                // A lock while the row was read took the store: nothing has been
+                // touched, and nothing is deleted under the curtain.
+                guard canUseStore, self.store === store else { return }
                 // A lookup that fails must not stop an unlinked row being deleted.
                 let destination = try? await store.destinations.destination(for: .calendar)
+                await eventRemovalDidLookUpDestination()
+                // The same after the destination was read, and the last point
+                // a lock can land before the Apple copy is removed: from here
+                // to `deleteRemote` nothing suspends. Past it the Apple copy
+                // would go while the row, on a store that is closed, stays with
+                // an identifier that finds nothing.
+                guard canUseStore, self.store === store else { return }
                 let canReach = appleCalendar.state == .granted && SyncDestinationCore.mayWrite(destination)
                 if snapshot.ekEventIdentifier != nil {
                     // Linked: the delete waits until the Apple copy can be removed.
@@ -144,10 +154,17 @@ extension AppSession {
             } else {
                 try await store.events.delete(id: id)
             }
+            // A lock during the delete cleared the selection and the lists.
+            guard canUseStore, self.store === store else { return }
             if selectedEventId == id { selectedEventId = nil }
             eventEpoch += 1
             await reloadEvents()
         } catch {
+            // The same for a failure: on a store that locked meanwhile there is
+            // no message to show and nothing to reload (after the unlock a
+            // linked row whose Apple copy was removed reports as missing, and
+            // deleting it again finishes the job).
+            guard canUseStore, self.store === store else { return }
             errorMessage = error.localizedDescription
             if selectedEventId == id,
                await eventExists(id: id) == false {

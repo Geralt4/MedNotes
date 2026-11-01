@@ -81,4 +81,74 @@ final class LockResidueTests: XCTestCase {
                       "the untouched row was left behind: \(notes.map(\.title))")
     }
 
+    // MARK: - Deleting an event while the session locks
+
+    /// Saves an event, lands a lock after `removeEvent` has read the event and
+    /// its destination, deletes it, and returns the session unlocked again.
+    private func deleteAnEventWhileTheLockLands(linked: Bool) async throws -> (session: AppSession, id: UUID) {
+        let session = try await makeSession()
+        session.selectedModule = .calendar
+        var event = CalendarEvent(title: "Clinic")
+        if linked {
+            event.ekEventIdentifier = "apple-identifier"
+            event.syncStatus = .synced
+            event.lastSyncDate = Date()
+        }
+        let store = try XCTUnwrap(session.store)
+        try await store.events.save(event)
+        session.eventRemovalDidLookUpDestination = { [unowned session] in
+            session.eventRemovalDidLookUpDestination = {}
+            await session.lockNow(reason: "idle")
+        }
+
+        await session.deleteEvent(id: event.id)
+        return (session, event.id)
+    }
+
+    /// A lock that lands while the Apple copy is being looked up must stop the
+    /// delete before that copy is touched: past that point the copy would go
+    /// while the row, on a store that has closed, stayed with an identifier
+    /// that finds nothing. With the Apple account not reachable (as in every
+    /// test) the old code failed here with the reconnect message, under the
+    /// curtain, and reloaded the lists on the closed store.
+    func testALockDuringTheDeleteOfALinkedEventStopsItBeforeTheAppleCopyIsTouched() async throws {
+        let (session, id) = try await deleteAnEventWhileTheLockLands(linked: true)
+
+        XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
+
+        await session.unlock()
+        let store = try XCTUnwrap(session.store, "unlock failed: \(session.initError ?? "")")
+        let kept = try await store.events.load(id: id)
+        XCTAssertEqual(kept?.ekEventIdentifier, "apple-identifier", "the row and its link are as they were")
+        XCTAssertNil(session.errorMessage)
+    }
+
+    /// The same for a row that was never linked, whose delete then reaches the
+    /// store: on a closed store it threw, and the message was shown.
+    func testALockDuringTheDeleteOfAnUnlinkedEventStopsItWithoutAMessage() async throws {
+        let (session, id) = try await deleteAnEventWhileTheLockLands(linked: false)
+
+        XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
+
+        await session.unlock()
+        let store = try XCTUnwrap(session.store, "unlock failed: \(session.initError ?? "")")
+        let kept = try await store.events.load(id: id)
+        XCTAssertNotNil(kept, "the delete was stopped by the lock, so the event is still there")
+    }
+
+    /// Without a lock the delete still happens, so the guards cannot be what
+    /// the two tests above are passing on.
+    func testWithoutALockAnUnlinkedEventIsStillDeleted() async throws {
+        let session = try await makeSession()
+        session.selectedModule = .calendar
+        let event = CalendarEvent(title: "Clinic")
+        let store = try XCTUnwrap(session.store)
+        try await store.events.save(event)
+
+        await session.deleteEvent(id: event.id)
+
+        let gone = try await store.events.load(id: event.id)
+        XCTAssertNil(gone)
+        XCTAssertNil(session.errorMessage)
+    }
 }
