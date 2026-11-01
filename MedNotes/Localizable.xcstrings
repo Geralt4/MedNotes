@@ -7458,6 +7458,16 @@
         }
       }
     },
+    "This backup would need %lld records, but a backup can hold at most %lld. The store has too many attachments, or too much attachment data, for one backup. Nothing was written." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτό το αντίγραφο ασφαλείας θα χρειαζόταν %lld εγγραφές, αλλά ένα αντίγραφο μπορεί να περιέχει το πολύ %lld. Η βάση δεδομένων έχει πάρα πολλά συνημμένα ή πάρα πολλά δεδομένα συνημμένων για ένα αντίγραφο ασφαλείας. Δεν γράφτηκε τίποτα."
+          }
+        }
+      }
+    },
     "This backup's manifest is invalid." : {
       "localizations" : {
         "el" : {
