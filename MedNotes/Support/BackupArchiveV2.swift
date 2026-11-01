@@ -216,9 +216,11 @@ enum BackupArchiveV2 {
     /// the end marker. Everything but the snapshot is known before any work
     /// starts, so passing 0 gives a lower bound that is checkable up front.
     static func projectedRecordCount(snapshotBytes: Int, attachments: [AttachmentRecord]) -> Int {
-        func chunks(_ bytes: Int) -> Int { max(0, bytes + maxChunkBytes - 1) / maxChunkBytes }
-        return 3 + chunks(snapshotBytes) + attachments.count
-            + attachments.reduce(0) { $0 + chunks($1.plaintextLength) }
+        // Written so that no length, however corrupt, overflows: a length near
+        // Int.max must give a huge count, not stop the app.
+        func chunks(_ bytes: Int) -> Int { bytes > 0 ? (bytes - 1) / maxChunkBytes + 1 : 0 }
+        let inAttachments = attachments.reduce(0) { min($0 + chunks($1.plaintextLength), Int.max / 2) }
+        return 3 + chunks(snapshotBytes) + attachments.count + inAttachments
     }
 
     /// Writes a v2 archive.
@@ -256,6 +258,11 @@ enum BackupArchiveV2 {
         if case .passphrase(let passphrase) = sealing,
            let policyError = BackupPassphrasePolicy.validate(passphrase) {
             throw ArchiveError.passphrasePolicy(policyError)
+        }
+        // An attachment over the size limit is refused as it always was, but
+        // now before any work, and before its length is used to count records.
+        guard !attachments.contains(where: { $0.plaintextLength > maxAttachmentBytes }) else {
+            throw ArchiveError.oversizedField
         }
         // The attachments alone may already need more records than an archive
         // holds. That is known now, so it is said now: after the key
