@@ -151,4 +151,70 @@ final class LockResidueTests: XCTestCase {
         XCTAssertNil(gone)
         XCTAssertNil(session.errorMessage)
     }
+
+    // MARK: - Deleting a todo while the session locks
+
+    /// Saves a todo, lands a lock after `removeTodo` has read the todo and its
+    /// destination, deletes it, and returns the session (locked).
+    private func deleteATodoWhileTheLockLands(linked: Bool) async throws -> (session: AppSession, id: UUID) {
+        let session = try await makeSession()
+        session.selectedModule = .todos
+        var todo = TodoItem(title: "Chase labs")
+        if linked {
+            todo.reminderIdentifier = "apple-reminder"
+            todo.syncStatus = .synced
+            todo.lastSyncDate = Date()
+        }
+        let store = try XCTUnwrap(session.store)
+        try await store.todos.save(todo)
+        session.todoRemovalDidLookUpDestination = { [unowned session] in
+            session.todoRemovalDidLookUpDestination = {}
+            await session.lockNow(reason: "idle")
+        }
+
+        await session.deleteTodo(id: todo.id)
+        return (session, todo.id)
+    }
+
+    /// As for an event: a lock that lands while the Apple copy is looked up
+    /// stops the delete before that copy is touched. With the Apple account not
+    /// reachable (as in every test) the old code failed here with the reconnect
+    /// message, under the curtain.
+    func testALockDuringTheDeleteOfALinkedTodoStopsItBeforeTheAppleCopyIsTouched() async throws {
+        let (session, id) = try await deleteATodoWhileTheLockLands(linked: true)
+
+        XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
+
+        await session.unlock()
+        let store = try XCTUnwrap(session.store, "unlock failed: \(session.initError ?? "")")
+        let kept = try await store.todos.load(id: id)
+        XCTAssertEqual(kept?.reminderIdentifier, "apple-reminder", "the row and its link are as they were")
+        XCTAssertNil(session.errorMessage)
+    }
+
+    func testALockDuringTheDeleteOfAnUnlinkedTodoStopsItWithoutAMessage() async throws {
+        let (session, id) = try await deleteATodoWhileTheLockLands(linked: false)
+
+        XCTAssertNil(session.errorMessage, "nothing is reported for a delete that a lock stopped")
+
+        await session.unlock()
+        let store = try XCTUnwrap(session.store, "unlock failed: \(session.initError ?? "")")
+        let kept = try await store.todos.load(id: id)
+        XCTAssertNotNil(kept, "the delete was stopped by the lock, so the todo is still there")
+    }
+
+    /// Without a lock the delete still happens.
+    func testWithoutALockAnUnlinkedTodoIsStillDeleted() async throws {
+        let session = try await makeSession()
+        session.selectedModule = .todos
+        let todo = TodoItem(title: "Chase labs")
+        let store = try XCTUnwrap(session.store)
+        try await store.todos.save(todo)
+
+        await session.deleteTodo(id: todo.id)
+
+        let gone = try await store.todos.load(id: todo.id)
+        XCTAssertNil(gone)
+        XCTAssertNil(session.errorMessage)
+    }
 }

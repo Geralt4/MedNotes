@@ -1210,6 +1210,9 @@ final class AppSession: ObservableObject {
     /// test can land a lock there. Nothing in the app sets it.
     var eventRemovalDidLookUpDestination: @MainActor () async -> Void = {}
 
+    /// Test seam: the same for `removeTodo`. Nothing in the app sets it.
+    var todoRemovalDidLookUpDestination: @MainActor () async -> Void = {}
+
     /// Test seam: told as each attachment is sealed into a backup, so a test
     /// can land a lock while the archive is being written. Nothing in the app
     /// sets it.
