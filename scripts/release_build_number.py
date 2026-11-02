@@ -4,9 +4,11 @@
   scripts/release_build_number.py [REPO]
 
 Prints `git rev-list --count HEAD` of REPO (default: the repository this
-script is in) and exits 0. Every release commit then has a build number that
-is unique and larger than any earlier release's, whatever the version name or
-suffix. `scripts/release.sh` passes it as CFBundleVersion.
+script is in) and exits 0. Along one branch (releases are cut from the main
+line) every release commit then has a build number that is unique and larger
+than any earlier release's, whatever the version name or suffix. A release cut
+from a different branch can repeat or lower it. `scripts/release.sh` passes it
+as CFBundleVersion.
 
 It refuses, with a plain reason and exit status 1, when the count could not be
 trusted:

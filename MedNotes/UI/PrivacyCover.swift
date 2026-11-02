@@ -16,8 +16,8 @@ private struct PrivacyCover: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        // Migration and recovery run in the main window only; here it is locked or hidden.
-        let wording = CurtainWording.wording(isLocked: session.isLocked)
+        let wording = CurtainWording.coverWording(
+            isLocked: session.isLocked, isMigrating: session.isMigrating, needsRecovery: session.needsRecovery)
         // Hidden from accessibility too, not only from sight.
         return content.accessibilityHidden(isCovered).overlay {
             if isCovered {

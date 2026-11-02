@@ -74,6 +74,20 @@ final class CurtainWordingTests: XCTestCase {
         XCTAssertNil(migrating.button)
     }
 
+    /// The curtain over Settings, Activity and sheets keeps saying "locked" while
+    /// a migration or a key recovery is under way (a store that is not open is
+    /// not "hidden").
+    func testTheCoverSaysLockedDuringMigrationAndRecoveryAndHiddenOtherwise() {
+        func cover(locked: Bool, migrating: Bool = false, recovery: Bool = false) -> CurtainWording.Situation {
+            CurtainWording.coverWording(isLocked: locked, isMigrating: migrating, needsRecovery: recovery).situation
+        }
+        XCTAssertEqual(cover(locked: false), .hidden)
+        XCTAssertEqual(cover(locked: true), .locked)
+        XCTAssertEqual(cover(locked: false, migrating: true), .locked)
+        XCTAssertEqual(cover(locked: false, recovery: true), .locked)
+        XCTAssertNotNil(CurtainWording.coverWording(isLocked: false, isMigrating: true, needsRecovery: false).button)
+    }
+
     // MARK: - The session
 
     func testTheSessionIsHiddenInTheBackgroundAndLockedWhenLocked() async throws {

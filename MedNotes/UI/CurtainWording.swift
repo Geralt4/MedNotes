@@ -64,6 +64,13 @@ struct CurtainWording: Equatable {
         }
     }
 
+    /// The curtain over Settings, Activity and sheets. Migration and recovery
+    /// run in the main window only; if one is under way, those windows are
+    /// covered as they always were: locked, with Unlock.
+    static func coverWording(isLocked: Bool, isMigrating: Bool, needsRecovery: Bool) -> CurtainWording {
+        wording(isLocked: isLocked || isMigrating || needsRecovery)
+    }
+
     @MainActor
     static func wording(for session: AppSession) -> CurtainWording {
         wording(isLocked: session.isLocked, isMigrating: session.isMigrating, needsRecovery: session.needsRecovery)

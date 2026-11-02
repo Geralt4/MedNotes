@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import MedNotes
 
@@ -201,5 +202,66 @@ final class GeneratedPassphraseTests: XCTestCase {
         XCTAssertFalse(enabled(generated: passphrase, confirmed: true, name: "  "))
         XCTAssertFalse(enabled(generated: passphrase, confirmed: true, working: true))
         XCTAssertFalse(enabled(generated: passphrase, confirmed: true, confirmation: "other"))
+    }
+
+    /// Typing one character over a generated passphrase and deleting it again
+    /// used to turn it into a typed one, and the backup went ahead unconfirmed.
+    func testEditingAndRestoringAGeneratedPassphraseDoesNotSkipTheConfirmation() throws {
+        let generated = try BackupPassphrasePolicy.generate()
+        func source(_ passphrase: String, confirmed: Bool = false) -> BackupPassphraseSource {
+            BackupFlowSheet.source(passphrase: passphrase, generated: generated, confirmedSaved: confirmed)
+        }
+        XCTAssertEqual(source(generated), .generated(confirmedSaved: false))
+        XCTAssertEqual(source(generated + "x"), .typed, "a different passphrase is a typed one")
+        // …but the fields held the generated one again afterwards:
+        XCTAssertEqual(source(generated), .generated(confirmedSaved: false),
+                       "typing a character and deleting it is not a way round the confirmation")
+        XCTAssertFalse(BackupFlowSheet.canBackUp(
+            name: "Backup", passphrase: generated, confirmation: generated,
+            generated: generated, confirmedSaved: false, isWorking: false))
+        XCTAssertEqual(source(generated, confirmed: true), .generated(confirmedSaved: true))
+        // A passphrase typed after generating one is judged as typed.
+        let typed = "a long enough typed passphrase"
+        XCTAssertTrue(BackupFlowSheet.canBackUp(
+            name: "Backup", passphrase: typed, confirmation: typed,
+            generated: generated, confirmedSaved: false, isWorking: false))
+    }
+
+    /// While the archive is being written the passphrase cannot be changed
+    /// under it, so the one that is shown (and copied) is the one it is sealed with.
+    func testThePassphraseCannotBeChangedWhileABackupIsBeingWritten() {
+        XCTAssertTrue(BackupFlowSheet.canEditPassphrase(isWorking: false))
+        XCTAssertFalse(BackupFlowSheet.canEditPassphrase(isWorking: true))
+    }
+
+    // MARK: - The clipboard
+
+    /// Quitting inside the minute must not leave the passphrase on the clipboard.
+    func testACopiedPassphraseIsClearedWhenTheAppQuits() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("MedNotesTests.quit-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        let center = NotificationCenter()
+        let clipboard = PassphraseClipboard(pasteboard: pasteboard, notificationCenter: center)
+        clipboard.copy("ABCD-EFGH-JKMN", after: 600)
+        XCTAssertEqual(pasteboard.string(forType: .string), "ABCD-EFGH-JKMN")
+
+        center.post(name: NSApplication.willTerminateNotification, object: nil)
+
+        XCTAssertNil(pasteboard.string(forType: .string), "the passphrase outlived the app")
+    }
+
+    /// Whatever the user copied since is theirs, and is not cleared at quit.
+    func testSomethingElseCopiedSinceIsLeftAloneAtQuit() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("MedNotesTests.quit2-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        let center = NotificationCenter()
+        let clipboard = PassphraseClipboard(pasteboard: pasteboard, notificationCenter: center)
+        clipboard.copy("ABCD-EFGH-JKMN", after: 600)
+        pasteboard.clearContents()
+        pasteboard.setString("something the user copied", forType: .string)
+
+        center.post(name: NSApplication.willTerminateNotification, object: nil)
+
+        XCTAssertEqual(pasteboard.string(forType: .string), "something the user copied")
     }
 }

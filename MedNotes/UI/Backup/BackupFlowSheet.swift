@@ -11,10 +11,13 @@ struct BackupFlowSheet: View {
     @State private var passphrase = ""
     @State private var confirmation = ""
     /// The passphrase "Generate" made, kept only while this sheet is open (and
-    /// wiped when it goes), so the backup can tell it from a typed one.
+    /// wiped when it goes), so the backup can tell it from a typed one. It is
+    /// kept even when the fields are edited away from it: typing one character
+    /// and deleting it must not turn it into a typed passphrase.
     @State private var generated: String?
-    /// The generated passphrase is on screen. Once, until the backup starts.
-    @State private var showsGenerated = false
+    /// The backup has started, so the generated passphrase is off the screen:
+    /// it is shown until then, and not again.
+    @State private var generatedHidden = false
     @State private var confirmedSaved = false
     @State private var copied = false
     @State private var generateFailed = false
@@ -44,6 +47,14 @@ struct BackupFlowSheet: View {
         !passphrase.isEmpty && passphrase == confirmation
     }
 
+    /// Where the passphrase in the fields came from: the generated one for as
+    /// long as the fields hold exactly it, whatever was typed and undone in
+    /// between; otherwise a typed one.
+    static func source(passphrase: String, generated: String?, confirmedSaved: Bool) -> BackupPassphraseSource {
+        guard let generated, passphrase == generated else { return .typed }
+        return .generated(confirmedSaved: confirmedSaved)
+    }
+
     /// Whether the Back Up button is enabled. A generated passphrase also needs
     /// the user's word that it is saved.
     static func canBackUp(name: String, passphrase: String, confirmation: String,
@@ -51,8 +62,13 @@ struct BackupFlowSheet: View {
         guard !passphrase.isEmpty, passphrase == confirmation,
               BackupPassphrasePolicy.isAcceptable(passphrase), !isWorking,
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        return generated == nil || confirmedSaved
+        return source(passphrase: passphrase, generated: generated, confirmedSaved: confirmedSaved)
+            != .generated(confirmedSaved: false)
     }
+
+    /// The passphrase fields and Generate wait while a backup is being written:
+    /// a new passphrase then would not be the one the archive is sealed with.
+    static func canEditPassphrase(isWorking: Bool) -> Bool { !isWorking }
 
     private var canBackUp: Bool {
         Self.canBackUp(name: name, passphrase: passphrase, confirmation: confirmation,
@@ -61,8 +77,13 @@ struct BackupFlowSheet: View {
 
     /// What `performBackup` is told about where the passphrase came from.
     private var source: BackupPassphraseSource {
-        generated != nil && passphrase == generated
-            ? .generated(confirmedSaved: confirmedSaved) : .typed
+        Self.source(passphrase: passphrase, generated: generated, confirmedSaved: confirmedSaved)
+    }
+
+    /// The generated passphrase is on screen: while the fields still hold it,
+    /// until the backup starts.
+    private var showsGenerated: Bool {
+        generated != nil && passphrase == generated && !generatedHidden
     }
 
     private func generate() {
@@ -71,7 +92,7 @@ struct BackupFlowSheet: View {
             passphrase = new
             confirmation = new
             generated = new
-            showsGenerated = true
+            generatedHidden = false
             confirmedSaved = false
             copied = false
             generateFailed = false
@@ -80,10 +101,10 @@ struct BackupFlowSheet: View {
         }
     }
 
-    /// Takes the generated passphrase off the screen and out of the state.
+    /// Takes the generated passphrase out of the state.
     private func forgetGenerated() {
         generated = nil
-        showsGenerated = false
+        generatedHidden = false
         confirmedSaved = false
         copied = false
     }
@@ -136,8 +157,10 @@ struct BackupFlowSheet: View {
                     SecureField("Passphrase", text: $passphrase)
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
+                        .disabled(!Self.canEditPassphrase(isWorking: isWorking))
                     Button("Generate", action: generate)
                         .help("Make a strong passphrase")
+                        .disabled(!Self.canEditPassphrase(isWorking: isWorking))
                 }
             }
             if showsGenerated { generatedBlock }
@@ -150,6 +173,7 @@ struct BackupFlowSheet: View {
                 SecureField("Confirm passphrase", text: $confirmation)
                     .textFieldStyle(.roundedBorder)
                     .labelsHidden()
+                    .disabled(!Self.canEditPassphrase(isWorking: isWorking))
             }
             if !confirmation.isEmpty, !passphrasesMatch {
                 Text("The passphrases do not match.")
@@ -175,7 +199,7 @@ struct BackupFlowSheet: View {
                     isWorking = true
                     failure = nil
                     // Shown once: from here on the passphrase is no longer on screen.
-                    showsGenerated = false
+                    generatedHidden = true
                     let source = source
                     Task {
                         do {
@@ -191,9 +215,6 @@ struct BackupFlowSheet: View {
                 .disabled(!canBackUp)  // an empty name would save as ".mednotesbackup", a hidden file
             }
         }
-        // Typing over a generated passphrase makes it a typed one.
-        .onChange(of: passphrase) { if generated != nil, passphrase != generated { forgetGenerated() } }
-        .onChange(of: confirmation) { if generated != nil, confirmation != generated { forgetGenerated() } }
         .onDisappear {
             passphrase = ""
             confirmation = ""

@@ -29,6 +29,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LICENSES_FILE = os.path.join(REPO, "MedNotes", "Licenses.txt")
@@ -173,6 +174,17 @@ def check_folder(folder: str, expected: str, relative: str = DMG_FILE_NAME) -> l
     return problems
 
 
+def _detach(mount: str) -> bool:
+    """Detaches a mounted image, retrying and then forcing; True when it is gone."""
+    for attempt in range(4):
+        args = ["hdiutil", "detach", mount, "-quiet"] + (["-force"] if attempt == 3 else [])
+        subprocess.run(args, capture_output=True)
+        if not os.path.ismount(mount):
+            return True
+        time.sleep(1)
+    return not os.path.ismount(mount)
+
+
 def check_dmg(dmg: str, expected: str) -> list[str]:
     if not os.path.exists(dmg):
         return [f"{dmg} does not exist"]
@@ -181,15 +193,20 @@ def check_dmg(dmg: str, expected: str) -> list[str]:
         ["hdiutil", "attach", "-readonly", "-nobrowse", "-noverify", "-noautoopen", "-mountpoint", mount, dmg],
         capture_output=True, text=True)
     if attach.returncode != 0:
+        os.rmdir(mount)
         return [f"could not mount {dmg}: {attach.stderr.strip()}"]
     try:
-        return check_folder(mount, expected)
+        problems = check_folder(mount, expected)
     finally:
-        subprocess.run(["hdiutil", "detach", mount, "-quiet"], capture_output=True)
+        detached = _detach(mount)
+    if detached:
         try:
             os.rmdir(mount)
         except OSError:
             pass
+    else:
+        problems.append(f"the DMG is still mounted at {mount}; detach it before going on")
+    return problems
 
 
 def main(argv: list[str]) -> int:

@@ -83,17 +83,26 @@ enum BackupPassphrasePolicy {
 }
 
 /// Clipboard hygiene for generated passphrases: a copied passphrase is cleared
-/// after 60 seconds if the clipboard still holds exactly that string.
+/// after 60 seconds, or when the app quits, if the clipboard still holds
+/// exactly that string.
 @MainActor
 final class PassphraseClipboard {
     static let shared = PassphraseClipboard()
     static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
     static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     private var clearTask: Task<Void, Never>?
+    private var terminationObserver: NSObjectProtocol?
+    private var lastCopied: String?
     private let pasteboard: NSPasteboard
+    private let notificationCenter: NotificationCenter
 
-    init(pasteboard: NSPasteboard = .general) {
+    init(pasteboard: NSPasteboard = .general, notificationCenter: NotificationCenter = .default) {
         self.pasteboard = pasteboard
+        self.notificationCenter = notificationCenter
+    }
+
+    deinit {
+        if let terminationObserver { notificationCenter.removeObserver(terminationObserver) }
     }
 
     func copy(_ passphrase: String, after seconds: TimeInterval = 60) {
@@ -103,13 +112,28 @@ final class PassphraseClipboard {
         // confidential, and it is about to be replaced by the clear task.
         pasteboard.setData(Data(), forType: Self.concealedType)
         pasteboard.setData(Data(), forType: Self.transientType)
-        clearTask?.cancel()
-        clearTask = Task { [pasteboard] in
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            if pasteboard.string(forType: .string) == passphrase {
-                pasteboard.clearContents()
+        lastCopied = passphrase
+        // The minute below runs in this process: quitting inside it would leave
+        // the passphrase on the clipboard, so quitting clears it too.
+        if terminationObserver == nil {
+            terminationObserver = notificationCenter.addObserver(
+                forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.clearIfStillHeld() }
             }
         }
+        clearTask?.cancel()
+        clearTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.clearIfStillHeld()
+        }
+    }
+
+    /// Clears the clipboard if it still holds the passphrase that was copied:
+    /// whatever the user copied since is theirs.
+    private func clearIfStillHeld() {
+        defer { lastCopied = nil }
+        guard let lastCopied, pasteboard.string(forType: .string) == lastCopied else { return }
+        pasteboard.clearContents()
     }
 }

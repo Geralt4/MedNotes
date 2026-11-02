@@ -137,9 +137,23 @@ class CheckLicensesTests(unittest.TestCase):
             self.skipTest("hdiutil cannot make a DMG here: " + made.stderr.strip())
         return dmg
 
-    def test_a_dmg_with_the_license_file_passes(self):
+    def mounted_check_points(self):
+        info = subprocess.run(["hdiutil", "info"], capture_output=True, text=True).stdout
+        return [line for line in info.splitlines() if "mednotes-dmg-check-" in line]
+
+    def test_a_dmg_with_the_license_file_passes_and_is_not_left_mounted(self):
         text = self.f.expected()
         self.assertEqual(gate.check_dmg(self.make_dmg({gate.DMG_FILE_NAME: text}), text), [])
+        self.assertEqual(self.mounted_check_points(), [], "the DMG was left mounted")
+
+    def test_a_dmg_that_cannot_be_detached_is_reported(self):
+        text = self.f.expected()
+        dmg = self.make_dmg({gate.DMG_FILE_NAME: text})
+        original = gate._detach
+        gate._detach = lambda mount: (original(mount), False)[1]  # detached, but reported as stuck
+        self.addCleanup(setattr, gate, "_detach", original)
+        problems = gate.check_dmg(dmg, text)
+        self.assertTrue(any("still mounted" in p for p in problems), problems)
 
     def test_a_dmg_without_the_license_file_is_refused(self):
         text = self.f.expected()

@@ -106,10 +106,11 @@ explicit.**
   four, about 137 bits. It is drawn from the system's secure random source
   (`SecRandomCopyBytes`) by rejection sampling, so each character is equally
   likely; if the source fails, no passphrase is made and nothing weaker is used.
-  It is shown once, in the sheet, and cleared from the sheet's state when the
-  backup starts or the sheet closes; the session never holds it. Copy goes
-  through the concealed, transient clipboard helper, which clears the clipboard
-  after 60 seconds if it still holds that string. The backup does not proceed
+  It is shown once, in the sheet: it is taken off the screen when the backup
+  starts and cleared from the sheet's state when the sheet closes (a retry after
+  a failure needs it until then); the session never holds it. Copy goes through
+  the concealed, transient clipboard helper, which clears the clipboard after 60
+  seconds or when the app quits, if it still holds that string. The backup does not proceed
   until the user confirms they have saved it: the sheet's button waits, and
   `performBackup(…, source: .generated(confirmedSaved:))` refuses an
   unconfirmed one before it shows a file panel, so the gate does not depend on

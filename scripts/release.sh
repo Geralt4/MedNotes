@@ -28,8 +28,9 @@
 #   scripts/release.sh 2.0.1
 #
 # The build number (CFBundleVersion) is the number of commits that lead to the
-# release commit (scripts/release_build_number.py), so it is unique and always
-# increasing. The run refuses a shallow clone or a tree with changes.
+# release commit (scripts/release_build_number.py), so along the main line it is
+# unique and always increasing. The run refuses a shallow clone or a tree with
+# changes. Release from the main line: another branch can repeat a number.
 #
 # Any mismatch in signature, entitlements or notarization fails the run and
 # leaves the artifacts in build/release for inspection.

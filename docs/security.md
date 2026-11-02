@@ -96,8 +96,8 @@ Data leaves MedNotes in exactly four ways, each one explicit:
    sheet can generate the passphrase: 28 characters from an alphabet without
    look-alikes (about 137 bits), from the system's secure random source, shown
    once, copied only through the concealed clipboard helper (cleared after 60
-   seconds), never logged, and the backup waits until you confirm you have
-   saved it.
+   seconds or at quit), never logged, and the backup waits until you confirm
+   you have saved it.
 
 ## What is not defended against
 
