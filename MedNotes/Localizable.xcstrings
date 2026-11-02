@@ -948,6 +948,16 @@
         }
       }
     },
+    "About MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Σχετικά με το MedNotes"
+          }
+        }
+      }
+    },
     "Add %@" : {
       "localizations" : {
         "el" : {
@@ -5164,6 +5174,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Άνοιγμα Ρυθμίσεων Συστήματος"
+          }
+        }
+      }
+    },
+    "Open-source licenses" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Άδειες ανοιχτού κώδικα"
           }
         }
       }

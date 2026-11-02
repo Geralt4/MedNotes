@@ -125,13 +125,24 @@ ENTITLEMENTS="$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 printf '%s' "$ENTITLEMENTS" > "$OUT/entitlements.plist"
 python3 scripts/verify_entitlements.py "$OUT/entitlements.plist" "$MEDNOTES_TEAM_ID"
 
+step "Check the third-party license texts in the app"
+# MedNotes/Licenses.txt must be what the pinned package versions yield, and the
+# built app must carry exactly that file (the About panel shows it).
+python3 scripts/check_licenses.py --checkouts "$DERIVED/SourcePackages/checkouts" --app "$APP"
+
 step "Build the DMG"
 STAGE="$OUT/dmg-root"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
+# The license texts also sit at the top level of the DMG, readable without
+# opening the app.
+cp "$APP/Contents/Resources/Licenses.txt" "$STAGE/Licenses.txt"
 hdiutil create -volname "MedNotes $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 codesign --force --sign "$MEDNOTES_SIGN_IDENTITY" "$DMG"
+
+step "Check the DMG carries the license texts"
+python3 scripts/check_licenses.py --checkouts "$DERIVED/SourcePackages/checkouts" --dmg "$DMG"
 
 step "Notarize and staple"
 xcrun notarytool submit "$DMG" --keychain-profile "$MEDNOTES_NOTARY_PROFILE" --wait
