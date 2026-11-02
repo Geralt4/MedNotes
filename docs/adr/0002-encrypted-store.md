@@ -100,10 +100,21 @@ explicit.**
   iterations bounded to 100,000–2,000,000, 1 GiB cap, entry-by-entry extraction
   with `O_NOFOLLOW | O_EXCL`, rejecting separators, depth, non-regular files,
   duplicate names and symlinks.
-- Generated passphrases are 24 Crockford Base32 characters, copied to the
-  clipboard and cleared after 60 seconds if unchanged. Custom passphrases must
-  be NFC and at least 16 characters; policy is enforced in the service, not
-  only the UI.
+- The Back Up sheet has a Generate button. A generated passphrase is 28
+  characters from a 30-character alphabet (Crockford Base32 without 0 and 1, so
+  nothing in it looks like another character: no 0 O 1 I l), in seven groups of
+  four, about 137 bits. It is drawn from the system's secure random source
+  (`SecRandomCopyBytes`) by rejection sampling, so each character is equally
+  likely; if the source fails, no passphrase is made and nothing weaker is used.
+  It is shown once, in the sheet, and cleared from the sheet's state when the
+  backup starts or the sheet closes; the session never holds it. Copy goes
+  through the concealed, transient clipboard helper, which clears the clipboard
+  after 60 seconds if it still holds that string. The backup does not proceed
+  until the user confirms they have saved it: the sheet's button waits, and
+  `performBackup(…, source: .generated(confirmedSaved:))` refuses an
+  unconfirmed one before it shows a file panel, so the gate does not depend on
+  the view. It is never logged. Custom passphrases must be NFC and at least 16
+  characters; policy is enforced in the service, not only the UI.
 
 ### Calendar and Reminders
 

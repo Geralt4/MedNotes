@@ -340,7 +340,10 @@ extension AppSession {
     /// while it was up closed them. A lock while the archive is written
     /// cancels it (`closeStore`): it stops before its next record, leaves
     /// nothing where the user chose, and the alert after the unlock says so.
-    func performBackup(name: String, passphrase: String) async throws {
+    func performBackup(name: String, passphrase: String, source: BackupPassphraseSource = .typed) async throws {
+        // A generated passphrase is shown once. The backup is useless without it,
+        // so it waits until the user says it is saved, whatever the view did.
+        if case .generated(confirmedSaved: false) = source { throw PassphraseNotConfirmedError() }
         guard canUseStore else { return }
         let chosen = await choose(FilePanelRequest(
             kind: .save(suggestedName: "\(name).\(BackupArchiveV2.fileExtension)"),
@@ -648,6 +651,22 @@ private struct MirrorEditsNotSavedError: LocalizedError {
 
     var errorDescription: String? {
         String(localized: "\(count) edit(s) could not be saved, so no note was replaced.")
+    }
+}
+
+/// Where the passphrase of a backup came from.
+enum BackupPassphraseSource: Equatable {
+    /// Typed by the user.
+    case typed
+    /// Made by "Generate"; `confirmedSaved` is whether the user said they have
+    /// saved it.
+    case generated(confirmedSaved: Bool)
+}
+
+/// A generated passphrase was not confirmed as saved, so no backup was made.
+struct PassphraseNotConfirmedError: LocalizedError {
+    var errorDescription: String? {
+        String(localized: "Confirm that you have saved the passphrase before the backup is made.")
     }
 }
 

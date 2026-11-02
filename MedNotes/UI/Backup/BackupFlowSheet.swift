@@ -10,6 +10,14 @@ struct BackupFlowSheet: View {
     @State private var name = String(localized: "MedNotes backup")
     @State private var passphrase = ""
     @State private var confirmation = ""
+    /// The passphrase "Generate" made, kept only while this sheet is open (and
+    /// wiped when it goes), so the backup can tell it from a typed one.
+    @State private var generated: String?
+    /// The generated passphrase is on screen. Once, until the backup starts.
+    @State private var showsGenerated = false
+    @State private var confirmedSaved = false
+    @State private var copied = false
+    @State private var generateFailed = false
     @State private var manifest: BackupManifest?
     @State private var isWorking = false
     @State private var failure: String?
@@ -36,6 +44,84 @@ struct BackupFlowSheet: View {
         !passphrase.isEmpty && passphrase == confirmation
     }
 
+    /// Whether the Back Up button is enabled. A generated passphrase also needs
+    /// the user's word that it is saved.
+    static func canBackUp(name: String, passphrase: String, confirmation: String,
+                          generated: String?, confirmedSaved: Bool, isWorking: Bool) -> Bool {
+        guard !passphrase.isEmpty, passphrase == confirmation,
+              BackupPassphrasePolicy.isAcceptable(passphrase), !isWorking,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        return generated == nil || confirmedSaved
+    }
+
+    private var canBackUp: Bool {
+        Self.canBackUp(name: name, passphrase: passphrase, confirmation: confirmation,
+                       generated: generated, confirmedSaved: confirmedSaved, isWorking: isWorking)
+    }
+
+    /// What `performBackup` is told about where the passphrase came from.
+    private var source: BackupPassphraseSource {
+        generated != nil && passphrase == generated
+            ? .generated(confirmedSaved: confirmedSaved) : .typed
+    }
+
+    private func generate() {
+        do {
+            let new = try BackupPassphrasePolicy.generate()
+            passphrase = new
+            confirmation = new
+            generated = new
+            showsGenerated = true
+            confirmedSaved = false
+            copied = false
+            generateFailed = false
+        } catch {
+            generateFailed = true
+        }
+    }
+
+    /// Takes the generated passphrase off the screen and out of the state.
+    private func forgetGenerated() {
+        generated = nil
+        showsGenerated = false
+        confirmedSaved = false
+        copied = false
+    }
+
+    private var generatedBlock: some View {
+        VStack(alignment: .leading, spacing: Chrome.Space.sm) {
+            Text("Write this passphrase down now. It is shown only once, and without it the backup cannot be opened.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let generated {
+                Text(verbatim: generated)
+                    .font(.system(.title3, design: .monospaced).weight(.medium))
+                    .textSelection(.disabled)
+                    .padding(Chrome.Space.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Chrome.editorFill, in: RoundedRectangle(cornerRadius: Chrome.Radius.card))
+                    .accessibilityIdentifier("generatedPassphrase")
+                HStack {
+                    Button(copied ? "Copied" : "Copy") {
+                        PassphraseClipboard.shared.copy(generated)
+                        copied = true
+                    }
+                    Text("The clipboard is cleared after a minute.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Toggle("I have saved this passphrase", isOn: $confirmedSaved)
+                .toggleStyle(.checkbox)
+            if !confirmedSaved {
+                Text("Confirm that you have saved the passphrase before the backup is made.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
     private var backUpForm: some View {
         VStack(alignment: .leading, spacing: Chrome.Space.lg) {
             Label("Back Up", systemImage: "externaldrive.badge.timemachine")
@@ -46,9 +132,19 @@ struct BackupFlowSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             EditorTextField("Name", text: $name)
             EditorField("Passphrase") {
-                SecureField("Passphrase", text: $passphrase)
-                    .textFieldStyle(.roundedBorder)
-                    .labelsHidden()
+                HStack {
+                    SecureField("Passphrase", text: $passphrase)
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                    Button("Generate", action: generate)
+                        .help("Make a strong passphrase")
+                }
+            }
+            if showsGenerated { generatedBlock }
+            if generateFailed {
+                Text("A passphrase could not be generated. Try again, or type your own.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
             EditorField("Confirm passphrase") {
                 SecureField("Confirm passphrase", text: $confirmation)
@@ -78,9 +174,12 @@ struct BackupFlowSheet: View {
                 Button("Choose Location & Back Up…") {
                     isWorking = true
                     failure = nil
+                    // Shown once: from here on the passphrase is no longer on screen.
+                    showsGenerated = false
+                    let source = source
                     Task {
                         do {
-                            try await session.performBackup(name: name, passphrase: passphrase)
+                            try await session.performBackup(name: name, passphrase: passphrase, source: source)
                         } catch {
                             failure = UserFacingFailure.message(for: error, during: .backup)
                         }
@@ -89,10 +188,16 @@ struct BackupFlowSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .prominentActionButtonStyle()
-                .disabled(!passphrasesMatch || !BackupPassphrasePolicy.isAcceptable(passphrase) || isWorking
-                          // An empty name would save as ".mednotesbackup", a hidden file.
-                          || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canBackUp)  // an empty name would save as ".mednotesbackup", a hidden file
             }
+        }
+        // Typing over a generated passphrase makes it a typed one.
+        .onChange(of: passphrase) { if generated != nil, passphrase != generated { forgetGenerated() } }
+        .onChange(of: confirmation) { if generated != nil, confirmation != generated { forgetGenerated() } }
+        .onDisappear {
+            passphrase = ""
+            confirmation = ""
+            forgetGenerated()
         }
     }
 
