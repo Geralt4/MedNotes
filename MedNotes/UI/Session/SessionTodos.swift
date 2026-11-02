@@ -142,8 +142,20 @@ extension AppSession {
         // Snapshot before deletion so a linked Apple Reminders copy can go too.
         do {
             if let snapshot = try await store.todos.load(id: id) {
+                // A lock while the row was read took the store: nothing has been
+                // touched, and nothing is deleted under the curtain.
+                guard canUseStore, self.store === store else { return }
                 // A lookup that fails must not stop an unlinked row being deleted.
                 let destination = try? await store.destinations.destination(for: .reminders)
+                await todoRemovalDidLookUpDestination()
+                // The same after the destination was read. For a todo this is
+                // not the last point a lock can land: when the stored
+                // identifier finds nothing, `deleteRemote` looks the reminder
+                // up by its marker with an awaited EventKit fetch, and a lock
+                // that lands during it still finds the reminder removed
+                // afterwards. (A calendar event has no such suspension; see
+                // `removeEvent`.)
+                guard canUseStore, self.store === store else { return }
                 let canReach = appleReminders.state == .granted && SyncDestinationCore.mayWrite(destination)
                 if snapshot.reminderIdentifier != nil {
                     // Linked: the delete waits until the Apple copy can be removed.
@@ -160,10 +172,15 @@ extension AppSession {
             } else {
                 try await store.todos.delete(id: id)
             }
+            // A lock during the delete cleared the selection and the lists.
+            guard canUseStore, self.store === store else { return }
             if selectedTodoId == id { selectedTodoId = nil }
             todoEpoch += 1
             await reloadTodos()
         } catch {
+            // The same for a failure: on a store that locked meanwhile there is
+            // no message to show and nothing to reload.
+            guard canUseStore, self.store === store else { return }
             errorMessage = error.localizedDescription
             if selectedTodoId == id,
                await todoExists(id: id) == false {

@@ -97,7 +97,7 @@ struct QuickSwitcherView: View {
     private func rowButton(_ hit: AppSession.SwitcherHit, index: Int) -> some View {
         Button {
             selection = index
-            confirmSelection()
+            choose(.clicked(position: index, hit: hit))
         } label: {
             QuickSwitcherRow(hit: hit)
         }
@@ -109,9 +109,11 @@ struct QuickSwitcherView: View {
     }
 
     private func confirmSelection() {
-        guard session.switcherResults.indices.contains(selection) else { return }
-        let hit = session.switcherResults[selection]
-        Task { await session.open(hit) }
+        choose(.highlighted(position: selection))
+    }
+
+    private func choose(_ choice: AppSession.SwitcherChoice) {
+        session.choose(choice)
     }
 }
 
