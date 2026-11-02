@@ -1372,7 +1372,13 @@ final class AppSession: ObservableObject {
             self.dataRoot = dataRoot
             // An install that a crash cut off is undone before anything reads a
             // key or opens a store, and before the orphan sweep can see it.
-            try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
+            do {
+                try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
+            } catch {
+                // Its message no longer carries the detail; the log does.
+                _ = UserFacingFailure.message(for: error, during: .restore)
+                throw error
+            }
             let keyManager = resolvedKeyManager()
             cleanupLeftovers = try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager)
                 .recoverInterruptedMigration()

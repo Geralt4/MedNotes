@@ -250,4 +250,38 @@ final class RestoreFixTests: XCTestCase {
         XCTAssertEqual(dropped, 0)
         await target.close()
     }
+
+    /// A patient whose only file is gone: the record also leaves the patient's
+    /// own file list (`files_json`), which is where a patient with no file rows
+    /// is read from.
+    func testAV1RestoreRemovesTheOnlyFileOfAPatientWhoseFileIsMissingFromThePatientToo() async throws {
+        let legacyRoot = try makeRoot()
+        let plain = try Database(path: legacyRoot.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Only"
+        patient.profile.lastName = "File"
+        patient.files = [PatientFile(name: "gone.txt", type: .other, data: nil)]
+        try await plain.savePatient(patient)
+        await plain.close()
+        let children: [String: FileWrapper] = [
+            "mednotes.db": FileWrapper(regularFileWithContents: try Data(contentsOf: legacyRoot.databaseURL)),
+            "manifest.json": FileWrapper(regularFileWithContents:
+                Data(#"{"name":"old","createdAt":0,"schemaVersion":1,"counts":{}}"#.utf8)),
+            "Files": FileWrapper(directoryWithFileWrappers: [:])
+        ]
+        for (name, wrapper) in children { wrapper.preferredFilename = name }
+        let payload = try XCTUnwrap(FileWrapper(directoryWithFileWrappers: children).serializedRepresentation)
+        let archive = try v1Archive(sealing: payload, passphrase: passphrase, name: "only-file.mnbk")
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let loaded = try await target.patients.load(id: patient.id)
+        XCTAssertEqual(try XCTUnwrap(loaded).files, [], "the dropped file must not come back from the patient's own list")
+        await target.close()
+    }
 }

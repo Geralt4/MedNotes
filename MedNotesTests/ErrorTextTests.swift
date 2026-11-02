@@ -120,7 +120,33 @@ final class ErrorTextTests: XCTestCase {
         let error = BackupError.missingManifest(URL(fileURLWithPath: "/tmp/x"))
 
         XCTAssertEqual(UserFacingFailure.message(for: error, during: .restore), error.localizedDescription)
+        let failures: Set<SecurityLog.Event> = [.backupFailed, .restoreFailed, .importFailed, .exportFailed, .migrationFailed]
+        XCTAssertTrue(logged.filter { failures.contains($0.event) }.isEmpty)
+    }
+
+    /// A duplicate AMKA has a plain message of its own that the user can act
+    /// on; it is neither replaced nor logged.
+    func testADuplicateAMKAKeepsItsOwnMessage() {
+        let error = SQLiteError.step("UNIQUE constraint failed: patients.amka", sql: "INSERT INTO patients …")
+
+        let text = UserFacingFailure.message(for: error, during: .importing)
+
+        XCTAssertEqual(text, String(localized: "Another patient already has this AMKA."))
         XCTAssertTrue(logged.isEmpty)
+    }
+
+    /// A backup from a newer build tells the user to update, as the migration does.
+    func testABackupFromANewerVersionStillSaysSo() {
+        XCTAssertEqual(BackupError.madeByNewerVersion.localizedDescription,
+                       String(localized: "The backup was made by a newer MedNotes."))
+    }
+
+    func testTheRedactionHandlesGreekQuotesAndPathsWithSpaces() {
+        let cleaned = SecurityLog.redactingPaths(
+            "Το αρχείο «Μαρία Π.pdf» δεν ανοίγει στο /Volumes/My Backup Disk/Μαρία Π.mnbk")
+        XCTAssertFalse(cleaned.contains("Μαρία"), cleaned)
+        XCTAssertFalse(cleaned.contains("Backup Disk"), cleaned)
+        XCTAssertTrue(cleaned.contains("<path>"), cleaned)
     }
 
     func testTheLoggedDetailHasNoPathsAndNoQuotedFileNames() {

@@ -483,7 +483,7 @@ extension AppSession {
                 // session. The folder named in the message holds the originals.
                 await lockNow(reason: "restore-rollback-failed")
                 // Set after the lock: its teardown clears errorMessage.
-                errorMessage = UserFacingFailure.message(for: error, during: .restore)
+                errorMessage = error.localizedDescription
             }
             throw error
         }

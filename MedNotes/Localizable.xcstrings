@@ -6838,6 +6838,16 @@
         }
       }
     },
+    "The export could not be completed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εξαγωγή δεν ολοκληρώθηκε."
+          }
+        }
+      }
+    },
     "The heading this link names is not in that note." : {
       "localizations" : {
         "el" : {

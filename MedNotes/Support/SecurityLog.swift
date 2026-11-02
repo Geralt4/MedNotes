@@ -29,6 +29,7 @@ enum SecurityLog {
         case backupFailed = "backup.failed"
         case restoreFailed = "restore.failed"
         case importFailed = "import.failed"
+        case exportFailed = "export.failed"
         case migrationFailed = "migration.failed"
     }
 
@@ -69,7 +70,14 @@ enum SecurityLog {
     /// `detail` without absolute paths and without quoted names.
     static func redactingPaths(_ detail: String) -> String {
         var text = detail
-        for (pattern, replacement) in [("“[^”]*”", "“…”"), ("\"[^\"]*\"", "\"…\""), ("/[^\\s”\"']+", "<path>")] {
+        // Quoted names first (curly, straight and Greek quotes), then a path
+        // from its first component to the end of the quote or line: a path may
+        // contain spaces, so it is not cut at the first one.
+        let roots = "Users|Volumes|private|var|tmp|Library|Applications|System|opt|home"
+        for (pattern, replacement) in [
+            ("“[^”]*”", "“…”"), ("\"[^\"]*\"", "\"…\""), ("«[^»]*»", "«…»"),
+            ("/(?:\(roots))\\b[^\\n“”\"«»]*", "<path>")
+        ] {
             if let expression = try? NSRegularExpression(pattern: pattern) {
                 text = expression.stringByReplacingMatches(
                     in: text, range: NSRange(text.startIndex..., in: text), withTemplate: replacement)

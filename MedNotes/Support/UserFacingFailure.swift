@@ -10,7 +10,7 @@ import Foundation
 /// the detail out, so no screen that shows one can leak it; this adds the log
 /// line, and makes the same true of a raw `SQLiteError`.
 enum FailureContext {
-    case backup, restore, importing, migration
+    case backup, restore, importing, migration, export
 
     var event: SecurityLog.Event {
         switch self {
@@ -18,6 +18,7 @@ enum FailureContext {
         case .restore: return .restoreFailed
         case .importing: return .importFailed
         case .migration: return .migrationFailed
+        case .export: return .exportFailed
         }
     }
 
@@ -28,6 +29,7 @@ enum FailureContext {
         case .restore: return String(localized: "The restore could not be completed.")
         case .importing: return String(localized: "The import could not be completed.")
         case .migration: return String(localized: "The store could not be encrypted.")
+        case .export: return String(localized: "The export could not be completed.")
         }
     }
 }
@@ -87,6 +89,8 @@ extension SQLiteError: DetailedFailure {
     /// `rekey` the SQL holds the raw key.
     var logDetail: String? {
         switch self {
+        // The one SQLite message with a plain, useful text of its own.
+        case let .step(msg, _) where msg.hasPrefix("UNIQUE constraint failed: patients.amka"): return nil
         case let .open(msg): return "open: \(msg)"
         case let .prepare(msg, _): return "prepare: \(msg)"
         case let .step(msg, _): return "step: \(msg)"

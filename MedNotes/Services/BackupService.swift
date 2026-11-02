@@ -125,6 +125,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     case snapshotUnreadable
     case invalidArchive
     case unexpectedSchema(String)
+    /// The archive's manifest names a schema newer than this build's.
+    case madeByNewerVersion
     case destinationNotConfirmed
     /// A restore failed and the original data could not be put back; the
     /// folder still holds it.
@@ -152,6 +154,7 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
         case let .restoreFailed(msg): return "restore failed: \(msg)"
         case .snapshotUnreadable: return "snapshot could not be read"
         case let .unexpectedSchema(detail): return "the backup's schema is not one MedNotes can restore: \(detail)"
+        case .madeByNewerVersion: return "the backup was made by a newer MedNotes"
         case .destinationNotConfirmed:
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
@@ -188,6 +191,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "The database snapshot could not be read.")
         case .unexpectedSchema:
             return String(localized: "This backup is not in a form MedNotes can restore.")
+        case .madeByNewerVersion:
+            return String(localized: "The backup was made by a newer MedNotes.")
         case .destinationNotConfirmed:
             return String(localized: "The sync destination has not been reconfirmed since the last restore.")
         case .restorePointKeyUnavailable:
@@ -438,7 +443,7 @@ actor BackupService {
             opened: opened, snapshotURL: snapshotURL, store: stagingStore).manifest
         // A newer build may have written a schema this one does not know.
         guard manifest.schemaVersion <= Schema.currentVersion else {
-            throw BackupError.unexpectedSchema(String(localized: "The backup was made by a newer MedNotes."))
+            throw BackupError.madeByNewerVersion
         }
 
         try await ArchiveExtraction.ensureEncryptedSnapshot(at: snapshotURL, key: opened.archiveKey)

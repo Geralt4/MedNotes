@@ -81,20 +81,20 @@ actor StoreRecovery {
         do {
             opened = try BackupArchiveV2.openReader(at: backupURL, passphrase: passphrase)
         } catch {
-            throw RecoveryError.archiveInvalid(error.localizedDescription)
+            throw RecoveryError.archiveInvalid(UserFacingFailure.message(for: error, during: .restore))
         }
         defer { try? opened.reader.handle.close() }
         do {
             manifest = try await ArchiveExtraction.extract(
                 opened: opened, snapshotURL: snapshotURL, store: store).manifest
         } catch {
-            throw RecoveryError.archiveInvalid(error.localizedDescription)
+            throw RecoveryError.archiveInvalid(UserFacingFailure.message(for: error, during: .restore))
         }
 
         do {
             try await ArchiveExtraction.ensureEncryptedSnapshot(at: snapshotURL, key: opened.archiveKey)
         } catch {
-            throw RecoveryError.archiveInvalid(error.localizedDescription)
+            throw RecoveryError.archiveInvalid(UserFacingFailure.message(for: error, during: .restore))
         }
 
         // Validate the snapshot under the archive key before anything moves.
@@ -124,7 +124,7 @@ actor StoreRecovery {
             await validation.close()
         } catch {
             await validation?.close()
-            throw RecoveryError.archiveInvalid(error.localizedDescription)
+            throw RecoveryError.archiveInvalid(UserFacingFailure.message(for: error, during: .restore))
         }
         Self.removeSidecars(at: snapshotURL)
 
@@ -137,7 +137,7 @@ actor StoreRecovery {
             defer { check.close() }
             try check.exec("SELECT count(*) FROM sqlite_master")
         } catch {
-            throw RecoveryError.installFailed(error.localizedDescription)
+            throw RecoveryError.installFailed(UserFacingFailure.message(for: error, during: .restore))
         }
         Self.removeSidecars(at: snapshotURL)
 
@@ -186,7 +186,7 @@ actor StoreRecovery {
         } catch {
             for url in installed { try? fm.removeItem(at: url) }
             for move in movedAside.reversed() { try? fm.moveItem(at: move.aside, to: move.live) }
-            throw RecoveryError.installFailed(error.localizedDescription)
+            throw RecoveryError.installFailed(UserFacingFailure.message(for: error, during: .restore))
         }
 
         // Only now are the unreadable bytes removed.
