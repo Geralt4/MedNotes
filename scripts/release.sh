@@ -147,8 +147,10 @@ printf '%s' "$ENTITLEMENTS" > "$OUT/entitlements.plist"
 python3 scripts/verify_entitlements.py "$OUT/entitlements.plist" "$MEDNOTES_TEAM_ID"
 
 step "Check the third-party license texts in the app"
-# MedNotes/Licenses.txt must be what the pinned package versions yield, and the
-# built app must carry exactly that file (the About panel shows it).
+# MedNotes/Licenses.txt must hold the notice of every component compiled in
+# (SQLCipher, swift-sodium, libsodium and the code it bundles; see
+# docs/dependencies.md) as the pinned package versions yield, and the built app
+# must carry exactly that file (the About panel shows it).
 python3 scripts/check_licenses.py --checkouts "$DERIVED/SourcePackages/checkouts" --app "$APP"
 
 step "Build the DMG"

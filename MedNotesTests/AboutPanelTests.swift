@@ -5,14 +5,21 @@ import XCTest
 /// number beside the version). The text is `MedNotes/Licenses.txt`, made from
 /// the pinned package versions and checked by `scripts/check_licenses.py`.
 final class AboutPanelTests: XCTestCase {
-    func testTheCreditsHoldBothLicenseTexts() {
+    func testTheCreditsHoldEveryComponentsLicenseText() {
         let credits = AboutPanel.credits().string
         XCTAssertTrue(credits.contains("SQLCipher"), "SQLCipher's license is missing from the About panel")
         XCTAssertTrue(credits.contains("Community Edition Open Source License"))
-        XCTAssertTrue(credits.contains("libsodium"), "libsodium's license is missing from the About panel")
+        XCTAssertTrue(credits.contains("ZETETIC LLC"))
+        XCTAssertTrue(credits.contains("swift-sodium"))
         XCTAssertTrue(credits.contains("ISC License"))
         XCTAssertTrue(credits.contains("Frank Denis"))
-        XCTAssertTrue(credits.contains("ZETETIC LLC"))
+        // libsodium has its own license and copyright holder, apart from swift-sodium's.
+        XCTAssertTrue(credits.contains("libsodium 1.0.22"), "libsodium's own license is missing from the About panel")
+        XCTAssertTrue(credits.contains("Copyright (c) 2013-2026"), "libsodium's own LICENSE text is missing")
+        // And the code libsodium bundles from other authors under BSD-style terms.
+        XCTAssertTrue(credits.contains("Colin Percival"), "the SHA-2/PBKDF2/scrypt notice is missing")
+        XCTAssertTrue(credits.contains("Alexander Peslyak"))
+        XCTAssertTrue(credits.contains("Redistributions in binary form must reproduce the above copyright"))
     }
 
     func testThePanelIsGivenTheCredits() throws {
@@ -29,8 +36,11 @@ final class AboutPanelTests: XCTestCase {
         let shipped = try XCTUnwrap(AboutPanel.licenseText(), "Licenses.txt is not in the app bundle")
         XCTAssertTrue(shipped.contains("SQLCipher.swift 4.19.0 (revision 39f212458aeb88e33bdac2200a793a3f0d55d32b)"))
         XCTAssertTrue(shipped.contains("swift-sodium 0.11.0 (revision cfd195c76882aa9b997560ca7cb95d72fbf5db00)"))
+        XCTAssertTrue(shipped.contains("libsodium 1.0.22 (revision 8cda270b3b18ca103c57085752cece1ebbf5abee)"))
+        XCTAssertTrue(shipped.contains("Code bundled in libsodium under BSD-style terms"))
         XCTAssertTrue(shipped.contains("Frank Denis"))
         XCTAssertTrue(shipped.contains("ZETETIC LLC"))
+        XCTAssertTrue(shipped.contains("Colin Percival"))
     }
 
     func testABundleWithoutTheFileGivesNoLicenseText() {
