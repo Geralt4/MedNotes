@@ -83,11 +83,21 @@ extension AppSession {
     /// A session over a temporary root with an in-memory key manager, so the
     /// test never touches the real Keychain. `defaults` comes from
     /// `TestDefaults.suite`: the init refuses the host's `.standard`.
-    static func testSession(dataRoot: DataRoot, defaults: UserDefaults) -> AppSession {
+    ///
+    /// Apple Calendar and Reminders are fakes too (`FakeEventKit.swift`), so a
+    /// test session can never reach the tester's calendars. Unless a test hands
+    /// in its own, they report that access was never requested, as the host does.
+    static func testSession(
+        dataRoot: DataRoot, defaults: UserDefaults,
+        calendar: FakeCalendarBackend? = nil,
+        reminders: FakeRemindersBackend? = nil
+    ) -> AppSession {
         AppSession(
             dataRoot: dataRoot,
             defaults: defaults,
-            keyManager: InMemoryKeyManager(key: TestKeys.root(for: dataRoot)))
+            keyManager: InMemoryKeyManager(key: TestKeys.root(for: dataRoot)),
+            calendarBackend: calendar ?? FakeCalendarBackend(),
+            remindersBackend: reminders ?? FakeRemindersBackend())
     }
 }
 

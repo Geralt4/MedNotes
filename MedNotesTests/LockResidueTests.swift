@@ -109,9 +109,9 @@ final class LockResidueTests: XCTestCase {
     /// the delete: the row keeps its identifier and nothing is reported.
     /// What this covers: the old code failed here with the reconnect message,
     /// under the curtain, and reloaded the lists on the closed store.
-    /// What it does not: the Apple account is never reachable in the test host
-    /// (and there is no fake EKEventStore), so `deleteRemote` is never reached
-    /// and the check that sits in front of it is not tested on its own.
+    /// What it does not: this session has no Apple Calendar access, so
+    /// `deleteRemote` is never reached. The check in front of it is tested
+    /// against a fake Calendar in `AppleSyncFakeTests`.
     func testALockDuringTheDeleteOfALinkedEventLeavesTheRowAndReportsNothing() async throws {
         let (session, id) = try await deleteAnEventWhileTheLockLands(linked: true)
 
@@ -180,9 +180,9 @@ final class LockResidueTests: XCTestCase {
     /// As for an event: a lock after the todo and its destination were read
     /// stops the delete, the row keeps its identifier and nothing is reported.
     /// The old code failed here with the reconnect message, under the curtain.
-    /// The Apple account is never reachable in the test host, so `deleteRemote`
-    /// is not reached; and a lock during its own awaited reminder fetch (see
-    /// `removeTodo`) is not covered.
+    /// This session has no Apple Reminders access, so `deleteRemote` is not
+    /// reached; the check in front of it is tested against a fake Reminders in
+    /// `AppleSyncFakeTests`.
     func testALockDuringTheDeleteOfALinkedTodoLeavesTheRowAndReportsNothing() async throws {
         let (session, id) = try await deleteATodoWhileTheLockLands(linked: true)
 
