@@ -38,4 +38,47 @@ final class AboutPanelTests: XCTestCase {
     func testABundleWithoutTheFileGivesNoLicenseText() {
         XCTAssertNil(AboutPanel.licenseText(bundle: Bundle(for: AboutPanelTests.self)))
     }
+
+    // MARK: - The build number beside the version
+
+    /// A bundle with a known version and build, as the release script makes one.
+    private func bundle(version: String, build: String) throws -> Bundle {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mednotes-about-\(UUID().uuidString).bundle", isDirectory: true)
+        let contents = root.appendingPathComponent("Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        let info: [String: Any] = [
+            "CFBundleIdentifier": "test.about", "CFBundleShortVersionString": version, "CFBundleVersion": build]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        return try XCTUnwrap(Bundle(url: root))
+    }
+
+    func testThePanelIsGivenTheVersionAndTheBuildNumberFromTheBundle() throws {
+        let options = AboutPanel.options(bundle: try bundle(version: "2.5.1", build: "987"))
+        XCTAssertEqual(options[.applicationVersion] as? String, "2.5.1")
+        XCTAssertEqual(options[.version] as? String, "987", "the build number shows next to the version")
+    }
+
+    func testTheRunningAppHasABuildNumber() {
+        let options = AboutPanel.options()
+        XCTAssertEqual(options[.version] as? String,
+                       Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+        XCTAssertFalse((options[.version] as? String ?? "").isEmpty)
+        XCTAssertFalse((options[.applicationVersion] as? String ?? "").isEmpty)
+    }
+
+    func testABundleWithoutAVersionGivesNoneRatherThanAWrongOne() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mednotes-about-\(UUID().uuidString).bundle", isDirectory: true)
+        let contents = root.appendingPathComponent("Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "test.none"], format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let options = AboutPanel.options(bundle: try XCTUnwrap(Bundle(url: root)))
+        XCTAssertNil(options[.version])
+        XCTAssertNil(options[.applicationVersion])
+    }
 }
