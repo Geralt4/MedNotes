@@ -114,6 +114,58 @@ struct BackupInfo: Sendable {
     let manifest: BackupManifest
 }
 
+/// Why a copy of the current data could not be made, when it is something the
+/// user can do something about. Anything else is reported without a cause and
+/// its detail goes to the log.
+enum SafetyCopyCause: Equatable, Sendable {
+    case diskFull, noPermission, inUse
+
+    /// The cause an error names, looking through the errors it wraps.
+    init?(from error: Error) {
+        var pending: [NSError] = [error as NSError]
+        var seen = 0
+        while let current = pending.popLast(), seen < 8 {
+            seen += 1
+            if let cause = Self.cause(of: current) { self = cause; return }
+            if let underlying = current.userInfo[NSUnderlyingErrorKey] as? NSError { pending.append(underlying) }
+        }
+        if let sqlite = error as? SQLiteError, let cause = Self.cause(ofSQLiteMessage: sqlite) {
+            self = cause
+            return
+        }
+        return nil
+    }
+
+    private static func cause(of error: NSError) -> SafetyCopyCause? {
+        switch (error.domain, error.code) {
+        case (NSCocoaErrorDomain, NSFileWriteOutOfSpaceError),
+             (NSPOSIXErrorDomain, Int(ENOSPC)), (NSPOSIXErrorDomain, Int(EDQUOT)):
+            return .diskFull
+        case (NSCocoaErrorDomain, NSFileWriteNoPermissionError), (NSCocoaErrorDomain, NSFileReadNoPermissionError),
+             (NSCocoaErrorDomain, NSFileWriteVolumeReadOnlyError),
+             (NSPOSIXErrorDomain, Int(EACCES)), (NSPOSIXErrorDomain, Int(EPERM)), (NSPOSIXErrorDomain, Int(EROFS)):
+            return .noPermission
+        case (NSPOSIXErrorDomain, Int(EBUSY)), (NSPOSIXErrorDomain, Int(ETXTBSY)):
+            return .inUse
+        default:
+            return nil
+        }
+    }
+
+    /// SQLite reports a full disk, a read-only file and a busy file by message.
+    private static func cause(ofSQLiteMessage error: SQLiteError) -> SafetyCopyCause? {
+        let message: String
+        switch error {
+        case let .open(m), let .prepare(m, _), let .step(m, _), let .exec(m, _): message = m.lowercased()
+        default: return nil
+        }
+        if message.contains("disk is full") { return .diskFull }
+        if message.contains("readonly") || message.contains("read-only") { return .noPermission }
+        if message.contains("is locked") || message.contains("is busy") { return .inUse }
+        return nil
+    }
+}
+
 enum BackupError: Error, CustomStringConvertible, LocalizedError {
     case missingManifest(URL)
     case missingDatabase(URL)
@@ -125,6 +177,8 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     case snapshotUnreadable
     case invalidArchive
     case unexpectedSchema(String)
+    /// The archive's manifest names a schema newer than this build's.
+    case madeByNewerVersion
     case destinationNotConfirmed
     /// A restore failed and the original data could not be put back; the
     /// folder still holds it.
@@ -134,7 +188,10 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     /// The restore point of the current data could not be made (an attachment
     /// that cannot be read, say), so nothing was replaced. The user may choose
     /// to restore without it.
-    case safetyCopyIncomplete(String)
+    ///
+    /// `cause` is set when the reason is one the user can act on (a full disk,
+    /// no permission, a file in use); the detail is for the log only.
+    case safetyCopyIncomplete(String, cause: SafetyCopyCause? = nil)
     /// A restore point still sealed under the old public passphrase; the
     /// upgrade pass reseals it under the device key first.
     case restorePointNotUpgraded
@@ -152,10 +209,11 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
         case let .restoreFailed(msg): return "restore failed: \(msg)"
         case .snapshotUnreadable: return "snapshot could not be read"
         case let .unexpectedSchema(detail): return "the backup's schema is not one MedNotes can restore: \(detail)"
+        case .madeByNewerVersion: return "the backup was made by a newer MedNotes"
         case .destinationNotConfirmed:
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
-        case let .safetyCopyIncomplete(detail): return "the restore point of the current data could not be made: \(detail)"
+        case let .safetyCopyIncomplete(detail, _): return "the restore point of the current data could not be made: \(detail)"
         case .restorePointNotUpgraded: return "the restore point is still sealed under the old passphrase"
         case let .rollbackFailed(folder, detail):
             return "restore failed and the original data could not be put back (kept in \(folder)): \(detail)"
@@ -163,7 +221,9 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     }
 
     /// What the sheets show. `description` stays English for logs, and the
-    /// file path is left out: the sheet already names the file.
+    /// file path is left out: the sheet already names the file. The detail some
+    /// cases carry (a SQLite message, a table or trigger name, a count) is never
+    /// part of it: it goes to the log (`UserFacingFailure`).
     var errorDescription: String? {
         switch self {
         case .missingManifest:
@@ -174,28 +234,39 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "The backup archive is not in a form MedNotes can read.")
         case .invalidManifest:
             return String(localized: "This backup's manifest is invalid.")
-        case let .integrityCheckFailed(detail):
-            return String(localized: "Integrity check failed: \(detail)")
+        case .integrityCheckFailed:
+            return String(localized: "The backup failed its integrity check.")
         case let .foreignKeyViolations(n):
             return String(localized: "The backup has \(n) broken links between records.")
-        case let .countMismatch(entity, expected, actual):
-            return String(localized: "The backup's \(entity) count does not match: expected \(expected), found \(actual).")
-        case let .restoreFailed(detail):
-            return String(localized: "Restore failed: \(detail)")
+        case .countMismatch:
+            return String(localized: "The backup's contents do not match what it says it holds.")
+        case .restoreFailed:
+            return String(localized: "The restore could not be completed.")
         case .snapshotUnreadable:
             return String(localized: "The database snapshot could not be read.")
-        case let .unexpectedSchema(detail):
-            return String(localized: "The backup's schema is not one MedNotes can restore: \(detail)")
+        case .unexpectedSchema:
+            return String(localized: "This backup is not in a form MedNotes can restore.")
+        case .madeByNewerVersion:
+            return String(localized: "The backup was made by a newer MedNotes.")
         case .destinationNotConfirmed:
             return String(localized: "The sync destination has not been reconfirmed since the last restore.")
         case .restorePointKeyUnavailable:
             return String(localized: "A restore point could not be made because this store has no restore key.")
-        case let .safetyCopyIncomplete(detail):
-            return String(localized: "A copy of your current data could not be made first, so nothing was changed: \(detail)")
+        case let .safetyCopyIncomplete(_, cause):
+            switch cause {
+            case .diskFull?:
+                return String(localized: "A copy of your current data could not be made first because the disk is full, so nothing was changed.")
+            case .noPermission?:
+                return String(localized: "A copy of your current data could not be made first because MedNotes is not allowed to write there, so nothing was changed.")
+            case .inUse?:
+                return String(localized: "A copy of your current data could not be made first because a file is in use by another program, so nothing was changed.")
+            case nil:
+                return String(localized: "A copy of your current data could not be made first, so nothing was changed.")
+            }
         case .restorePointNotUpgraded:
             return String(localized: "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again.")
-        case let .rollbackFailed(folder, detail):
-            return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”. \(detail)")
+        case let .rollbackFailed(folder, _):
+            return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”.")
         }
     }
 }
@@ -207,6 +278,12 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
 /// key derived from the device restore key: without that key the file cannot
 /// be opened, and no plaintext copy of the store exists at any point.
 actor BackupService {
+    #if DEBUG
+    /// A test's way to make the restore point fail with a given error. Nothing
+    /// in the app sets it.
+    nonisolated(unsafe) static var restorePointFailureForTesting: (() -> Error?)?
+    #endif
+
     private let db: Database
     private let fileStore: AttachmentStore?
     private let restorePointsRoot: URL
@@ -436,7 +513,7 @@ actor BackupService {
             opened: opened, snapshotURL: snapshotURL, store: stagingStore).manifest
         // A newer build may have written a schema this one does not know.
         guard manifest.schemaVersion <= Schema.currentVersion else {
-            throw BackupError.unexpectedSchema(String(localized: "The backup was made by a newer MedNotes."))
+            throw BackupError.madeByNewerVersion
         }
 
         try await ArchiveExtraction.ensureEncryptedSnapshot(at: snapshotURL, key: opened.archiveKey)
@@ -565,13 +642,16 @@ actor BackupService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+            throw BackupError.safetyCopyIncomplete(error.localizedDescription, cause: SafetyCopyCause(from: error))
         }
     }
 
     /// Internal restore points are v2 archives sealed by the device restore
     /// key. They are listed and deleted by name and never leave the container.
     func createEncryptedRestorePoint(name: String) async throws -> String {
+        #if DEBUG
+        if let failure = Self.restorePointFailureForTesting?() { throw failure }
+        #endif
         guard let restorePointKey else { throw BackupError.restorePointKeyUnavailable }
         try FileManager.default.createDirectory(at: restorePointsRoot, withIntermediateDirectories: true)
         let formatter = DateFormatter()
@@ -992,11 +1072,23 @@ actor BackupService {
             // inside `Files/` may be read, as in `legacyAttachments`.
             let rootPath = legacyFilesRoot.resolvingSymlinksInPath().path
             let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+            var dropped = 0
             for file in try await encrypted.attachmentsNeedingEncryption() {
                 let source = legacyFilesRoot.appendingPathComponent(file.relativePath)
                     .resolvingSymlinksInPath()
                 guard source.path.hasPrefix(prefix),
-                      let plaintext = try? Data(contentsOf: source) else { continue }
+                      let plaintext = try? Data(contentsOf: source) else {
+                    // The backup does not hold the file: the record goes, as the
+                    // migration drops one whose file is gone, instead of
+                    // leaving a file that opens to nothing. The backup itself
+                    // still has the record. Only the count is logged.
+                    if let patientId = UUID(uuidString: file.patientId),
+                       let fileId = UUID(uuidString: file.fileId) {
+                        try await encrypted.dropAttachmentRecord(patientId: patientId, fileId: fileId)
+                        dropped += 1
+                    }
+                    continue
+                }
                 let storageID = try await store.store(plaintext)
                 try await encrypted.setAttachmentEncryption(
                     patientId: UUID(uuidString: file.patientId) ?? UUID(),
@@ -1005,6 +1097,7 @@ actor BackupService {
                     plaintextLength: plaintext.count,
                     digest: store.digest(of: plaintext))
             }
+            if dropped > 0 { SecurityLog.record(.restoreDroppedAttachments, count: dropped) }
             try await encrypted.checkpoint()
             try await plainReader.close()
             try await encrypted.close()

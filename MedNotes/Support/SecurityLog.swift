@@ -25,10 +25,25 @@ enum SecurityLog {
         case integrityFailed = "store.integrity_failed"
         case restorePointUpgradeFailed = "restore_point.upgrade_failed"
         case linkDerivationFailed = "links.derivation_failed"
+        case restoreDroppedAttachments = "restore.dropped_attachments"
+        case backupFailed = "backup.failed"
+        case restoreFailed = "restore.failed"
+        case importFailed = "import.failed"
+        case exportFailed = "export.failed"
+        case migrationFailed = "migration.failed"
     }
+
+    #if DEBUG
+    /// A test's view of what was recorded: the event, its count and its detail.
+    /// Nothing in the app sets it.
+    nonisolated(unsafe) static var observer: ((Event, Int?, String?) -> Void)?
+    #endif
 
     /// Records a generic security event with counts and opaque IDs only.
     static func record(_ event: Event, count: Int? = nil, opaqueID: String? = nil) {
+        #if DEBUG
+        observer?(event, count, nil)
+        #endif
         if let count, let opaqueID {
             logger.notice("\(event.rawValue, privacy: .public) count=\(count, privacy: .public) id=\(opaqueID, privacy: .public)")
         } else if let count {
@@ -38,6 +53,37 @@ enum SecurityLog {
         } else {
             logger.notice("\(event.rawValue, privacy: .public)")
         }
+    }
+
+    /// Records why an operation failed: the internal detail the user is not
+    /// shown (a SQLite message, a table name, a count). Absolute paths and
+    /// quoted file names are taken out first; it never carries SQL, record
+    /// content or a patient's name.
+    static func recordFailure(_ event: Event, detail: String) {
+        let clean = redactingPaths(detail)
+        #if DEBUG
+        observer?(event, nil, clean)
+        #endif
+        logger.notice("\(event.rawValue, privacy: .public) detail=\(clean, privacy: .public)")
+    }
+
+    /// `detail` without absolute paths and without quoted names.
+    static func redactingPaths(_ detail: String) -> String {
+        var text = detail
+        // Quoted names first (curly, straight and Greek quotes), then a path
+        // from its first component to the end of the quote or line: a path may
+        // contain spaces, so it is not cut at the first one.
+        let roots = "Users|Volumes|private|var|tmp|Library|Applications|System|opt|home"
+        for (pattern, replacement) in [
+            ("“[^”]*”", "“…”"), ("\"[^\"]*\"", "\"…\""), ("«[^»]*»", "«…»"),
+            ("/(?:\(roots))\\b[^\\n“”\"«»]*", "<path>")
+        ] {
+            if let expression = try? NSRegularExpression(pattern: pattern) {
+                text = expression.stringByReplacingMatches(
+                    in: text, range: NSRange(text.startIndex..., in: text), withTemplate: replacement)
+            }
+        }
+        return text
     }
 
     /// A short opaque label for a file name or path. Never returns the path.

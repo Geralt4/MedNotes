@@ -368,12 +368,42 @@
         }
       }
     },
+    "%lld edit(s) could not be saved, so no backup was made." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν δημιουργήθηκε αντίγραφο ασφαλείας."
+          }
+        }
+      }
+    },
     "%lld edit(s) could not be saved, so no note was replaced." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν αντικαταστάθηκε καμία σημείωση."
+          }
+        }
+      }
+    },
+    "%lld edit(s) could not be saved, so nothing was exported." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε εξαγωγή."
+          }
+        }
+      }
+    },
+    "%lld edit(s) could not be saved, so nothing was imported." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε εισαγωγή."
           }
         }
       }
@@ -808,12 +838,42 @@
         }
       }
     },
-    "A copy of your current data could not be made first, so nothing was changed: %@" : {
+    "A copy of your current data could not be made first because a file is in use by another program, so nothing was changed." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας, γι’ αυτό δεν άλλαξε τίποτα: %@"
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή ένα αρχείο χρησιμοποιείται από άλλο πρόγραμμα, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first because MedNotes is not allowed to write there, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή το MedNotes δεν έχει άδεια εγγραφής εκεί, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first because the disk is full, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή ο δίσκος είναι γεμάτος, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας, γι’ αυτό δεν άλλαξε τίποτα."
           }
         }
       }
@@ -1184,6 +1244,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Προορισμός που υπήρχε ήδη. Το MedNotes θα επεμβαίνει μόνο στις εγγραφές που δημιούργησε και επισήμανε το ίδιο."
+          }
+        }
+      }
+    },
+    "An interrupted restore could not be undone automatically. Your original data is in the folder “%@” inside the MedNotes data folder, and nothing was deleted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μια διακοπείσα επαναφορά δεν μπόρεσε να αναιρεθεί αυτόματα. Τα αρχικά σας δεδομένα βρίσκονται στον φάκελο «%@» μέσα στον φάκελο δεδομένων του MedNotes και δεν διαγράφηκε τίποτα."
           }
         }
       }
@@ -2154,16 +2224,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Περιεχόμενο"
-          }
-        }
-      }
-    },
-    "Could not build the encrypted store: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Δεν ήταν δυνατή η δημιουργία της κρυπτογραφημένης βάσης δεδομένων: %@"
           }
         }
       }
@@ -3644,16 +3704,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ακεραιότητα"
-          }
-        }
-      }
-    },
-    "Integrity check failed: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ο έλεγχος ακεραιότητας απέτυχε: %@"
           }
         }
       }
@@ -5888,16 +5938,6 @@
         }
       }
     },
-    "Restore failed: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Η επαναφορά απέτυχε: %@"
-          }
-        }
-      }
-    },
     "Restore from Backup" : {
       "localizations" : {
         "el" : {
@@ -6748,6 +6788,36 @@
         }
       }
     },
+    "The backup could not be made." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η δημιουργία του αντιγράφου ασφαλείας."
+          }
+        }
+      }
+    },
+    "The backup failed its integrity check." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το αντίγραφο ασφαλείας απέτυχε στον έλεγχο ακεραιότητας."
+          }
+        }
+      }
+    },
+    "The backup's contents do not match what it says it holds." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το περιεχόμενο του αντιγράφου ασφαλείας δεν ταιριάζει με αυτό που δηλώνει."
+          }
+        }
+      }
+    },
     "The block this link names is not in that note." : {
       "localizations" : {
         "el" : {
@@ -6758,12 +6828,72 @@
         }
       }
     },
+    "The encrypted store could not be built." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η δημιουργία της κρυπτογραφημένης βάσης δεδομένων."
+          }
+        }
+      }
+    },
+    "The encrypted store could not be installed, and the original database could not be recovered." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η εγκατάσταση της κρυπτογραφημένης βάσης δεδομένων και δεν ανακτήθηκε η αρχική βάση δεδομένων."
+          }
+        }
+      }
+    },
+    "The encrypted store could not be installed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η εγκατάσταση της κρυπτογραφημένης βάσης δεδομένων."
+          }
+        }
+      }
+    },
+    "The encrypted store failed validation." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επικύρωση της κρυπτογραφημένης βάσης δεδομένων απέτυχε."
+          }
+        }
+      }
+    },
+    "The export could not be completed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εξαγωγή δεν ολοκληρώθηκε."
+          }
+        }
+      }
+    },
     "The heading this link names is not in that note." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Η επικεφαλίδα που ονομάζει ο σύνδεσμος δεν υπάρχει σε εκείνη τη σημείωση."
+          }
+        }
+      }
+    },
+    "The import could not be completed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η εισαγωγή δεν ολοκληρώθηκε."
           }
         }
       }
@@ -7018,16 +7148,6 @@
         }
       }
     },
-    "The backup's %@ count does not match: expected %lld, found %lld." : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Το πλήθος για %@ στο αντίγραφο ασφαλείας δεν ταιριάζει: αναμένονταν %lld, βρέθηκαν %lld."
-          }
-        }
-      }
-    },
     "The backup's final authentication tag is missing." : {
       "localizations" : {
         "el" : {
@@ -7054,16 +7174,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Οι εγγραφές του αντιγράφου ασφαλείας δεν είναι στη σωστή σειρά."
-          }
-        }
-      }
-    },
-    "The backup's schema is not one MedNotes can restore: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Το MedNotes δεν μπορεί να επαναφέρει αντίγραφο ασφαλείας με αυτό το σχήμα βάσης δεδομένων: %@"
           }
         }
       }
@@ -7208,26 +7318,6 @@
         }
       }
     },
-    "The encrypted store could not be installed: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Δεν ήταν δυνατή η εγκατάσταση της κρυπτογραφημένης βάσης δεδομένων: %@"
-          }
-        }
-      }
-    },
-    "The encrypted store failed validation: %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Η επικύρωση της κρυπτογραφημένης βάσης δεδομένων απέτυχε: %@"
-          }
-        }
-      }
-    },
     "The encryption migration failed: %@" : {
       "localizations" : {
         "el" : {
@@ -7338,12 +7428,32 @@
         }
       }
     },
-    "The restore failed, and your original data could not be put back. It was kept in “%@”. %@" : {
+    "The restore could not be completed." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Η επαναφορά απέτυχε και τα αρχικά σας δεδομένα δεν μπόρεσαν να επανέλθουν. Φυλάχθηκαν στο «%@». %@"
+            "value" : "Η επαναφορά δεν ολοκληρώθηκε."
+          }
+        }
+      }
+    },
+    "The restore failed, and your original data could not be put back. It was kept in “%@”." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η επαναφορά απέτυχε και τα αρχικά σας δεδομένα δεν μπόρεσαν να επανέλθουν. Φυλάχθηκαν στο «%@»."
+          }
+        }
+      }
+    },
+    "The store could not be encrypted." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατή η κρυπτογράφηση της βάσης δεδομένων."
           }
         }
       }
@@ -7434,6 +7544,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αυτό το αντίγραφο ασφαλείας είναι μεγαλύτερο από 1 GiB, το όριο για ασφαλές άνοιγμα αντιγράφων παλαιάς μορφής."
+          }
+        }
+      }
+    },
+    "This backup is not in a form MedNotes can restore." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το MedNotes δεν μπορεί να επαναφέρει αντίγραφο ασφαλείας με αυτή τη μορφή."
           }
         }
       }
@@ -8496,16 +8616,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Αυτό το σημείο επαναφοράς δημιουργήθηκε από παλαιότερη έκδοση και δεν έχει μετατραπεί ακόμη. Κλειδώστε και ξεκλειδώστε το MedNotes και δοκιμάστε ξανά."
-          }
-        }
-      }
-    },
-    "An interrupted restore could not be undone automatically. Your original data is in the folder “%@” inside the MedNotes data folder, and nothing was deleted. %@" : {
-      "localizations" : {
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Μια διακοπείσα επαναφορά δεν μπόρεσε να αναιρεθεί αυτόματα. Τα αρχικά σας δεδομένα βρίσκονται στον φάκελο «%@» μέσα στον φάκελο δεδομένων του MedNotes και δεν διαγράφηκε τίποτα. %@"
           }
         }
       }

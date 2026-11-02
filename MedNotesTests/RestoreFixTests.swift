@@ -164,4 +164,196 @@ final class RestoreFixTests: XCTestCase {
         XCTAssertEqual(LegacyBackupReader.passphraseForms("cafe\u{301} passphrase").count, 2,
                        "as given plus the precomposed form")
     }
+
+    // MARK: - A version 1 restore and a file the backup lost
+
+    /// A v1 backup holding a patient with two files, of which `Files/` has one.
+    private func legacyBackup(missingFile: Bool) async throws -> (archive: URL, patient: Patient, present: PatientFile, missing: PatientFile) {
+        let legacyRoot = try makeRoot()
+        let plain = try Database(path: legacyRoot.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Has"
+        patient.profile.lastName = "Files"
+        let present = PatientFile(name: "present.txt", type: .other, data: nil)
+        let missing = PatientFile(name: "missing.txt", type: .other, data: nil)
+        patient.files = [present, missing]
+        try await plain.savePatient(patient)
+        await plain.close()
+        for suffix in ["-wal", "-shm"] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: legacyRoot.databaseURL.path + suffix),
+                           "premise: the snapshot is one file")
+        }
+        var files: [String: FileWrapper] = [
+            patient.id.uuidString: FileWrapper(directoryWithFileWrappers: [
+                present.id.uuidString: FileWrapper(regularFileWithContents: Data("PRESENT-BYTES".utf8))
+            ])
+        ]
+        if !missingFile {
+            files[patient.id.uuidString]?.addRegularFile(
+                withContents: Data("MISSING-BYTES".utf8), preferredFilename: missing.id.uuidString)
+        }
+        for (name, wrapper) in files { wrapper.preferredFilename = name }
+        let manifest = #"{"name":"old","createdAt":0,"schemaVersion":1,"counts":{}}"#
+        var children: [String: FileWrapper] = [
+            "mednotes.db": FileWrapper(regularFileWithContents: try Data(contentsOf: legacyRoot.databaseURL)),
+            "manifest.json": FileWrapper(regularFileWithContents: Data(manifest.utf8)),
+            "Files": FileWrapper(directoryWithFileWrappers: files)
+        ]
+        for (name, wrapper) in children { wrapper.preferredFilename = name }
+        let payload = try XCTUnwrap(FileWrapper(directoryWithFileWrappers: children).serializedRepresentation)
+        children.removeAll()
+        return (try v1Archive(sealing: payload, passphrase: passphrase, name: "lost-file.mnbk"), patient, present, missing)
+    }
+
+    /// The migration drops a patient-file record whose file is gone; a version 1
+    /// restore used to keep it, listing a file that opens to nothing. It now
+    /// drops it too, and logs how many, not which.
+    func testAV1RestoreDropsAPatientFileRowWhoseFileIsMissingFromTheBackup() async throws {
+        let backup = try await legacyBackup(missingFile: true)
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        var logged: [(SecurityLog.Event, Int?)] = []
+        SecurityLog.observer = { event, count, _ in logged.append((event, count)) }
+        defer { SecurityLog.observer = nil }
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: backup.archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let loaded = try await target.patients.load(id: backup.patient.id)
+        let restored = try XCTUnwrap(loaded)
+        XCTAssertEqual(restored.files.map(\.id), [backup.present.id], "the record without a file is gone")
+        let rows = try await target.db.loadPatientFiles(patientId: backup.patient.id)
+        XCTAssertEqual(rows.map(\.id), [backup.present.id])
+        XCTAssertEqual(logged.filter { $0.0 == .restoreDroppedAttachments }.map(\.1), [1],
+                       "the count is logged: \(logged)")
+        await target.close()
+    }
+
+    /// Nothing is dropped, and nothing logged, when the backup holds every file.
+    func testAV1RestoreKeepsEveryRowWhoseFileIsInTheBackup() async throws {
+        let backup = try await legacyBackup(missingFile: false)
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        var dropped = 0
+        SecurityLog.observer = { event, _, _ in if event == .restoreDroppedAttachments { dropped += 1 } }
+        defer { SecurityLog.observer = nil }
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: backup.archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let rows = try await target.db.loadPatientFiles(patientId: backup.patient.id)
+        XCTAssertEqual(Set(rows.map(\.id)), [backup.present.id, backup.missing.id])
+        XCTAssertEqual(dropped, 0)
+        await target.close()
+    }
+
+    /// A patient whose only file is gone: the record also leaves the patient's
+    /// own file list (`files_json`), which is where a patient with no file rows
+    /// is read from.
+    func testAV1RestoreRemovesTheOnlyFileOfAPatientWhoseFileIsMissingFromThePatientToo() async throws {
+        let legacyRoot = try makeRoot()
+        let plain = try Database(path: legacyRoot.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Only"
+        patient.profile.lastName = "File"
+        patient.files = [PatientFile(name: "gone.txt", type: .other, data: nil)]
+        try await plain.savePatient(patient)
+        await plain.close()
+        let children: [String: FileWrapper] = [
+            "mednotes.db": FileWrapper(regularFileWithContents: try Data(contentsOf: legacyRoot.databaseURL)),
+            "manifest.json": FileWrapper(regularFileWithContents:
+                Data(#"{"name":"old","createdAt":0,"schemaVersion":1,"counts":{}}"#.utf8)),
+            "Files": FileWrapper(directoryWithFileWrappers: [:])
+        ]
+        for (name, wrapper) in children { wrapper.preferredFilename = name }
+        let payload = try XCTUnwrap(FileWrapper(directoryWithFileWrappers: children).serializedRepresentation)
+        let archive = try v1Archive(sealing: payload, passphrase: passphrase, name: "only-file.mnbk")
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let loaded = try await target.patients.load(id: patient.id)
+        XCTAssertEqual(try XCTUnwrap(loaded).files, [], "the dropped file must not come back from the patient's own list")
+        await target.close()
+    }
+
+    // MARK: - Why the safety copy failed
+
+    func testTheCauseOfAFailedSafetyCopyIsNamedWhenTheUserCanActOnIt() {
+        func cause(_ error: Error) -> SafetyCopyCause? { SafetyCopyCause(from: error) }
+        let diskFull = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
+        XCTAssertEqual(cause(diskFull), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSCocoaErrorDomain, code: 4,
+                                     userInfo: [NSUnderlyingErrorKey: diskFull])), .diskFull,
+                       "an error that wraps a full disk")
+        XCTAssertEqual(cause(SQLiteError.step("database or disk is full", sql: "VACUUM INTO ?")), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)), .noPermission)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))), .noPermission)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(EBUSY))), .inUse)
+        XCTAssertNil(cause(NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoSuchFileError)),
+                     "a missing file is not something to act on here")
+        XCTAssertNil(cause(SQLiteError.step("no such table: patients", sql: "")))
+    }
+
+    /// A restore whose safety copy hits a full disk stops with nothing changed,
+    /// says so in plain words (so the user knows why before choosing to go on
+    /// without the copy), and keeps the raw detail for the log.
+    func testARestoreWhoseSafetyCopyHitsAFullDiskSaysSoAndKeepsTheDetailForTheLog() async throws {
+        let sourceRoot = try makeRoot()
+        let source = try AppStore.testStore(dataRoot: sourceRoot)
+        try await source.notes.save(Note(title: "From the backup", content: "FROM-BACKUP"))
+        let archive = scratch.appendingPathComponent("good.mednotesbackup")
+        _ = try await source.backups.createEncryptedBackup(name: "Good", to: archive, passphrase: passphrase)
+        await source.close()
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        try await target.notes.save(Note(title: "Mine", content: "MINE"))
+        let raw = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError, userInfo: [
+            NSLocalizedDescriptionKey: "RAW-DETAIL: no space left on device at /private/var/x"])
+        BackupService.restorePointFailureForTesting = { raw }
+        var logged: [String] = []
+        SecurityLog.observer = { _, _, detail in if let detail { logged.append(detail) } }
+        defer {
+            BackupService.restorePointFailureForTesting = nil
+            SecurityLog.observer = nil
+        }
+
+        do {
+            _ = try await target.backups.restore(
+                fromEncryptedBackupAt: archive, passphrase: passphrase,
+                databaseKey: TestKeys.database(for: targetRoot),
+                attachmentKey: TestKeys.attachment(for: targetRoot))
+            XCTFail("the safety copy cannot be made, so the restore must stop")
+        } catch let error as BackupError {
+            guard case .safetyCopyIncomplete(_, let cause) = error else {
+                return XCTFail("expected safetyCopyIncomplete, got \(error)")
+            }
+            XCTAssertEqual(cause, .diskFull)
+            let shown = UserFacingFailure.message(for: error, during: .restore)
+            XCTAssertEqual(shown, String(localized: "A copy of your current data could not be made first because the disk is full, so nothing was changed."))
+            XCTAssertFalse(shown.contains("RAW-DETAIL"), shown)
+            XCTAssertTrue(logged.contains { $0.contains("RAW-DETAIL") && $0.contains("diskFull") },
+                          "the raw detail goes to the log: \(logged)")
+            XCTAssertFalse(logged.joined().contains("/private/var"), "paths are removed from the log")
+        }
+        let untouched = try await target.db.loadAllNotes()
+        XCTAssertEqual(untouched.map(\.content), ["MINE"], "nothing was replaced")
+        await target.close()
+    }
+
+    /// Another reason keeps the general line.
+    func testAnOtherwiseUnexplainedSafetyCopyFailureKeepsTheGeneralLine() {
+        let error = BackupError.safetyCopyIncomplete("something odd", cause: SafetyCopyCause(from: NSError(domain: "x", code: 1)))
+        XCTAssertEqual(error.localizedDescription,
+                       String(localized: "A copy of your current data could not be made first, so nothing was changed."))
+    }
 }

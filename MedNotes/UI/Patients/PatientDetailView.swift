@@ -52,7 +52,7 @@ struct PatientDetailView: View {
         }
         .onAppear {
             let draft = $draft, original = $original, pending = $pendingEntries
-            session.registerOpenEditor(lockToken) {
+            session.registerOpenEditor(lockToken, draft: {
                 draft.wrappedValue.map { current in
                     // What is typed in an add row goes with the draft the lock saves.
                     var committed = current
@@ -61,7 +61,25 @@ struct PatientDetailView: View {
                     return .patient(committed, edited: committed != original.wrappedValue,
                                     knownFileIDs: original.wrappedValue.map { Set($0.files.map(\.id)) })
                 }
-            }
+            }, commit: { [weak session] in
+                // Not retained: the session holds this closure until the editor goes.
+                guard let session else { return true }
+                // What Done saves (see `save(thenLeaveEditing:)`), without
+                // leaving the editor. Text in an Add row is not saved, as Done
+                // does not save it, and so counts as an edit that could not be.
+                guard pending.wrappedValue.firstUnadded == nil else { return false }
+                guard let d = draft.wrappedValue, d != original.wrappedValue else { return true }
+                guard await session.save(d, knownFileIDs: original.wrappedValue.map { Set($0.files.map(\.id)) })
+                else { return false }
+                if let latest = await session.loadSelectedPatient(),
+                   latest.id == d.id,
+                   draft.wrappedValue?.profile == d.profile,
+                   draft.wrappedValue?.medical == d.medical {
+                    draft.wrappedValue = latest
+                    original.wrappedValue = latest
+                }
+                return true
+            })
         }
         .onDisappear {
             commitPendingEntries()

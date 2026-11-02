@@ -307,6 +307,10 @@ final class AppSession: ObservableObject {
     /// detaches the store; see `OpenEditorDraft`.
     var openEditors: [UUID: () -> OpenEditorDraft?] = [:]
 
+    /// How each of those editors saves itself, as its own Save does; see
+    /// `commitEditorsOnScreen`.
+    var openEditorCommits: [UUID: @MainActor () async -> Bool] = [:]
+
     /// Fields inside an editor that hold typed text not yet written to the
     /// draft (an inspector property, committed on submit or when focus leaves),
     /// by registration token. `openEditorDrafts` runs them first, so a lock or a
@@ -1062,6 +1066,25 @@ final class AppSession: ObservableObject {
         return failures
     }
 
+    /// Has every editor on screen save what it holds, before something reads
+    /// the store whole (a backup, an export, a restore point), and returns how
+    /// many could not.
+    ///
+    /// Each editor saves through its own Save, the path the user's Done takes:
+    /// Revert and Cancel keep working afterwards (the editor's baseline moves
+    /// with the store), a patient's attachments are checked as they are on
+    /// Save, and text in an Add row, which Save refuses to guess at, is not
+    /// saved but counted. The editors stay open. This is not the lock's save
+    /// (`saveDrafts`), which writes from a snapshot and closes the editors.
+    func commitEditorsOnScreen() async -> Int {
+        flushPendingEdits()
+        var failures = 0
+        for commit in Array(openEditorCommits.values) {
+            if await !commit() { failures += 1 }
+        }
+        return failures
+    }
+
     /// Marks the editors behind `tokens` as saved by the session, so their own
     /// autosave on the way out is skipped, and forgets the quiet pushes the
     /// drafts' saves queued: the records they named may be gone or replaced.
@@ -1349,7 +1372,13 @@ final class AppSession: ObservableObject {
             self.dataRoot = dataRoot
             // An install that a crash cut off is undone before anything reads a
             // key or opens a store, and before the orphan sweep can see it.
-            try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
+            do {
+                try RestoreRecovery.recoverInterruptedRestore(rootURL: dataRoot.rootURL)
+            } catch {
+                // Its message no longer carries the detail; the log does.
+                _ = UserFacingFailure.message(for: error, during: .restore)
+                throw error
+            }
             let keyManager = resolvedKeyManager()
             cleanupLeftovers = try await StoreMigrator(dataRoot: dataRoot, keyManager: keyManager)
                 .recoverInterruptedMigration()
@@ -1491,7 +1520,7 @@ final class AppSession: ObservableObject {
             // The wizard is part of the curtain, which goes away with
             // `isMigrating`; without this the window would sit on the startup
             // spinner with no explanation.
-            initError = error.localizedDescription
+            initError = UserFacingFailure.message(for: error, during: .migration)
             throw error
         }
     }

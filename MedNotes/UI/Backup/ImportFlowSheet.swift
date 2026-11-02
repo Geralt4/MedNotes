@@ -133,7 +133,7 @@ struct ImportFlowSheet: View {
             do {
                 report = try await session.dryRunImport(from: flow.folderURL)
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingFailure.message(for: error, during: .importing)
             }
             isWorking = false
         }
@@ -146,7 +146,7 @@ struct ImportFlowSheet: View {
             do {
                 try await session.performImport(from: flow.folderURL)
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingFailure.message(for: error, during: .importing)
             }
             isWorking = false
         }

@@ -47,9 +47,29 @@ struct TodoDetailView: View {
         }
         .onAppear {
             let draft = $draft, original = $original, tag = $pendingTag
-            session.registerOpenEditor(lockToken) {
+            session.registerOpenEditor(lockToken, draft: {
                 draft.wrappedValue.map { .todo($0, edited: $0 != original.wrappedValue) }
-            }
+            }, commit: { [weak session] in
+                // Not retained: the session holds this closure until the editor goes.
+                guard let session else { return true }
+                // What Done saves (see `save()`), without leaving the editor.
+                session.flushPendingEdits()
+                guard let d = draft.wrappedValue, d != original.wrappedValue else { return true }
+                guard await session.save(d) else { return false }
+                if let latest = await session.loadSelectedTodo(),
+                   latest.id == d.id,
+                   draft.wrappedValue?.title == d.title,
+                   draft.wrappedValue?.notes == d.notes,
+                   draft.wrappedValue?.tags == d.tags,
+                   draft.wrappedValue?.priority == d.priority,
+                   draft.wrappedValue?.dueDate == d.dueDate,
+                   draft.wrappedValue?.patientId == d.patientId,
+                   draft.wrappedValue?.patientName == d.patientName {
+                    draft.wrappedValue = latest
+                    original.wrappedValue = latest
+                }
+                return true
+            })
             // A lock or restore reads the draft after this has run.
             session.registerPendingEdit(pendingEditToken) {
                 guard var d = draft.wrappedValue else { return }

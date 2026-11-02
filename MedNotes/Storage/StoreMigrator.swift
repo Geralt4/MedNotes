@@ -56,18 +56,30 @@ actor StoreMigrator {
         case stagingFailed(String)
         case validationFailed(String)
         case swapFailed(String)
+        /// The swap failed and the plaintext original could not be put back.
+        case originalNotRecovered
+        case backupFromNewerVersion
+        case nothingToConvert
         case journalCorrupt
 
         var errorDescription: String? {
             switch self {
             case .backupNotTested:
                 return String(localized: "Create and verify a portable backup before encrypting this store.")
-            case .stagingFailed(let detail):
-                return String(localized: "Could not build the encrypted store: \(detail)")
-            case .validationFailed(let detail):
-                return String(localized: "The encrypted store failed validation: \(detail)")
-            case .swapFailed(let detail):
-                return String(localized: "The encrypted store could not be installed: \(detail)")
+            // The detail these three carry (an integrity result, a table and its
+            // row counts) is for the log, not the screen (`UserFacingFailure`).
+            case .stagingFailed:
+                return String(localized: "The encrypted store could not be built.")
+            case .validationFailed:
+                return String(localized: "The encrypted store failed validation.")
+            case .swapFailed:
+                return String(localized: "The encrypted store could not be installed.")
+            case .originalNotRecovered:
+                return String(localized: "The encrypted store could not be installed, and the original database could not be recovered.")
+            case .backupFromNewerVersion:
+                return String(localized: "The backup was made by a newer MedNotes.")
+            case .nothingToConvert:
+                return String(localized: "There is no unencrypted store to convert.")
             case .journalCorrupt:
                 return String(localized: "The migration journal is unreadable. The original store is untouched.")
             }
@@ -147,13 +159,13 @@ actor StoreMigrator {
             }
             guard fm.fileExists(atPath: dataRoot.databaseURL.path),
                   SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
-                throw MigrationError.swapFailed("The original database could not be recovered.")
+                throw MigrationError.originalNotRecovered
             }
             rollbackStaging()
         default:
             guard fm.fileExists(atPath: dataRoot.databaseURL.path),
                   SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
-                throw MigrationError.swapFailed("The original database could not be recovered.")
+                throw MigrationError.originalNotRecovered
             }
             rollbackStaging()
         }
@@ -210,7 +222,7 @@ actor StoreMigrator {
         // before any original data is touched.
         let inspection = try BackupArchiveV2.inspect(at: backupURL, passphrase: passphrase)
         guard inspection.manifest.schemaVersion <= Schema.currentVersion else {
-            throw MigrationError.validationFailed(String(localized: "The backup was made by a newer MedNotes."))
+            throw MigrationError.backupFromNewerVersion
         }
         report.backupTestedAt = backupURL
 
@@ -219,7 +231,7 @@ actor StoreMigrator {
         // and the swap would then discard the only original.
         guard FileManager.default.fileExists(atPath: dataRoot.databaseURL.path),
               SQLiteHeaderInspection.isPlaintextSQLite(at: dataRoot.databaseURL) else {
-            throw MigrationError.stagingFailed(String(localized: "There is no unencrypted store to convert."))
+            throw MigrationError.nothingToConvert
         }
 
         let staging = Self.stagingDirectory(in: dataRoot)

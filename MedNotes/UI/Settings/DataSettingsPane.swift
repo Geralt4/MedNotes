@@ -348,7 +348,7 @@ struct DataSettingsPane: View {
                                     localized: "Exported \(report.notesWritten) notes as plaintext Markdown.")
                             }
                         } catch {
-                            exportFailure = error.localizedDescription
+                            exportFailure = UserFacingFailure.message(for: error, during: .export)
                         }
                     }
                 }
@@ -518,7 +518,7 @@ struct DataSettingsPane: View {
             do {
                 _ = try await resolveLegacyVault(choice)
             } catch {
-                vaultFailure = error.localizedDescription
+                vaultFailure = UserFacingFailure.message(for: error, during: .restore)
             }
             vaultReport = await legacyVaultReport()
             // Resolving may have imported notes and made a restore point.
@@ -534,7 +534,7 @@ struct DataSettingsPane: View {
         do {
             try await restoreRestorePoint(point)
         } catch {
-            failure = error.localizedDescription
+            failure = UserFacingFailure.message(for: error, during: .restore)
         }
         restorePoints = await loadRestorePoints()
         // What the pane showed described the store that was just replaced.

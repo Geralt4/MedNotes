@@ -141,6 +141,7 @@ extension AppSession {
             kind: .folder(canCreate: true),
             message: String(localized: "Choose a folder for the plaintext Markdown export.")))
         guard let url = chosen, canUseStore, let store else { return nil }
+        guard try await saveEditsOnScreen(into: store, before: .export) else { return nil }
         let locksAtStart = lockRequests
         let service = MarkdownExportService(db: store.db)
         let noteCount: Int
@@ -258,7 +259,7 @@ extension AppSession {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+                throw BackupError.safetyCopyIncomplete(error.localizedDescription, cause: SafetyCopyCause(from: error))
             }
             await pruneRestorePoints()
         }
@@ -320,6 +321,19 @@ extension AppSession {
         notice = String(localized: "The plaintext Markdown mirror was deleted.")
     }
 
+    /// The edits on screen go into the store before it is read whole, as Done
+    /// and the lock put them there: a backup, an export or a restore point made
+    /// without them would silently lack what was just typed. When one cannot be
+    /// saved nothing is made. False when a lock took the store meanwhile.
+    private func saveEditsOnScreen(into store: AppStore, before purpose: OpenEditsNotSavedError.Purpose) async throws -> Bool {
+        let unsaved = await commitEditorsOnScreen()
+        // A lock during the saves closed the store under them: that is not an
+        // edit that failed to save, and the lock has saved what it could.
+        guard canUseStore, self.store === store else { return false }
+        guard unsaved == 0 else { throw OpenEditsNotSavedError(count: unsaved, purpose: purpose) }
+        return true
+    }
+
     /// Asks where the archive goes, then writes it there.
     ///
     /// The store and its keys are read after the panel, never before: a lock
@@ -333,6 +347,7 @@ extension AppSession {
             message: String(localized: "The backup is encrypted with the passphrase you entered.")))
         guard let url = chosen, canUseStore, let store, let coordinator else { return }
         _ = try coordinator.requireAttachmentKey()
+        guard try await saveEditsOnScreen(into: store, before: .backup) else { return }
         let locksAtStart = lockRequests
         let manifest: BackupManifest
         do {
@@ -590,6 +605,7 @@ extension AppSession {
         guard let store else { return }
         let accessing = folderURL.startAccessingSecurityScopedResource()
         defer { if accessing { folderURL.stopAccessingSecurityScopedResource() } }
+        guard try await saveEditsOnScreen(into: store, before: .importing) else { return }
         let locksAtStart = lockRequests
         let report: ImportReport
         do {
@@ -632,6 +648,24 @@ private struct MirrorEditsNotSavedError: LocalizedError {
 
     var errorDescription: String? {
         String(localized: "\(count) edit(s) could not be saved, so no note was replaced.")
+    }
+}
+
+/// An edit on screen could not be saved before the store was read whole, so
+/// the backup, export or restore point that was about to be made would have
+/// lacked it. Nothing was made.
+private struct OpenEditsNotSavedError: LocalizedError {
+    enum Purpose { case backup, export, importing }
+
+    let count: Int
+    let purpose: Purpose
+
+    var errorDescription: String? {
+        switch purpose {
+        case .backup: return String(localized: "\(count) edit(s) could not be saved, so no backup was made.")
+        case .export: return String(localized: "\(count) edit(s) could not be saved, so nothing was exported.")
+        case .importing: return String(localized: "\(count) edit(s) could not be saved, so nothing was imported.")
+        }
     }
 }
 

@@ -40,8 +40,8 @@ enum RestoreRecovery {
 
         var errorDescription: String? {
             switch self {
-            case let .couldNotReinstate(folder, detail):
-                return String(localized: "An interrupted restore could not be undone automatically. Your original data is in the folder “\(folder)” inside the MedNotes data folder, and nothing was deleted. \(detail)")
+            case let .couldNotReinstate(folder, _):
+                return String(localized: "An interrupted restore could not be undone automatically. Your original data is in the folder “\(folder)” inside the MedNotes data folder, and nothing was deleted.")
             }
         }
     }
