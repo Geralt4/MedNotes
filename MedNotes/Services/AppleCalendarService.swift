@@ -161,7 +161,7 @@ enum CalendarSyncCore {
     }
 }
 
-/// Owns the `EKEventStore` connection to Apple Calendar. Pushes MedNotes
+/// Owns the connection to Apple Calendar (through a `CalendarBackend`). Pushes MedNotes
 /// events into a dedicated "MedNotes" calendar and pulls external edits back.
 ///
 /// Permission failures degrade gracefully: the app remains fully usable as a
@@ -207,34 +207,33 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 
     nonisolated static let medNotesCalendarTitle = "MedNotes"
 
-    init() {
-        state = Self.initialState()
+    /// `backend` is Apple Calendar itself unless a test passes a fake.
+    init(backend: CalendarBackend? = nil) {
+        let backend = backend ?? EventKitCalendarBackend()
+        self.backend = backend
+        state = Self.initialState(backend)
     }
 
     /// Whether macOS has already granted this app full Calendar access. A
-    /// class-level query that never prompts, so automatic sync passes can
-    /// consult it without raising the permission dialog.
-    nonisolated static var hasFullAccess: Bool {
-        EKEventStore.authorizationStatus(for: .event) == .fullAccess
+    /// query that never prompts, so automatic sync passes can consult it
+    /// without raising the permission dialog.
+    var hasFullAccess: Bool {
+        backend.authorization == .granted
     }
 
     /// The pill should be truthful from launch: access granted in an earlier
     /// run is still granted. Sample-data runs stay "not connected" whatever
     /// TCC says, so the pill never advertises a bridge that
     /// `refusePreviewSeedWrites` blocks.
-    private static func initialState() -> AccessState {
+    private static func initialState(_ backend: CalendarBackend) -> AccessState {
         guard !PreviewSeed.isActive else { return .notRequested }
-        switch EKEventStore.authorizationStatus(for: .event) {
-        case .fullAccess: return .granted
-        case .denied, .restricted: return .denied
-        default: return .notRequested
-        }
+        return backend.authorization
     }
 
     /// Re-reads access after the user may have changed it in System Settings.
     /// Never prompts.
     func refreshAccessState() {
-        let current = Self.initialState()
+        let current = Self.initialState(backend)
         guard current != state else { return }
         state = current
         if current == .granted { lastError = nil }
@@ -243,15 +242,9 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// How far back/forward external changes are pulled on each sync pass.
     static let pullWindow: TimeInterval = 366 * 24 * 3600
 
-    private let store = EKEventStore()
+    private let backend: CalendarBackend
     private var changeTask: Task<Void, Never>?
-    private var observer: NSObjectProtocol?
-
-    deinit {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
+    private var isObserving = false
 
     func requestAccess() async -> Bool {
         // A seeded run must never even raise the TCC prompt: granting it would
@@ -261,14 +254,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             return false
         }
         do {
-            if #available(macOS 14.0, *) {
-                state = try await store.requestFullAccessToEvents() ? .granted : .denied
-            } else {
-                let granted: Bool = await withCheckedContinuation { continuation in
-                    store.requestAccess(to: .event) { ok, _ in continuation.resume(returning: ok) }
-                }
-                state = granted ? .granted : .denied
-            }
+            state = try await backend.requestAccess() ? .granted : .denied
             if state == .granted { lastError = nil }
             return state == .granted
         } catch {
@@ -279,12 +265,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     }
 
     func startObservingChanges() {
-        guard observer == nil else { return }
-        observer = NotificationCenter.default.addObserver(
-            forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in
-            Task { @MainActor in
-                self?.scheduleExternalChangeHandling()
-            }
+        guard !isObserving else { return }
+        isObserving = true
+        backend.startObservingChanges { [weak self] in
+            self?.scheduleExternalChangeHandling()
         }
     }
 
@@ -309,18 +293,18 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// a cloud source is marked for acknowledgment rather than claimed safe.
     func destinationCandidates(recordCount: Int, transmittedFields: [String])
         -> [SyncDestinationCandidate] {
-        let candidates = store.calendars(for: .event).filter { $0.allowsContentModifications }
+        let candidates = backend.calendars.filter { $0.allowsContentModifications }
         return candidates.map { calendar in
             SyncDestinationCandidate(
-                calendarIdentifier: calendar.calendarIdentifier,
+                calendarIdentifier: calendar.identifier,
                 calendarTitle: calendar.title,
-                sourceIdentifier: calendar.source?.sourceIdentifier ?? "",
-                sourceTitle: calendar.source?.title ?? "",
-                sourceType: Self.sourceTypeName(calendar.source?.sourceType),
+                sourceIdentifier: calendar.sourceIdentifier,
+                sourceTitle: calendar.sourceTitle,
+                sourceType: calendar.sourceType,
                 isAppCreated: calendar.title == Self.medNotesCalendarTitle,
                 recordCount: recordCount,
                 transmittedFields: transmittedFields,
-                requiresCloudAcknowledgment: Self.isCloudSource(calendar.source?.sourceType))
+                requiresCloudAcknowledgment: calendar.isCloud)
         }
         .sorted { $0.calendarTitle.localizedStandardCompare($1.calendarTitle) == .orderedAscending }
     }
@@ -328,11 +312,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// The sources the wizard offers when the user wants a new calendar, one
     /// per account, explicitly chosen rather than defaulted silently.
     func sourceCandidates() -> [(identifier: String, title: String, type: String, isCloud: Bool)] {
-        store.sources
-            .filter { $0.sourceType != .subscribed && $0.sourceType != .birthdays }
+        backend.sources
+            .filter { $0.type != "subscribed" && $0.type != "birthdays" }
             .map { source in
-                (source.sourceIdentifier, source.title, Self.sourceTypeName(source.sourceType),
-                 Self.isCloudSource(source.sourceType))
+                (source.identifier, source.title, source.type, source.isCloud)
             }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
@@ -340,52 +323,30 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// Creates `MedNotes` in the explicitly chosen source and returns its
     /// candidate. The user picked the source; nothing is guessed.
     func createMedNotesCalendar(inSource sourceIdentifier: String) throws -> SyncDestinationCandidate {
-        guard let source = store.sources.first(where: { $0.sourceIdentifier == sourceIdentifier }) else {
-            throw CalendarSyncError.noCalendarSource
-        }
-        let calendar = EKCalendar(for: .event, eventStore: store)
-        calendar.title = Self.medNotesCalendarTitle
-        calendar.source = source
+        let calendar: RemoteCalendar
         do {
-            try store.saveCalendar(calendar, commit: true)
+            calendar = try backend.createCalendar(title: Self.medNotesCalendarTitle, inSource: sourceIdentifier)
+        } catch EventKitBackendError.noSource {
+            throw CalendarSyncError.noCalendarSource
         } catch {
             throw CalendarSyncError.calendarCreateFailed(error.localizedDescription)
         }
         return SyncDestinationCandidate(
-            calendarIdentifier: calendar.calendarIdentifier,
+            calendarIdentifier: calendar.identifier,
             calendarTitle: calendar.title,
-            sourceIdentifier: source.sourceIdentifier,
-            sourceTitle: source.title,
-            sourceType: Self.sourceTypeName(source.sourceType),
+            sourceIdentifier: calendar.sourceIdentifier,
+            sourceTitle: calendar.sourceTitle,
+            sourceType: calendar.sourceType,
             isAppCreated: true,
             recordCount: 0,
             transmittedFields: [],
-            requiresCloudAcknowledgment: Self.isCloudSource(source.sourceType))
+            requiresCloudAcknowledgment: calendar.isCloud)
     }
 
-    /// Resolves a confirmed destination to the live `EKCalendar`, or nil when
+    /// Resolves a confirmed destination to the live calendar, or nil when
     /// it no longer exists. Never falls back to a title match.
-    func calendar(for destination: SyncDestination) -> EKCalendar? {
-        store.calendar(withIdentifier: destination.calendarIdentifier)
-    }
-
-    private static func sourceTypeName(_ type: EKSourceType?) -> String {
-        switch type {
-        case .local: return "local"
-        case .exchange: return "exchange"
-        case .calDAV: return "calDAV"
-        case .mobileMe: return "mobileMe"
-        case .subscribed: return "subscribed"
-        case .birthdays: return "birthdays"
-        default: return "other"
-        }
-    }
-
-    private static func isCloudSource(_ type: EKSourceType?) -> Bool {
-        switch type {
-        case .calDAV, .exchange, .mobileMe: return true
-        default: return false
-        }
+    func calendar(for destination: SyncDestination) -> RemoteCalendar? {
+        backend.calendar(withIdentifier: destination.calendarIdentifier)
     }
 
     // MARK: - Destination-bound push
@@ -401,13 +362,12 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         guard let targetCalendar = calendar(for: destination) else {
             throw CalendarSyncError.destinationMissing
         }
-        var ek: EKEvent
-        var isExisting = true
-        let identified = event.ekEventIdentifier.flatMap { store.calendarItem(withIdentifier: $0) as? EKEvent }
+        var ek: RemoteEvent?
+        let identified = event.ekEventIdentifier.flatMap { backend.event(withIdentifier: $0) }
         let route = SyncDestinationCore.pushRoute(
             rowID: event.id, destination: destination,
             found: identified.map {
-                ($0.calendar?.calendarIdentifier == destination.calendarIdentifier,
+                ($0.calendarID == destination.calendarIdentifier,
                  SyncDestinationCore.marker(from: $0.url),
                  SyncDestinationCore.recordID(from: $0.url))
             })
@@ -419,35 +379,31 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             // sync changes them, or a save was skipped): reuse it, never make
             // a second one.
             ek = made
-        } else {
-            ek = EKEvent(eventStore: store)
-            ek.title = SyncDestinationCore.titleForRemote(event.title)
-            isExisting = false
         }
-        if isExisting {
+        if let existing = ek {
             let decision = CalendarSyncCore.pushDecision(
-                local: event, remote: ek.fields(), remoteModified: ek.lastModifiedDate)
+                local: event, remote: existing.fields(), remoteModified: existing.lastModified)
             if decision == .remoteNewer { return .remoteNewer }
-            if decision == .unchanged, SyncDestinationCore.recordID(from: ek.url) == event.id {
-                return .pushed(syncedCopy(of: event, from: ek))
+            if decision == .unchanged, SyncDestinationCore.recordID(from: existing.url) == event.id {
+                return .pushed(syncedCopy(of: event, from: existing))
             }
         }
-        apply(event.fields(), to: ek)
-        ek.calendar = targetCalendar
         // The marker is what makes the object provably MedNotes-owned without
         // reading its title, and names the row it was made from.
-        ek.url = SyncDestinationCore.markerURL(for: destination, record: event.id)
+        let saved: RemoteEvent
         do {
-            try store.save(ek, span: .thisEvent, commit: true)
+            saved = try backend.save(
+                event.fields(), replacing: ek, in: targetCalendar,
+                marker: SyncDestinationCore.markerURL(for: destination, record: event.id))
         } catch {
             throw CalendarSyncError.saveFailed(error.localizedDescription)
         }
-        return .pushed(syncedCopy(of: event, from: ek))
+        return .pushed(syncedCopy(of: event, from: saved))
     }
 
-    private func syncedCopy(of event: CalendarEvent, from ek: EKEvent) -> CalendarEvent {
+    private func syncedCopy(of event: CalendarEvent, from ek: RemoteEvent) -> CalendarEvent {
         var synced = event
-        synced.ekEventIdentifier = ek.calendarItemIdentifier
+        synced.ekEventIdentifier = ek.identifier
         synced.syncStatus = .synced
         synced.lastSyncDate = Date()
         synced.ensureEndNotBeforeStart()
@@ -459,15 +415,14 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         DateInterval(start: now.addingTimeInterval(-Self.pullWindow), end: now.addingTimeInterval(Self.pullWindow))
     }
 
-    private func events(in window: DateInterval, calendar: EKCalendar) -> [EKEvent] {
-        let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar])
-        return store.events(matching: predicate)
+    private func events(in window: DateInterval, calendar: RemoteCalendar) -> [RemoteEvent] {
+        backend.events(in: window, calendar: calendar)
     }
 
     /// An event in the destination that MedNotes made from `event`, if any.
     /// The year around now is read first; an event further away is then looked
     /// for around its own dates, which is where its object is.
-    private func objectMade(for event: CalendarEvent, in calendar: EKCalendar, destination: SyncDestination) -> EKEvent? {
+    private func objectMade(for event: CalendarEvent, in calendar: RemoteCalendar, destination: SyncDestination) -> RemoteEvent? {
         let near = nearWindow()
         for window in [near] + CalendarSyncCore.lookupWindows(for: [event], beyond: near) {
             let made = events(in: window, calendar: calendar).first { ek in
@@ -489,10 +444,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
     /// destination that carries this app's marker is ever removed.
     func deleteRemote(_ event: CalendarEvent, from destination: SyncDestination) async throws {
         guard state == .granted else { return }
-        var target: EKEvent?
+        var target: RemoteEvent?
         if let identifier = event.ekEventIdentifier,
-           let item = store.calendarItem(withIdentifier: identifier) as? EKEvent,
-           item.calendar?.calendarIdentifier == destination.calendarIdentifier,
+           let item = backend.event(withIdentifier: identifier),
+           item.calendarID == destination.calendarIdentifier,
            SyncDestinationCore.ownsRemoteObject(
             marker: SyncDestinationCore.marker(from: item.url),
             destination: destination,
@@ -503,21 +458,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         }
         guard let item = target else { return }
         do {
-            try store.remove(item, span: .thisEvent, commit: true)
+            try backend.remove(item)
         } catch {
             throw CalendarSyncError.saveFailed(error.localizedDescription)
         }
-    }
-
-    private func apply(_ fields: EventFields, to ek: EKEvent) {
-        ek.title = SyncDestinationCore.titleForRemote(fields.title)
-        ek.notes = fields.notes
-        ek.startDate = fields.startDate
-        ek.endDate = fields.isAllDay
-            ? max(fields.endDate, fields.startDate)
-            : fields.endDate
-        if ek.endDate < ek.startDate { ek.endDate = ek.startDate.addingTimeInterval(1800) }
-        ek.isAllDay = fields.isAllDay
     }
 
     // MARK: - Destination-bound pull
@@ -546,8 +490,8 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         // and importing both need them.
         let near = nearWindow()
         let windowEvents = events(in: near, calendar: targetCalendar)
-        var madeFrom: [UUID: EKEvent] = [:]
-        func index(_ found: [EKEvent]) {
+        var madeFrom: [UUID: RemoteEvent] = [:]
+        func index(_ found: [RemoteEvent]) {
             for ek in found {
                 guard let record = SyncDestinationCore.recordID(from: ek.url), madeFrom[record] == nil,
                       SyncDestinationCore.ownsRemoteObject(
@@ -559,10 +503,10 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         index(windowEvents)
 
         // Each stored identifier is looked up once.
-        var ownedByIdentifier: [String: EKEvent] = [:]
+        var ownedByIdentifier: [String: RemoteEvent] = [:]
         for identifier in byEKID.keys {
-            if let ek = store.calendarItem(withIdentifier: identifier) as? EKEvent,
-               ek.calendar?.calendarIdentifier == destination.calendarIdentifier,
+            if let ek = backend.event(withIdentifier: identifier),
+               ek.calendarID == destination.calendarIdentifier,
                SyncDestinationCore.ownsRemoteObject(
                 marker: SyncDestinationCore.marker(from: ek.url),
                 destination: destination,
@@ -584,7 +528,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
         // skipped because the row had been edited again) has the object but
         // does not know it.
         for local in localEvents where local.ekEventIdentifier == nil {
-            if let made = madeFrom[local.id] { result.rebinds[local.id] = made.calendarItemIdentifier }
+            if let made = madeFrom[local.id] { result.rebinds[local.id] = made.identifier }
         }
 
         for (identifier, local) in byEKID {
@@ -592,7 +536,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
                 // Its identifier finds nothing, but the object it made is
                 // there under another one: point the row at it.
                 if let made = madeFrom[local.id] {
-                    result.rebinds[local.id] = made.calendarItemIdentifier
+                    result.rebinds[local.id] = made.identifier
                     continue
                 }
                 // Missing, moved or untagged remotely: a conflict the user
@@ -616,7 +560,7 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
 
         var imported = Set<String>()
         for ek in windowEvents {
-            let identifier = ek.calendarItemIdentifier
+            let identifier = ek.identifier
             guard byEKID[identifier] == nil else { continue }
             // Only MedNotes-created objects may be imported.
             guard SyncDestinationCore.ownsRemoteObject(
@@ -640,8 +584,8 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             result.creations.append(CalendarEvent(
                 title: SyncDestinationCore.titleFromRemote(ek.title),
                 description: ek.notes ?? "",
-                startDate: ek.startDate,
-                endDate: ek.endDate ?? (ek.isAllDay ? ek.startDate : ek.startDate.addingTimeInterval(1800)),
+                startDate: ek.start,
+                endDate: ek.endDate ?? (ek.isAllDay ? ek.start : ek.start.addingTimeInterval(1800)),
                 isAllDay: ek.isAllDay,
                 patientId: nil,
                 eventType: .appointment,
@@ -697,17 +641,6 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
                 return String(localized: "The chosen calendar no longer exists. Reconnect in Settings \u{203a} Sync.")
             }
         }
-    }
-}
-
-extension EKEvent {
-    func fields() -> EventFields {
-        EventFields(
-            title: SyncDestinationCore.titleFromRemote(title),
-            notes: notes ?? "",
-            startDate: startDate,
-            endDate: endDate ?? (isAllDay ? startDate : startDate.addingTimeInterval(1800)),
-            isAllDay: isAllDay)
     }
 }
 

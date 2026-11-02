@@ -164,7 +164,7 @@ enum ReminderSyncCore {
     }
 }
 
-/// Owns the `EKEventStore` connection to Apple Reminders. Pushes MedNotes
+/// Owns the connection to Apple Reminders (through a `RemindersBackend`). Pushes MedNotes
 /// todos into a dedicated "MedNotes" list and pulls external edits back.
 ///
 /// Permission failures degrade gracefully: the app remains fully usable as a
@@ -209,44 +209,37 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
 
     nonisolated static let medNotesListTitle = "MedNotes"
 
-    private let store = EKEventStore()
+    private let backend: RemindersBackend
     private var changeTask: Task<Void, Never>?
-    private var observer: NSObjectProtocol?
+    private var isObserving = false
 
-    init() {
-        state = Self.initialState()
-    }
-
-    deinit {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-        }
+    /// `backend` is Apple Reminders itself unless a test passes a fake.
+    init(backend: RemindersBackend? = nil) {
+        let backend = backend ?? EventKitRemindersBackend()
+        self.backend = backend
+        state = Self.initialState(backend)
     }
 
     /// Whether macOS has already granted this app full Reminders access. A
-    /// class-level query that never prompts, so automatic sync passes can
-    /// consult it without raising the permission dialog.
-    nonisolated static var hasFullAccess: Bool {
-        EKEventStore.authorizationStatus(for: .reminder) == .fullAccess
+    /// query that never prompts, so automatic sync passes can consult it
+    /// without raising the permission dialog.
+    var hasFullAccess: Bool {
+        backend.authorization == .granted
     }
 
     /// The pill should be truthful from launch: access granted in an earlier
     /// run is still granted. Sample-data runs stay "not connected" whatever
     /// TCC says, so the pill never advertises a bridge that
     /// `refusePreviewSeedWrites` blocks.
-    private static func initialState() -> AccessState {
+    private static func initialState(_ backend: RemindersBackend) -> AccessState {
         guard !PreviewSeed.isActive else { return .notRequested }
-        switch EKEventStore.authorizationStatus(for: .reminder) {
-        case .fullAccess: return .granted
-        case .denied, .restricted: return .denied
-        default: return .notRequested
-        }
+        return backend.authorization
     }
 
     /// Re-reads access after the user may have changed it in System Settings.
     /// Never prompts.
     func refreshAccessState() {
-        let current = Self.initialState()
+        let current = Self.initialState(backend)
         guard current != state else { return }
         state = current
         if current == .granted { lastError = nil }
@@ -260,7 +253,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
             return false
         }
         do {
-            state = try await store.requestFullAccessToReminders() ? .granted : .denied
+            state = try await backend.requestAccess() ? .granted : .denied
             if state == .granted { lastError = nil }
             return state == .granted
         } catch {
@@ -271,12 +264,10 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     }
 
     func startObservingChanges() {
-        guard observer == nil else { return }
-        observer = NotificationCenter.default.addObserver(
-            forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in
-            Task { @MainActor in
-                self?.scheduleExternalChangeHandling()
-            }
+        guard !isObserving else { return }
+        isObserving = true
+        backend.startObservingChanges { [weak self] in
+            self?.scheduleExternalChangeHandling()
         }
     }
 
@@ -299,18 +290,18 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// The lists the wizard can offer, with the disclosure a choice needs.
     func destinationCandidates(recordCount: Int, transmittedFields: [String])
         -> [SyncDestinationCandidate] {
-        let lists = store.calendars(for: .reminder).filter { $0.allowsContentModifications }
+        let lists = backend.lists.filter { $0.allowsContentModifications }
         return lists.map { list in
             SyncDestinationCandidate(
-                calendarIdentifier: list.calendarIdentifier,
+                calendarIdentifier: list.identifier,
                 calendarTitle: list.title,
-                sourceIdentifier: list.source?.sourceIdentifier ?? "",
-                sourceTitle: list.source?.title ?? "",
-                sourceType: Self.sourceTypeName(list.source?.sourceType),
+                sourceIdentifier: list.sourceIdentifier,
+                sourceTitle: list.sourceTitle,
+                sourceType: list.sourceType,
                 isAppCreated: list.title == Self.medNotesListTitle,
                 recordCount: recordCount,
                 transmittedFields: transmittedFields,
-                requiresCloudAcknowledgment: Self.isCloudSource(list.source?.sourceType))
+                requiresCloudAcknowledgment: list.isCloud)
         }
         .sorted { $0.calendarTitle.localizedStandardCompare($1.calendarTitle) == .orderedAscending }
     }
@@ -319,63 +310,40 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// CalDAV servers other than iCloud cannot, and those are filtered out
     /// rather than offered and then failing.
     func sourceCandidates() -> [(identifier: String, title: String, type: String, isCloud: Bool)] {
-        store.sources
-            .filter { $0.sourceType != .subscribed && $0.sourceType != .exchange && $0.sourceType != .birthdays }
+        backend.sources
+            .filter { $0.type != "subscribed" && $0.type != "exchange" && $0.type != "birthdays" }
             .map { source in
-                (source.sourceIdentifier, source.title, Self.sourceTypeName(source.sourceType),
-                 Self.isCloudSource(source.sourceType))
+                (source.identifier, source.title, source.type, source.isCloud)
             }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     /// Creates the `MedNotes` list in the explicitly chosen source.
     func createMedNotesList(inSource sourceIdentifier: String) throws -> SyncDestinationCandidate {
-        guard let source = store.sources.first(where: { $0.sourceIdentifier == sourceIdentifier }) else {
-            throw RemindersSyncError.noListSource
-        }
-        let list = EKCalendar(for: .reminder, eventStore: store)
-        list.title = Self.medNotesListTitle
-        list.source = source
+        let list: RemoteCalendar
         do {
-            try store.saveCalendar(list, commit: true)
+            list = try backend.createList(title: Self.medNotesListTitle, inSource: sourceIdentifier)
+        } catch EventKitBackendError.noSource {
+            throw RemindersSyncError.noListSource
         } catch {
             throw RemindersSyncError.listCreateFailed(error.localizedDescription)
         }
         return SyncDestinationCandidate(
-            calendarIdentifier: list.calendarIdentifier,
+            calendarIdentifier: list.identifier,
             calendarTitle: list.title,
-            sourceIdentifier: source.sourceIdentifier,
-            sourceTitle: source.title,
-            sourceType: Self.sourceTypeName(source.sourceType),
+            sourceIdentifier: list.sourceIdentifier,
+            sourceTitle: list.sourceTitle,
+            sourceType: list.sourceType,
             isAppCreated: true,
             recordCount: 0,
             transmittedFields: [],
-            requiresCloudAcknowledgment: Self.isCloudSource(source.sourceType))
+            requiresCloudAcknowledgment: list.isCloud)
     }
 
     /// Resolves a confirmed destination to the live list, or nil when it is
     /// gone. Never a title match.
-    func list(for destination: SyncDestination) -> EKCalendar? {
-        store.calendar(withIdentifier: destination.calendarIdentifier)
-    }
-
-    private static func sourceTypeName(_ type: EKSourceType?) -> String {
-        switch type {
-        case .local: return "local"
-        case .exchange: return "exchange"
-        case .calDAV: return "calDAV"
-        case .mobileMe: return "mobileMe"
-        case .subscribed: return "subscribed"
-        case .birthdays: return "birthdays"
-        default: return "other"
-        }
-    }
-
-    private static func isCloudSource(_ type: EKSourceType?) -> Bool {
-        switch type {
-        case .calDAV, .exchange, .mobileMe: return true
-        default: return false
-        }
+    func list(for destination: SyncDestination) -> RemoteCalendar? {
+        backend.list(withIdentifier: destination.calendarIdentifier)
     }
 
     // MARK: - Destination-bound push
@@ -389,13 +357,12 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         guard let list = list(for: destination) else {
             throw RemindersSyncError.destinationMissing
         }
-        let reminder: EKReminder
-        var isExisting = true
-        let identified = todo.reminderIdentifier.flatMap { store.calendarItem(withIdentifier: $0) as? EKReminder }
+        var reminder: RemoteReminder?
+        let identified = todo.reminderIdentifier.flatMap { backend.reminder(withIdentifier: $0) }
         let route = SyncDestinationCore.pushRoute(
             rowID: todo.id, destination: destination,
             found: identified.map {
-                ($0.calendar?.calendarIdentifier == destination.calendarIdentifier,
+                ($0.calendarID == destination.calendarIdentifier,
                  SyncDestinationCore.marker(from: $0.url),
                  SyncDestinationCore.recordID(from: $0.url))
             })
@@ -406,43 +373,40 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
             // The todo lost the identifier of a reminder it already made: reuse
             // it, never make a second one.
             reminder = made
-        } else {
-            reminder = EKReminder(eventStore: store)
-            isExisting = false
         }
-        if isExisting {
+        if let existing = reminder {
             let decision = ReminderSyncCore.pushDecision(
-                local: todo, remote: reminder.reminderFields(), remoteModified: reminder.lastModifiedDate)
+                local: todo, remote: existing.reminderFields(), remoteModified: existing.lastModified)
             if decision == .remoteNewer { return .remoteNewer }
-            if decision == .unchanged, SyncDestinationCore.recordID(from: reminder.url) == todo.id {
-                return .pushed(syncedCopy(of: todo, from: reminder, in: list))
+            if decision == .unchanged, SyncDestinationCore.recordID(from: existing.url) == todo.id {
+                return .pushed(syncedCopy(of: todo, from: existing, in: list))
             }
         }
-        apply(todo.reminderFields(), to: reminder, completedAt: todo.completedAt)
-        reminder.calendar = list
         // The marker makes the reminder provably MedNotes-owned and names the
         // todo it was made from.
-        reminder.url = SyncDestinationCore.markerURL(for: destination, record: todo.id)
+        let saved: RemoteReminder
         do {
-            try store.save(reminder, commit: true)
+            saved = try backend.save(
+                todo.reminderFields(), completedAt: todo.completedAt, replacing: reminder, in: list,
+                marker: SyncDestinationCore.markerURL(for: destination, record: todo.id))
         } catch {
             throw RemindersSyncError.saveFailed(error.localizedDescription)
         }
-        return .pushed(syncedCopy(of: todo, from: reminder, in: list))
+        return .pushed(syncedCopy(of: todo, from: saved, in: list))
     }
 
-    private func syncedCopy(of todo: TodoItem, from reminder: EKReminder, in list: EKCalendar) -> TodoItem {
+    private func syncedCopy(of todo: TodoItem, from reminder: RemoteReminder, in list: RemoteCalendar) -> TodoItem {
         var synced = todo
-        synced.reminderIdentifier = reminder.calendarItemIdentifier
-        synced.reminderListIdentifier = list.calendarIdentifier
+        synced.reminderIdentifier = reminder.identifier
+        synced.reminderListIdentifier = list.identifier
         synced.syncStatus = .synced
         synced.lastSyncDate = Date()
         return synced
     }
 
     /// A reminder in the destination that MedNotes made from todo `id`, if any.
-    private func reminderMade(from id: UUID, in list: EKCalendar, destination: SyncDestination) async -> EKReminder? {
-        await fetchReminders(matching: store.predicateForReminders(in: [list])).first { reminder in
+    private func reminderMade(from id: UUID, in list: RemoteCalendar, destination: SyncDestination) async -> RemoteReminder? {
+        await backend.reminders(in: list).first { reminder in
             SyncDestinationCore.recordID(from: reminder.url) == id
                 && SyncDestinationCore.ownsRemoteObject(
                     marker: SyncDestinationCore.marker(from: reminder.url),
@@ -454,12 +418,19 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// identifier the todo stored, and when that finds nothing by the marker
     /// MedNotes put on it, which names this todo. Only a reminder in the
     /// destination that carries this app's marker is ever removed.
-    func deleteRemote(_ todo: TodoItem, from destination: SyncDestination) async throws {
+    ///
+    /// Looking the reminder up by its marker suspends (EventKit's fetch), so the
+    /// session can lock in the middle of it. `stillValid` is asked once the
+    /// fetch is back and before anything is removed: when it says no, nothing
+    /// is removed, because the row cannot be deleted under a lock and would
+    /// keep an identifier that finds nothing.
+    func deleteRemote(_ todo: TodoItem, from destination: SyncDestination,
+                      stillValid: @MainActor () -> Bool = { true }) async throws {
         guard state == .granted else { return }
-        var target: EKReminder?
+        var target: RemoteReminder?
         if let identifier = todo.reminderIdentifier,
-           let item = store.calendarItem(withIdentifier: identifier) as? EKReminder,
-           item.calendar?.calendarIdentifier == destination.calendarIdentifier,
+           let item = backend.reminder(withIdentifier: identifier),
+           item.calendarID == destination.calendarIdentifier,
            SyncDestinationCore.ownsRemoteObject(
             marker: SyncDestinationCore.marker(from: item.url),
             destination: destination,
@@ -467,38 +438,13 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
             target = item
         } else if let list = list(for: destination) {
             target = await reminderMade(from: todo.id, in: list, destination: destination)
+            guard stillValid() else { return }
         }
         guard let item = target else { return }
         do {
-            try store.remove(item, commit: true)
+            try backend.remove(item)
         } catch {
             throw RemindersSyncError.saveFailed(error.localizedDescription)
-        }
-    }
-
-    private func apply(_ fields: ReminderFields, to reminder: EKReminder, completedAt: Date?) {
-        reminder.title = SyncDestinationCore.titleForRemote(fields.title)
-        reminder.notes = fields.notes.isEmpty ? nil : fields.notes
-        if let day = fields.dueDay {
-            // Same day: leave the reminder's own components alone, including
-            // any time the user set in the Reminders app. New day: date-only,
-            // which is all MedNotes means by a due date, so a timed alarm
-            // left over from the old day goes too.
-            if DueDay(components: reminder.dueDateComponents) != day {
-                reminder.dueDateComponents = day.components
-                reminder.alarms?.forEach(reminder.removeAlarm)
-            }
-        } else if reminder.dueDateComponents != nil {
-            reminder.dueDateComponents = nil
-            reminder.alarms?.forEach(reminder.removeAlarm)
-        }
-        if ReminderSyncCore.priority(fromReminder: reminder.priority) != fields.priority {
-            reminder.priority = ReminderSyncCore.reminderPriority(fields.priority)
-        }
-        if reminder.isCompleted != fields.isCompleted {
-            // completionDate drives isCompleted in EventKit: a date completes
-            // the reminder, nil reopens it.
-            reminder.completionDate = fields.isCompleted ? (completedAt ?? Date()) : nil
         }
     }
 
@@ -525,8 +471,8 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
 
         // The list's reminders, read once: re-binding a lost identifier and
         // importing both need them.
-        let listReminders = await fetchReminders(matching: store.predicateForReminders(in: [list]))
-        var madeFrom: [UUID: EKReminder] = [:]
+        let listReminders = await backend.reminders(in: list)
+        var madeFrom: [UUID: RemoteReminder] = [:]
         for reminder in listReminders {
             guard let record = SyncDestinationCore.recordID(from: reminder.url), madeFrom[record] == nil,
                   SyncDestinationCore.ownsRemoteObject(
@@ -537,12 +483,12 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         // A todo that never stored its reminder's identifier has the
         // reminder but does not know it.
         for local in localTodos where local.reminderIdentifier == nil {
-            if let made = madeFrom[local.id] { result.rebinds[local.id] = made.calendarItemIdentifier }
+            if let made = madeFrom[local.id] { result.rebinds[local.id] = made.identifier }
         }
 
         for (identifier, local) in byReminderID {
-            guard let reminder = store.calendarItem(withIdentifier: identifier) as? EKReminder,
-                  reminder.calendar?.calendarIdentifier == destination.calendarIdentifier,
+            guard let reminder = backend.reminder(withIdentifier: identifier),
+                  reminder.calendarID == destination.calendarIdentifier,
                   SyncDestinationCore.ownsRemoteObject(
                     marker: SyncDestinationCore.marker(from: reminder.url),
                     destination: destination,
@@ -550,7 +496,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
                 // Its identifier finds nothing, but the reminder it made is
                 // there under another one: point the todo at it.
                 if let made = madeFrom[local.id] {
-                    result.rebinds[local.id] = made.calendarItemIdentifier
+                    result.rebinds[local.id] = made.identifier
                     continue
                 }
                 result.remoteMissing.append(local.id)
@@ -571,7 +517,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
         }
 
         for reminder in listReminders {
-            let identifier = reminder.calendarItemIdentifier
+            let identifier = reminder.identifier
             guard byReminderID[identifier] == nil else { continue }
             guard SyncDestinationCore.ownsRemoteObject(
                 marker: SyncDestinationCore.marker(from: reminder.url),
@@ -601,21 +547,11 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
                 dueDate: fields.dueDay?.date(),
                 notes: fields.notes.isEmpty ? nil : fields.notes,
                 reminderIdentifier: identifier,
-                reminderListIdentifier: reminder.calendar?.calendarIdentifier,
+                reminderListIdentifier: reminder.calendarID,
                 syncStatus: .synced,
                 lastSyncDate: now))
         }
         return result
-    }
-
-    /// `fetchReminders` is completion-based and returns a cancellation token,
-    /// so Swift generates no async twin for it.
-    private func fetchReminders(matching predicate: NSPredicate) async -> [EKReminder] {
-        await withCheckedContinuation { continuation in
-            _ = store.fetchReminders(matching: predicate) { reminders in
-                continuation.resume(returning: reminders ?? [])
-            }
-        }
     }
 
     /// Structural containment for `--preview-seed` runs, at the EventKit
@@ -656,17 +592,6 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
                 return String(localized: "The chosen reminder list no longer exists. Reconnect in Settings \u{203a} Sync.")
             }
         }
-    }
-}
-
-extension EKReminder {
-    func reminderFields() -> ReminderFields {
-        ReminderFields(
-            title: SyncDestinationCore.titleFromRemote(title),
-            notes: notes ?? "",
-            dueDay: DueDay(components: dueDateComponents),
-            isCompleted: isCompleted,
-            priority: ReminderSyncCore.priority(fromReminder: priority))
     }
 }
 

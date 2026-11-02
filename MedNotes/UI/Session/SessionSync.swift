@@ -226,7 +226,7 @@ extension AppSession {
         guard !PreviewSeed.isActive else { return }
         // Settings › Sync: off means nothing moves until Sync Now.
         if automatic, !calendarAutoSyncEnabled { return }
-        if automatic, !AppleCalendarService.hasFullAccess { return }
+        if automatic, !appleCalendar.hasFullAccess { return }
         guard await ensureCalendarAccess() else { return }
         // No destination, no consent, no writes. The wizard creates one.
         let calendarDestination = try? await store.destinations.destination(for: .calendar)
@@ -385,7 +385,7 @@ extension AppSession {
         guard !PreviewSeed.isActive else { return }
         // Settings › Sync: off means nothing moves until Sync Now.
         if automatic, !remindersAutoSyncEnabled { return }
-        if automatic, !AppleRemindersService.hasFullAccess { return }
+        if automatic, !appleReminders.hasFullAccess { return }
         guard await ensureRemindersAccess() else { return }
         let remindersDestination = try? await store.destinations.destination(for: .reminders)
         guard let destination = remindersDestination, SyncDestinationCore.mayWrite(destination) else {

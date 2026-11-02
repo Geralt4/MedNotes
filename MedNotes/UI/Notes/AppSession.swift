@@ -189,7 +189,7 @@ final class AppSession: ObservableObject {
 
     // MARK: Apple Calendar bridge
 
-    let appleCalendar = AppleCalendarService()
+    let appleCalendar: AppleCalendarService
     @Published var lastCalendarSyncSummary: String?
     /// One calendar pass at a time; see `SyncPassGate`.
     var calendarPassGate = SyncPassGate()
@@ -197,7 +197,7 @@ final class AppSession: ObservableObject {
 
     // MARK: Apple Reminders bridge
 
-    let appleReminders = AppleRemindersService()
+    let appleReminders: AppleRemindersService
     @Published var lastRemindersSyncSummary: String?
 
     /// Snapshot of what the module-scoped delete confirmation will delete.
@@ -1255,12 +1255,15 @@ final class AppSession: ObservableObject {
     /// one without an injected root; a test passes true to check that wiring.
     init(dataRoot: DataRoot? = nil, defaults: UserDefaults = .standard,
          keyManager: KeyManager? = nil, followsSystem: Bool? = nil,
-         panels: FilePanels? = nil) {
+         panels: FilePanels? = nil, calendarBackend: CalendarBackend? = nil,
+         remindersBackend: RemindersBackend? = nil) {
         // In the XCTest host `.standard` is the owner's real preferences file:
         // a test's session would read their settings and overwrite their last
         // module. It gets a suite of its own (`TestDefaults` in the tests).
         precondition(dataRoot == nil || !Self.isTestHost || defaults !== UserDefaults.standard,
                      "a test session must not use the host's real preferences")
+        self.appleCalendar = AppleCalendarService(backend: calendarBackend)
+        self.appleReminders = AppleRemindersService(backend: remindersBackend)
         self.injectedDataRoot = dataRoot
         self.injectedKeyManager = keyManager
         self.panels = panels ?? AppKitFilePanels()
