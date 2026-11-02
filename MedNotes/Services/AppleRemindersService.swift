@@ -418,7 +418,14 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
     /// identifier the todo stored, and when that finds nothing by the marker
     /// MedNotes put on it, which names this todo. Only a reminder in the
     /// destination that carries this app's marker is ever removed.
-    func deleteRemote(_ todo: TodoItem, from destination: SyncDestination) async throws {
+    ///
+    /// Looking the reminder up by its marker suspends (EventKit's fetch), so the
+    /// session can lock in the middle of it. `stillValid` is asked once the
+    /// fetch is back and before anything is removed: when it says no, nothing
+    /// is removed, because the row cannot be deleted under a lock and would
+    /// keep an identifier that finds nothing.
+    func deleteRemote(_ todo: TodoItem, from destination: SyncDestination,
+                      stillValid: @MainActor () -> Bool = { true }) async throws {
         guard state == .granted else { return }
         var target: RemoteReminder?
         if let identifier = todo.reminderIdentifier,
@@ -431,6 +438,7 @@ final class AppleRemindersService: ObservableObject, SyncBridgeService {
             target = item
         } else if let list = list(for: destination) {
             target = await reminderMade(from: todo.id, in: list, destination: destination)
+            guard stillValid() else { return }
         }
         guard let item = target else { return }
         do {

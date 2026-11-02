@@ -465,4 +465,30 @@ final class AppleSyncFakeTests: XCTestCase {
             .todos.load(id: s.todo.id)
         XCTAssertEqual(kept?.reminderIdentifier, s.object.identifier)
     }
+
+    /// The reminder is found by its marker, which suspends on EventKit's fetch;
+    /// a lock that lands during the fetch must stop the removal. The reminder
+    /// stays, the row stays with its identifier, and nothing is reported. (The
+    /// same path without a lock is
+    /// `testDeletingALinkedTodoWhoseIdentifierChangedRemovesTheReminderByItsMarker`.)
+    func testALockDuringTheReminderFetchRemovesNothingAndKeepsTheTodo() async throws {
+        let s = try await sessionWithALinkedTodo()
+        s.backend.reidentify(s.object.identifier)
+        s.backend.fetchWillReturn = { [unowned session = s.session, unowned backend = s.backend] in
+            backend.fetchWillReturn = {}
+            await session.lockNow(reason: "idle")
+        }
+
+        await s.session.deleteTodo(id: s.todo.id)
+
+        XCTAssertEqual(s.backend.fetchCount, 1, "the marker lookup was not reached")
+        XCTAssertEqual(s.backend.allReminders.count, 1, "the reminder was removed under a lock")
+        XCTAssertTrue(s.backend.removedIdentifiers.isEmpty)
+        XCTAssertNil(s.session.errorMessage, "nothing is reported for a delete that a lock stopped")
+        await s.session.unlock()
+        let kept = try await XCTUnwrap(s.session.store, "unlock failed: \(s.session.initError ?? "")")
+            .todos.load(id: s.todo.id)
+        XCTAssertEqual(kept?.reminderIdentifier, s.object.identifier, "the row is as it was")
+        XCTAssertNil(s.session.errorMessage)
+    }
 }

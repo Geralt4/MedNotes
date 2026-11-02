@@ -151,21 +151,24 @@ extension AppSession {
                 // The same after the destination was read. For a todo this is
                 // not the last point a lock can land: when the stored
                 // identifier finds nothing, `deleteRemote` looks the reminder
-                // up by its marker with an awaited EventKit fetch, and a lock
-                // that lands during it still finds the reminder removed
-                // afterwards. (A calendar event has no such suspension; see
-                // `removeEvent`.)
+                // up by its marker with an awaited EventKit fetch. It asks
+                // `stillValid` once that is back, so a lock that landed during
+                // it removes nothing. (A calendar event has no such
+                // suspension; see `removeEvent`.)
                 guard canUseStore, self.store === store else { return }
                 let canReach = appleReminders.state == .granted && SyncDestinationCore.mayWrite(destination)
+                let stillValid = { @MainActor [unowned self] in self.canUseStore && self.store === store }
                 if snapshot.reminderIdentifier != nil {
                     // Linked: the delete waits until the Apple copy can be removed.
                     guard canReach, let destination else { throw LinkedDeletionError.reminders }
-                    try await appleReminders.deleteRemote(snapshot, from: destination)
+                    try await appleReminders.deleteRemote(snapshot, from: destination, stillValid: stillValid)
                 } else if canReach, let destination, !snapshot.isUntouchedNewRecord {
                     // No identifier stored, but a reminder may exist under its
                     // marker; see `removeEvent`.
-                    try? await appleReminders.deleteRemote(snapshot, from: destination)
+                    try? await appleReminders.deleteRemote(snapshot, from: destination, stillValid: stillValid)
                 }
+                // A lock that stopped the removal stops the delete too.
+                guard stillValid() else { return }
             }
             if discarding {
                 try await store.todos.discard(id: id)
