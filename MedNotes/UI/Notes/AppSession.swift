@@ -307,6 +307,10 @@ final class AppSession: ObservableObject {
     /// detaches the store; see `OpenEditorDraft`.
     var openEditors: [UUID: () -> OpenEditorDraft?] = [:]
 
+    /// How each of those editors saves itself, as its own Save does; see
+    /// `commitEditorsOnScreen`.
+    var openEditorCommits: [UUID: @MainActor () async -> Bool] = [:]
+
     /// Fields inside an editor that hold typed text not yet written to the
     /// draft (an inspector property, committed on submit or when focus leaves),
     /// by registration token. `openEditorDrafts` runs them first, so a lock or a
@@ -1058,6 +1062,25 @@ final class AppSession: ObservableObject {
             } catch {
                 failures += 1
             }
+        }
+        return failures
+    }
+
+    /// Has every editor on screen save what it holds, before something reads
+    /// the store whole (a backup, an export, a restore point), and returns how
+    /// many could not.
+    ///
+    /// Each editor saves through its own Save, the path the user's Done takes:
+    /// Revert and Cancel keep working afterwards (the editor's baseline moves
+    /// with the store), a patient's attachments are checked as they are on
+    /// Save, and text in an Add row, which Save refuses to guess at, is not
+    /// saved but counted. The editors stay open. This is not the lock's save
+    /// (`saveDrafts`), which writes from a snapshot and closes the editors.
+    func commitEditorsOnScreen() async -> Int {
+        flushPendingEdits()
+        var failures = 0
+        for commit in Array(openEditorCommits.values) {
+            if await !commit() { failures += 1 }
         }
         return failures
     }

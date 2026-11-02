@@ -42,9 +42,28 @@ struct EventDetailView: View {
         }
         .onAppear {
             let draft = $draft, original = $original
-            session.registerOpenEditor(lockToken) {
+            session.registerOpenEditor(lockToken, draft: {
                 draft.wrappedValue.map { .event($0, edited: $0 != original.wrappedValue) }
-            }
+            }, commit: { [weak session] in
+                // Not retained: the session holds this closure until the editor goes.
+                guard let session else { return true }
+                // What Done saves (see `save()`), without leaving the editor.
+                guard let d = draft.wrappedValue, d != original.wrappedValue else { return true }
+                guard await session.save(d) else { return false }
+                if let latest = await session.loadSelectedEvent(),
+                   latest.id == d.id,
+                   draft.wrappedValue?.title == d.title,
+                   draft.wrappedValue?.description == d.description,
+                   draft.wrappedValue?.startDate == d.startDate,
+                   draft.wrappedValue?.endDate == d.endDate,
+                   draft.wrappedValue?.isAllDay == d.isAllDay,
+                   draft.wrappedValue?.eventType == d.eventType,
+                   draft.wrappedValue?.patientId == d.patientId {
+                    draft.wrappedValue = latest
+                    original.wrappedValue = latest
+                }
+                return true
+            })
         }
         .onDisappear {
             // False when a lock or restore already saved or discarded this draft.

@@ -90,9 +90,27 @@ struct NoteDetailView: View {
         }
         .onAppear {
             let draft = $draft, original = $original, tag = $pendingTag
-            session.registerOpenEditor(lockToken) {
+            session.registerOpenEditor(lockToken, draft: {
                 draft.wrappedValue.map { .note($0, edited: $0 != original.wrappedValue) }
-            }
+            }, commit: { [weak session] in
+                // Not retained: the session holds this closure until the editor goes.
+                guard let session else { return true }
+                // What Save does (see `save()`), for a backup that must hold
+                // what is on screen. The baseline moves with the store, so
+                // Revert afterwards goes to what was saved.
+                session.flushPendingEdits()
+                guard let d = draft.wrappedValue, d != original.wrappedValue else { return true }
+                guard await session.save(d) else { return false }
+                if let latest = await session.loadSelectedNote(),
+                   latest.id == d.id,
+                   draft.wrappedValue?.title == d.title,
+                   draft.wrappedValue?.content == d.content,
+                   draft.wrappedValue?.tags == d.tags {
+                    draft.wrappedValue = latest
+                    original.wrappedValue = latest
+                }
+                return true
+            })
             // A lock or restore reads the draft after this has run.
             session.registerPendingEdit(pendingEditToken) {
                 guard var d = draft.wrappedValue else { return }

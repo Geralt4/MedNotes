@@ -368,12 +368,42 @@
         }
       }
     },
+    "%lld edit(s) could not be saved, so no backup was made." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν δημιουργήθηκε αντίγραφο ασφαλείας."
+          }
+        }
+      }
+    },
     "%lld edit(s) could not be saved, so no note was replaced." : {
       "localizations" : {
         "el" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν αντικαταστάθηκε καμία σημείωση."
+          }
+        }
+      }
+    },
+    "%lld edit(s) could not be saved, so nothing was exported." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε εξαγωγή."
+          }
+        }
+      }
+    },
+    "%lld edit(s) could not be saved, so nothing was imported." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld αλλαγή(-ές) δεν αποθηκεύτηκαν, οπότε δεν έγινε εισαγωγή."
           }
         }
       }

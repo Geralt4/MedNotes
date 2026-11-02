@@ -34,8 +34,15 @@ extension AppSession {
     /// Called by a record editor when it appears. `draft` must not capture
     /// the view itself (pass its state bindings), or the session would keep
     /// the view alive.
-    func registerOpenEditor(_ token: UUID, draft: @escaping () -> OpenEditorDraft?) {
+    ///
+    /// `commit` saves the editor the way its own Save does and says whether it
+    /// did (true also when there was nothing to save). Like `draft`, it must
+    /// capture state bindings, and the session only weakly, never the view:
+    /// the session holds it until the editor goes.
+    func registerOpenEditor(_ token: UUID, draft: @escaping () -> OpenEditorDraft?,
+                            commit: (@MainActor () async -> Bool)? = nil) {
         openEditors[token] = draft
+        openEditorCommits[token] = commit
         settledEditors.remove(token)
     }
 
@@ -45,6 +52,7 @@ extension AppSession {
     @discardableResult
     func unregisterOpenEditor(_ token: UUID) -> Bool {
         openEditors[token] = nil
+        openEditorCommits[token] = nil
         return settledEditors.remove(token) == nil
     }
 
