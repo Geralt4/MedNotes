@@ -284,4 +284,76 @@ final class RestoreFixTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(loaded).files, [], "the dropped file must not come back from the patient's own list")
         await target.close()
     }
+
+    // MARK: - Why the safety copy failed
+
+    func testTheCauseOfAFailedSafetyCopyIsNamedWhenTheUserCanActOnIt() {
+        func cause(_ error: Error) -> SafetyCopyCause? { SafetyCopyCause(from: error) }
+        let diskFull = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
+        XCTAssertEqual(cause(diskFull), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSCocoaErrorDomain, code: 4,
+                                     userInfo: [NSUnderlyingErrorKey: diskFull])), .diskFull,
+                       "an error that wraps a full disk")
+        XCTAssertEqual(cause(SQLiteError.step("database or disk is full", sql: "VACUUM INTO ?")), .diskFull)
+        XCTAssertEqual(cause(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)), .noPermission)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))), .noPermission)
+        XCTAssertEqual(cause(NSError(domain: NSPOSIXErrorDomain, code: Int(EBUSY))), .inUse)
+        XCTAssertNil(cause(NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoSuchFileError)),
+                     "a missing file is not something to act on here")
+        XCTAssertNil(cause(SQLiteError.step("no such table: patients", sql: "")))
+    }
+
+    /// A restore whose safety copy hits a full disk stops with nothing changed,
+    /// says so in plain words (so the user knows why before choosing to go on
+    /// without the copy), and keeps the raw detail for the log.
+    func testARestoreWhoseSafetyCopyHitsAFullDiskSaysSoAndKeepsTheDetailForTheLog() async throws {
+        let sourceRoot = try makeRoot()
+        let source = try AppStore.testStore(dataRoot: sourceRoot)
+        try await source.notes.save(Note(title: "From the backup", content: "FROM-BACKUP"))
+        let archive = scratch.appendingPathComponent("good.mednotesbackup")
+        _ = try await source.backups.createEncryptedBackup(name: "Good", to: archive, passphrase: passphrase)
+        await source.close()
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        try await target.notes.save(Note(title: "Mine", content: "MINE"))
+        let raw = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError, userInfo: [
+            NSLocalizedDescriptionKey: "RAW-DETAIL: no space left on device at /private/var/x"])
+        BackupService.restorePointFailureForTesting = { raw }
+        var logged: [String] = []
+        SecurityLog.observer = { _, _, detail in if let detail { logged.append(detail) } }
+        defer {
+            BackupService.restorePointFailureForTesting = nil
+            SecurityLog.observer = nil
+        }
+
+        do {
+            _ = try await target.backups.restore(
+                fromEncryptedBackupAt: archive, passphrase: passphrase,
+                databaseKey: TestKeys.database(for: targetRoot),
+                attachmentKey: TestKeys.attachment(for: targetRoot))
+            XCTFail("the safety copy cannot be made, so the restore must stop")
+        } catch let error as BackupError {
+            guard case .safetyCopyIncomplete(_, let cause) = error else {
+                return XCTFail("expected safetyCopyIncomplete, got \(error)")
+            }
+            XCTAssertEqual(cause, .diskFull)
+            let shown = UserFacingFailure.message(for: error, during: .restore)
+            XCTAssertEqual(shown, String(localized: "A copy of your current data could not be made first because the disk is full, so nothing was changed."))
+            XCTAssertFalse(shown.contains("RAW-DETAIL"), shown)
+            XCTAssertTrue(logged.contains { $0.contains("RAW-DETAIL") && $0.contains("diskFull") },
+                          "the raw detail goes to the log: \(logged)")
+            XCTAssertFalse(logged.joined().contains("/private/var"), "paths are removed from the log")
+        }
+        let untouched = try await target.db.loadAllNotes()
+        XCTAssertEqual(untouched.map(\.content), ["MINE"], "nothing was replaced")
+        await target.close()
+    }
+
+    /// Another reason keeps the general line.
+    func testAnOtherwiseUnexplainedSafetyCopyFailureKeepsTheGeneralLine() {
+        let error = BackupError.safetyCopyIncomplete("something odd", cause: SafetyCopyCause(from: NSError(domain: "x", code: 1)))
+        XCTAssertEqual(error.localizedDescription,
+                       String(localized: "A copy of your current data could not be made first, so nothing was changed."))
+    }
 }

@@ -838,6 +838,36 @@
         }
       }
     },
+    "A copy of your current data could not be made first because a file is in use by another program, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή ένα αρχείο χρησιμοποιείται από άλλο πρόγραμμα, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first because MedNotes is not allowed to write there, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή το MedNotes δεν έχει άδεια εγγραφής εκεί, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
+    "A copy of your current data could not be made first because the disk is full, so nothing was changed." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν ήταν δυνατό να γίνει πρώτα αντίγραφο των τρεχόντων δεδομένων σας επειδή ο δίσκος είναι γεμάτος, γι’ αυτό δεν άλλαξε τίποτα."
+          }
+        }
+      }
+    },
     "A copy of your current data could not be made first, so nothing was changed." : {
       "localizations" : {
         "el" : {

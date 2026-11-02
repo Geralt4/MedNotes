@@ -259,7 +259,7 @@ extension AppSession {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+                throw BackupError.safetyCopyIncomplete(error.localizedDescription, cause: SafetyCopyCause(from: error))
             }
             await pruneRestorePoints()
         }

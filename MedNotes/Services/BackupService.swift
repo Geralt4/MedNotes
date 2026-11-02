@@ -114,6 +114,58 @@ struct BackupInfo: Sendable {
     let manifest: BackupManifest
 }
 
+/// Why a copy of the current data could not be made, when it is something the
+/// user can do something about. Anything else is reported without a cause and
+/// its detail goes to the log.
+enum SafetyCopyCause: Equatable, Sendable {
+    case diskFull, noPermission, inUse
+
+    /// The cause an error names, looking through the errors it wraps.
+    init?(from error: Error) {
+        var pending: [NSError] = [error as NSError]
+        var seen = 0
+        while let current = pending.popLast(), seen < 8 {
+            seen += 1
+            if let cause = Self.cause(of: current) { self = cause; return }
+            if let underlying = current.userInfo[NSUnderlyingErrorKey] as? NSError { pending.append(underlying) }
+        }
+        if let sqlite = error as? SQLiteError, let cause = Self.cause(ofSQLiteMessage: sqlite) {
+            self = cause
+            return
+        }
+        return nil
+    }
+
+    private static func cause(of error: NSError) -> SafetyCopyCause? {
+        switch (error.domain, error.code) {
+        case (NSCocoaErrorDomain, NSFileWriteOutOfSpaceError),
+             (NSPOSIXErrorDomain, Int(ENOSPC)), (NSPOSIXErrorDomain, Int(EDQUOT)):
+            return .diskFull
+        case (NSCocoaErrorDomain, NSFileWriteNoPermissionError), (NSCocoaErrorDomain, NSFileReadNoPermissionError),
+             (NSCocoaErrorDomain, NSFileWriteVolumeReadOnlyError),
+             (NSPOSIXErrorDomain, Int(EACCES)), (NSPOSIXErrorDomain, Int(EPERM)), (NSPOSIXErrorDomain, Int(EROFS)):
+            return .noPermission
+        case (NSPOSIXErrorDomain, Int(EBUSY)), (NSPOSIXErrorDomain, Int(ETXTBSY)):
+            return .inUse
+        default:
+            return nil
+        }
+    }
+
+    /// SQLite reports a full disk, a read-only file and a busy file by message.
+    private static func cause(ofSQLiteMessage error: SQLiteError) -> SafetyCopyCause? {
+        let message: String
+        switch error {
+        case let .open(m), let .prepare(m, _), let .step(m, _), let .exec(m, _): message = m.lowercased()
+        default: return nil
+        }
+        if message.contains("disk is full") { return .diskFull }
+        if message.contains("readonly") || message.contains("read-only") { return .noPermission }
+        if message.contains("is locked") || message.contains("is busy") { return .inUse }
+        return nil
+    }
+}
+
 enum BackupError: Error, CustomStringConvertible, LocalizedError {
     case missingManifest(URL)
     case missingDatabase(URL)
@@ -136,7 +188,10 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     /// The restore point of the current data could not be made (an attachment
     /// that cannot be read, say), so nothing was replaced. The user may choose
     /// to restore without it.
-    case safetyCopyIncomplete(String)
+    ///
+    /// `cause` is set when the reason is one the user can act on (a full disk,
+    /// no permission, a file in use); the detail is for the log only.
+    case safetyCopyIncomplete(String, cause: SafetyCopyCause? = nil)
     /// A restore point still sealed under the old public passphrase; the
     /// upgrade pass reseals it under the device key first.
     case restorePointNotUpgraded
@@ -158,7 +213,7 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
         case .destinationNotConfirmed:
             return "the sync destination has not been reconfirmed since the last restore"
         case .restorePointKeyUnavailable: return "no restore key is available for a restore point"
-        case let .safetyCopyIncomplete(detail): return "the restore point of the current data could not be made: \(detail)"
+        case let .safetyCopyIncomplete(detail, _): return "the restore point of the current data could not be made: \(detail)"
         case .restorePointNotUpgraded: return "the restore point is still sealed under the old passphrase"
         case let .rollbackFailed(folder, detail):
             return "restore failed and the original data could not be put back (kept in \(folder)): \(detail)"
@@ -197,8 +252,17 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "The sync destination has not been reconfirmed since the last restore.")
         case .restorePointKeyUnavailable:
             return String(localized: "A restore point could not be made because this store has no restore key.")
-        case .safetyCopyIncomplete:
-            return String(localized: "A copy of your current data could not be made first, so nothing was changed.")
+        case let .safetyCopyIncomplete(_, cause):
+            switch cause {
+            case .diskFull?:
+                return String(localized: "A copy of your current data could not be made first because the disk is full, so nothing was changed.")
+            case .noPermission?:
+                return String(localized: "A copy of your current data could not be made first because MedNotes is not allowed to write there, so nothing was changed.")
+            case .inUse?:
+                return String(localized: "A copy of your current data could not be made first because a file is in use by another program, so nothing was changed.")
+            case nil:
+                return String(localized: "A copy of your current data could not be made first, so nothing was changed.")
+            }
         case .restorePointNotUpgraded:
             return String(localized: "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again.")
         case let .rollbackFailed(folder, _):
@@ -214,6 +278,12 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
 /// key derived from the device restore key: without that key the file cannot
 /// be opened, and no plaintext copy of the store exists at any point.
 actor BackupService {
+    #if DEBUG
+    /// A test's way to make the restore point fail with a given error. Nothing
+    /// in the app sets it.
+    nonisolated(unsafe) static var restorePointFailureForTesting: (() -> Error?)?
+    #endif
+
     private let db: Database
     private let fileStore: AttachmentStore?
     private let restorePointsRoot: URL
@@ -572,13 +642,16 @@ actor BackupService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw BackupError.safetyCopyIncomplete(error.localizedDescription)
+            throw BackupError.safetyCopyIncomplete(error.localizedDescription, cause: SafetyCopyCause(from: error))
         }
     }
 
     /// Internal restore points are v2 archives sealed by the device restore
     /// key. They are listed and deleted by name and never leave the container.
     func createEncryptedRestorePoint(name: String) async throws -> String {
+        #if DEBUG
+        if let failure = Self.restorePointFailureForTesting?() { throw failure }
+        #endif
         guard let restorePointKey else { throw BackupError.restorePointKeyUnavailable }
         try FileManager.default.createDirectory(at: restorePointsRoot, withIntermediateDirectories: true)
         let formatter = DateFormatter()

@@ -42,9 +42,10 @@ protocol DetailedFailure: Error {
 extension BackupError: DetailedFailure {
     var logDetail: String? {
         switch self {
-        case let .integrityCheckFailed(detail), let .restoreFailed(detail),
-             let .unexpectedSchema(detail), let .safetyCopyIncomplete(detail):
+        case let .integrityCheckFailed(detail), let .restoreFailed(detail), let .unexpectedSchema(detail):
             return "\(Self.caseName(self)): \(detail)"
+        case let .safetyCopyIncomplete(detail, cause):
+            return "safetyCopyIncomplete(\(cause.map { "\($0)" } ?? "other")): \(detail)"
         case let .countMismatch(entity, expected, actual):
             return "countMismatch: \(entity) expected \(expected), found \(actual)"
         case let .rollbackFailed(_, detail):
@@ -59,7 +60,6 @@ extension BackupError: DetailedFailure {
         case .integrityCheckFailed: return "integrityCheckFailed"
         case .restoreFailed: return "restoreFailed"
         case .unexpectedSchema: return "unexpectedSchema"
-        case .safetyCopyIncomplete: return "safetyCopyIncomplete"
         default: return "backupError"
         }
     }
