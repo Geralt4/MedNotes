@@ -4248,6 +4248,26 @@
         }
       }
     },
+    "MedNotes is hidden" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το MedNotes είναι κρυμμένο"
+          }
+        }
+      }
+    },
+    "MedNotes is hidden while it is in the background. Choose Show to bring it back." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το MedNotes είναι κρυμμένο όσο βρίσκεται στο παρασκήνιο. Επιλέξτε «Εμφάνιση» για να επανέλθει."
+          }
+        }
+      }
+    },
     "MedNotes is locked" : {
       "localizations" : {
         "el" : {
@@ -6194,6 +6214,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Περισσότερες σημειώσεις έχουν αυτόν τον τίτλο"
+          }
+        }
+      }
+    },
+    "Show" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εμφάνιση"
           }
         }
       }

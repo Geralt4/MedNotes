@@ -277,20 +277,21 @@ private struct PrivacyCurtain: View {
     let session: AppSession
     let onUnlock: () -> Void
 
+    private var wording: CurtainWording { CurtainWording.wording(for: session) }
+
     var body: some View {
         ZStack {
             Rectangle()
                 .fill(.regularMaterial)
                 .ignoresSafeArea()
             VStack(spacing: Chrome.Space.md) {
-                Image(systemName: session.needsRecovery ? "exclamationmark.triangle.fill" : "lock.fill")
+                Image(systemName: wording.symbol)
                     .font(.system(size: 34, weight: .regular))
                     .foregroundStyle(session.needsRecovery ? Color.orange : Color.secondary)
-                Text(session.needsRecovery
-                     ? "The device key is missing"
-                     : (session.isMigrating ? "Encrypting MedNotes" : "MedNotes is locked"))
+                Text(verbatim: wording.title)
                     .font(.title3.weight(.semibold))
-                Text(verbatim: curtainMessage)
+                    .accessibilityIdentifier("curtainTitle")
+                Text(verbatim: wording.message)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -309,24 +310,15 @@ private struct PrivacyCurtain: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: 360)
                     }
-                    Button("Unlock", action: onUnlock)
+                    Button(wording.button ?? "", action: onUnlock)
                         .keyboardShortcut(.defaultAction)
                         .prominentActionButtonStyle()
+                        .accessibilityIdentifier("curtainButton")
                 }
             }
             .padding(Chrome.Space.xl)
         }
         .transition(.opacity)
-    }
-
-    private var curtainMessage: String {
-        if session.needsRecovery {
-            return String(localized: "Encrypted data exists, but the Keychain item that holds its key is gone. Restore a portable backup to recover. MedNotes will not start an empty database over this data.")
-        }
-        if session.isMigrating {
-            return String(localized: "MedNotes is converting this store to an encrypted one. Make and verify a backup first; the wizard will not touch your data until it has.")
-        }
-        return String(localized: "Touch ID or your account password unlocks MedNotes.")
     }
 }
 

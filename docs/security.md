@@ -37,7 +37,10 @@ the database, clears every displayed record and wipes the keys; only Touch ID
 or the account password opens it again. A lock
 that arrives while an unlock is still loading records wins. Switching to
 another app or hiding MedNotes does not lock the store: a curtain covers the
-window until the app is active again. The curtain hides the window from
+window until the app is active again. That curtain says MedNotes is hidden and
+offers Show, which lifts it without asking for Touch ID (the store never
+closed); "locked" and Unlock appear only when the session really is locked.
+The curtain hides the window from
 VoiceOver and other apps with Accessibility access as well, and keyboard focus
 leaves the covered content until it lifts; the passphrase fields of the
 encryption and recovery screens keep theirs.
