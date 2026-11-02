@@ -992,11 +992,23 @@ actor BackupService {
             // inside `Files/` may be read, as in `legacyAttachments`.
             let rootPath = legacyFilesRoot.resolvingSymlinksInPath().path
             let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+            var dropped = 0
             for file in try await encrypted.attachmentsNeedingEncryption() {
                 let source = legacyFilesRoot.appendingPathComponent(file.relativePath)
                     .resolvingSymlinksInPath()
                 guard source.path.hasPrefix(prefix),
-                      let plaintext = try? Data(contentsOf: source) else { continue }
+                      let plaintext = try? Data(contentsOf: source) else {
+                    // The backup does not hold the file: the record goes, as the
+                    // migration drops one whose file is gone, instead of
+                    // leaving a file that opens to nothing. The backup itself
+                    // still has the record. Only the count is logged.
+                    if let patientId = UUID(uuidString: file.patientId),
+                       let fileId = UUID(uuidString: file.fileId) {
+                        try await encrypted.dropAttachmentRecord(patientId: patientId, fileId: fileId)
+                        dropped += 1
+                    }
+                    continue
+                }
                 let storageID = try await store.store(plaintext)
                 try await encrypted.setAttachmentEncryption(
                     patientId: UUID(uuidString: file.patientId) ?? UUID(),
@@ -1005,6 +1017,7 @@ actor BackupService {
                     plaintextLength: plaintext.count,
                     digest: store.digest(of: plaintext))
             }
+            if dropped > 0 { SecurityLog.record(.restoreDroppedAttachments, count: dropped) }
             try await encrypted.checkpoint()
             try await plainReader.close()
             try await encrypted.close()

@@ -164,4 +164,90 @@ final class RestoreFixTests: XCTestCase {
         XCTAssertEqual(LegacyBackupReader.passphraseForms("cafe\u{301} passphrase").count, 2,
                        "as given plus the precomposed form")
     }
+
+    // MARK: - A version 1 restore and a file the backup lost
+
+    /// A v1 backup holding a patient with two files, of which `Files/` has one.
+    private func legacyBackup(missingFile: Bool) async throws -> (archive: URL, patient: Patient, present: PatientFile, missing: PatientFile) {
+        let legacyRoot = try makeRoot()
+        let plain = try Database(path: legacyRoot.databaseURL.path)
+        var patient = Patient.newRecord()
+        patient.profile.firstName = "Has"
+        patient.profile.lastName = "Files"
+        let present = PatientFile(name: "present.txt", type: .other, data: nil)
+        let missing = PatientFile(name: "missing.txt", type: .other, data: nil)
+        patient.files = [present, missing]
+        try await plain.savePatient(patient)
+        await plain.close()
+        for suffix in ["-wal", "-shm"] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: legacyRoot.databaseURL.path + suffix),
+                           "premise: the snapshot is one file")
+        }
+        var files: [String: FileWrapper] = [
+            patient.id.uuidString: FileWrapper(directoryWithFileWrappers: [
+                present.id.uuidString: FileWrapper(regularFileWithContents: Data("PRESENT-BYTES".utf8))
+            ])
+        ]
+        if !missingFile {
+            files[patient.id.uuidString]?.addRegularFile(
+                withContents: Data("MISSING-BYTES".utf8), preferredFilename: missing.id.uuidString)
+        }
+        for (name, wrapper) in files { wrapper.preferredFilename = name }
+        let manifest = #"{"name":"old","createdAt":0,"schemaVersion":1,"counts":{}}"#
+        var children: [String: FileWrapper] = [
+            "mednotes.db": FileWrapper(regularFileWithContents: try Data(contentsOf: legacyRoot.databaseURL)),
+            "manifest.json": FileWrapper(regularFileWithContents: Data(manifest.utf8)),
+            "Files": FileWrapper(directoryWithFileWrappers: files)
+        ]
+        for (name, wrapper) in children { wrapper.preferredFilename = name }
+        let payload = try XCTUnwrap(FileWrapper(directoryWithFileWrappers: children).serializedRepresentation)
+        children.removeAll()
+        return (try v1Archive(sealing: payload, passphrase: passphrase, name: "lost-file.mnbk"), patient, present, missing)
+    }
+
+    /// The migration drops a patient-file record whose file is gone; a version 1
+    /// restore used to keep it, listing a file that opens to nothing. It now
+    /// drops it too, and logs how many, not which.
+    func testAV1RestoreDropsAPatientFileRowWhoseFileIsMissingFromTheBackup() async throws {
+        let backup = try await legacyBackup(missingFile: true)
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        var logged: [(SecurityLog.Event, Int?)] = []
+        SecurityLog.observer = { event, count, _ in logged.append((event, count)) }
+        defer { SecurityLog.observer = nil }
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: backup.archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let loaded = try await target.patients.load(id: backup.patient.id)
+        let restored = try XCTUnwrap(loaded)
+        XCTAssertEqual(restored.files.map(\.id), [backup.present.id], "the record without a file is gone")
+        let rows = try await target.db.loadPatientFiles(patientId: backup.patient.id)
+        XCTAssertEqual(rows.map(\.id), [backup.present.id])
+        XCTAssertEqual(logged.filter { $0.0 == .restoreDroppedAttachments }.map(\.1), [1],
+                       "the count is logged: \(logged)")
+        await target.close()
+    }
+
+    /// Nothing is dropped, and nothing logged, when the backup holds every file.
+    func testAV1RestoreKeepsEveryRowWhoseFileIsInTheBackup() async throws {
+        let backup = try await legacyBackup(missingFile: false)
+        let targetRoot = try makeRoot()
+        let target = try AppStore.testStore(dataRoot: targetRoot)
+        var dropped = 0
+        SecurityLog.observer = { event, _, _ in if event == .restoreDroppedAttachments { dropped += 1 } }
+        defer { SecurityLog.observer = nil }
+
+        _ = try await target.backups.restore(
+            fromLegacyBackupAt: backup.archive, passphrase: passphrase,
+            databaseKey: TestKeys.database(for: targetRoot),
+            attachmentKey: TestKeys.attachment(for: targetRoot), createRestorePoint: false)
+
+        let rows = try await target.db.loadPatientFiles(patientId: backup.patient.id)
+        XCTAssertEqual(Set(rows.map(\.id)), [backup.present.id, backup.missing.id])
+        XCTAssertEqual(dropped, 0)
+        await target.close()
+    }
 }

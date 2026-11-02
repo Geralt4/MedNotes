@@ -25,10 +25,20 @@ enum SecurityLog {
         case integrityFailed = "store.integrity_failed"
         case restorePointUpgradeFailed = "restore_point.upgrade_failed"
         case linkDerivationFailed = "links.derivation_failed"
+        case restoreDroppedAttachments = "restore.dropped_attachments"
     }
+
+    #if DEBUG
+    /// A test's view of what was recorded: the event, its count and its detail.
+    /// Nothing in the app sets it.
+    nonisolated(unsafe) static var observer: ((Event, Int?, String?) -> Void)?
+    #endif
 
     /// Records a generic security event with counts and opaque IDs only.
     static func record(_ event: Event, count: Int? = nil, opaqueID: String? = nil) {
+        #if DEBUG
+        observer?(event, count, nil)
+        #endif
         if let count, let opaqueID {
             logger.notice("\(event.rawValue, privacy: .public) count=\(count, privacy: .public) id=\(opaqueID, privacy: .public)")
         } else if let count {
