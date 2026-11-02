@@ -117,11 +117,12 @@ final class FakeCalendarBackend: FakeEventKitBase, CalendarBackend {
         return events.values
             .filter { $0.calendarID == calendar.identifier }
             .filter { event in
-                let eventEnd = max(event.endDate ?? event.startDate, event.startDate)
-                if eventEnd == event.startDate {
-                    return event.startDate >= window.start && event.startDate < end
+                let eventStart = event.start
+                let eventEnd = max(event.endDate ?? eventStart, eventStart)
+                if eventEnd == eventStart {
+                    return eventStart >= window.start && eventStart < end
                 }
-                return event.startDate < end && eventEnd > window.start
+                return eventStart < end && eventEnd > window.start
             }
             .sorted { $0.identifier < $1.identifier }
     }
@@ -146,7 +147,7 @@ final class FakeCalendarBackend: FakeEventKitBase, CalendarBackend {
         event.notes = fields.notes
         event.startDate = fields.startDate
         event.endDate = fields.isAllDay ? max(fields.endDate, fields.startDate) : fields.endDate
-        if let end = event.endDate, end < event.startDate { event.endDate = event.startDate.addingTimeInterval(1800) }
+        if let end = event.endDate, end < event.start { event.endDate = event.start.addingTimeInterval(1800) }
         event.isAllDay = fields.isAllDay
         event.calendarID = calendar.identifier
         event.url = marker

@@ -584,8 +584,8 @@ final class AppleCalendarService: ObservableObject, SyncBridgeService {
             result.creations.append(CalendarEvent(
                 title: SyncDestinationCore.titleFromRemote(ek.title),
                 description: ek.notes ?? "",
-                startDate: ek.startDate,
-                endDate: ek.endDate ?? (ek.isAllDay ? ek.startDate : ek.startDate.addingTimeInterval(1800)),
+                startDate: ek.start,
+                endDate: ek.endDate ?? (ek.isAllDay ? ek.start : ek.start.addingTimeInterval(1800)),
                 isAllDay: ek.isAllDay,
                 patientId: nil,
                 eventType: .appointment,

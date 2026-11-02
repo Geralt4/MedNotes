@@ -41,7 +41,11 @@ struct RemoteEvent {
     var url: URL?
     var title: String?
     var notes: String?
-    var startDate: Date
+    /// EventKit's start date is an implicitly unwrapped optional that can be
+    /// nil in rare cases. It is carried as it came, and read through `start`
+    /// only where the services read it before the backend existed: for objects
+    /// MedNotes owns. A foreign event without one must not stop a pass.
+    var startDate: Date?
     var endDate: Date?
     var isAllDay: Bool
     var lastModified: Date?
@@ -50,12 +54,16 @@ struct RemoteEvent {
     /// object that was read. Opaque to the services.
     var handle: AnyObject?
 
+    /// The start date, read like EventKit's own property: it traps when there
+    /// is none, as it did when the services read `EKEvent.startDate` directly.
+    var start: Date { startDate! }
+
     func fields() -> EventFields {
         EventFields(
             title: SyncDestinationCore.titleFromRemote(title),
             notes: notes ?? "",
-            startDate: startDate,
-            endDate: endDate ?? (isAllDay ? startDate : startDate.addingTimeInterval(1800)),
+            startDate: start,
+            endDate: endDate ?? (isAllDay ? start : start.addingTimeInterval(1800)),
             isAllDay: isAllDay)
     }
 }
