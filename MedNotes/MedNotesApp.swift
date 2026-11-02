@@ -41,6 +41,12 @@ private struct MedNotesCommands: Commands {
     @FocusedValue(\.deleteCommand) private var deleteCommand
 
     var body: some Commands {
+        // The standard panel, with the licenses and the build number; see
+        // `AboutPanel`.
+        CommandGroup(replacing: .appInfo) {
+            Button("About MedNotes") { AboutPanel.show() }
+        }
+
         CommandGroup(replacing: .newItem) {
             Button(session.selectedModule.newItemTitle) {
                 Task { await session.createInCurrentModule() }

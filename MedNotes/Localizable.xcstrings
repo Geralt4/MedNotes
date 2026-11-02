@@ -898,6 +898,16 @@
         }
       }
     },
+    "A passphrase could not be generated. Try again, or type your own." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δεν ήταν δυνατή η δημιουργία συνθηματικού. Δοκιμάστε ξανά ή πληκτρολογήστε το δικό σας."
+          }
+        }
+      }
+    },
     "A restore point could not be made because this store has no restore key." : {
       "localizations" : {
         "el" : {
@@ -944,6 +954,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Προορισμός «MedNotes» που δημιούργησε νωρίτερα το MedNotes."
+          }
+        }
+      }
+    },
+    "About MedNotes" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Σχετικά με το MedNotes"
           }
         }
       }
@@ -2148,6 +2168,16 @@
         }
       }
     },
+    "Confirm that you have saved the passphrase before the backup is made." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Επιβεβαιώστε ότι έχετε αποθηκεύσει το συνθηματικό πριν γίνει το αντίγραφο ασφαλείας."
+          }
+        }
+      }
+    },
     "Confirmed a %@ destination" : {
       "localizations" : {
         "el" : {
@@ -2224,6 +2254,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Περιεχόμενο"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αντιγράφηκε"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Αντιγραφή"
           }
         }
       }
@@ -3408,6 +3458,16 @@
         }
       }
     },
+    "Generate" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δημιουργία"
+          }
+        }
+      }
+    },
     "Go" : {
       "localizations" : {
         "el" : {
@@ -3544,6 +3604,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Πόσους συνδέσμους μακριά από αυτή τη σημείωση θα εξεταστούν"
+          }
+        }
+      }
+    },
+    "I have saved this passphrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Έχω αποθηκεύσει αυτό το συνθηματικό"
           }
         }
       }
@@ -4068,6 +4138,16 @@
         }
       }
     },
+    "Make a strong passphrase" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δημιουργία ισχυρού συνθηματικού"
+          }
+        }
+      }
+    },
     "Male" : {
       "localizations" : {
         "el" : {
@@ -4164,6 +4244,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Το MedNotes μετατρέπει αυτή τη βάση δεδομένων σε κρυπτογραφημένη. Δημιουργήστε και επαληθεύστε πρώτα ένα αντίγραφο ασφαλείας· μέχρι να γίνει αυτό, τα δεδομένα σας δεν θα αλλάξουν."
+          }
+        }
+      }
+    },
+    "MedNotes is hidden" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το MedNotes είναι κρυμμένο"
+          }
+        }
+      }
+    },
+    "MedNotes is hidden while it is in the background. Choose Show to bring it back." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το MedNotes είναι κρυμμένο όσο βρίσκεται στο παρασκήνιο. Επιλέξτε «Εμφάνιση» για να επανέλθει."
           }
         }
       }
@@ -5168,6 +5268,16 @@
         }
       }
     },
+    "Open-source licenses" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Άδειες ανοιχτού κώδικα"
+          }
+        }
+      }
+    },
     "Opening…" : {
       "localizations" : {
         "el" : {
@@ -6108,6 +6218,16 @@
         }
       }
     },
+    "Show" : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Εμφάνιση"
+          }
+        }
+      }
+    },
     "Show Graph Settings" : {
       "localizations" : {
         "el" : {
@@ -6824,6 +6944,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Το μπλοκ που ονομάζει ο σύνδεσμος δεν υπάρχει σε εκείνη τη σημείωση."
+          }
+        }
+      }
+    },
+    "The clipboard is cleared after a minute." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Το πρόχειρο καθαρίζεται μετά από ένα λεπτό."
           }
         }
       }
@@ -8104,6 +8234,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Εκεί που σταμάτησα"
+          }
+        }
+      }
+    },
+    "Write this passphrase down now. It is shown only once, and without it the backup cannot be opened." : {
+      "localizations" : {
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Καταγράψτε αυτό το συνθηματικό τώρα. Εμφανίζεται μόνο μία φορά και χωρίς αυτό δεν ανοίγει το αντίγραφο ασφαλείας."
           }
         }
       }

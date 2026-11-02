@@ -16,22 +16,26 @@ private struct PrivacyCover: ViewModifier {
     }
 
     func body(content: Content) -> some View {
+        let wording = CurtainWording.coverWording(
+            isLocked: session.isLocked, isMigrating: session.isMigrating, needsRecovery: session.needsRecovery)
         // Hidden from accessibility too, not only from sight.
-        content.accessibilityHidden(isCovered).overlay {
+        return content.accessibilityHidden(isCovered).overlay {
             if isCovered {
                 ZStack {
                     Rectangle()
                         .fill(.regularMaterial)
                         .ignoresSafeArea()
                     VStack(spacing: Chrome.Space.md) {
-                        Image(systemName: "lock.fill")
+                        Image(systemName: wording.symbol)
                             .font(.system(size: 28, weight: .regular))
                             .foregroundStyle(.secondary)
-                        Text("MedNotes is locked")
+                        Text(verbatim: wording.title)
                             .font(.title3.weight(.semibold))
-                        Button("Unlock") {
+                            .accessibilityIdentifier("curtainTitle")
+                        Button(wording.button ?? "") {
                             Task { await session.unlock() }
                         }
+                        .accessibilityIdentifier("curtainButton")
                         .keyboardShortcut(.defaultAction)
                         .prominentActionButtonStyle()
                     }

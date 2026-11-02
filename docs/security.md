@@ -37,7 +37,10 @@ the database, clears every displayed record and wipes the keys; only Touch ID
 or the account password opens it again. A lock
 that arrives while an unlock is still loading records wins. Switching to
 another app or hiding MedNotes does not lock the store: a curtain covers the
-window until the app is active again. The curtain hides the window from
+window until the app is active again. That curtain says MedNotes is hidden and
+offers Show, which lifts it without asking for Touch ID (the store never
+closed); "locked" and Unlock appear only when the session really is locked.
+The curtain hides the window from
 VoiceOver and other apps with Accessibility access as well, and keyboard focus
 leaves the covered content until it lifts; the passphrase fields of the
 encryption and recovery screens keep theirs.
@@ -89,7 +92,12 @@ Data leaves MedNotes in exactly four ways, each one explicit:
    next launch. Losing focus does not remove it: the application it was handed
    to takes focus as it opens the copy, and must still be able to read it.
 4. **Backups.** A portable backup is encrypted with its passphrase. Losing the
-   passphrase loses the backup; there is no recovery and no escrow.
+   passphrase loses the backup; there is no recovery and no escrow. The Back Up
+   sheet can generate the passphrase: 28 characters from an alphabet without
+   look-alikes (about 137 bits), from the system's secure random source, shown
+   once, copied only through the concealed clipboard helper (cleared after 60
+   seconds or at quit), never logged, and the backup waits until you confirm
+   you have saved it.
 
 ## What is not defended against
 
@@ -108,7 +116,9 @@ Data leaves MedNotes in exactly four ways, each one explicit:
 
 - Keep FileVault on.
 - Keep the generated backup passphrases; store them where clinical data is
-  already permitted to be stored.
+  already permitted to be stored. A generated passphrase is shown once, when
+  you make it; MedNotes confirms you have saved it before it makes the backup,
+  and does not keep it.
 - Review the destination each bridge writes to occasionally, and reconnect if
   the connection state reads "Needs Reconnection".
 - Delete the retired plaintext Markdown mirror after reviewing it, and be aware

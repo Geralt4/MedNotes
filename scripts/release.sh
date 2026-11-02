@@ -27,6 +27,11 @@
 # Usage:
 #   scripts/release.sh 2.0.1
 #
+# The build number (CFBundleVersion) is the number of commits that lead to the
+# release commit (scripts/release_build_number.py), so along the main line it is
+# unique and always increasing. The run refuses a shallow clone or a tree with
+# changes. Release from the main line: another branch can repeat a number.
+#
 # Any mismatch in signature, entitlements or notarization fails the run and
 # leaves the artifacts in build/release for inspection.
 
@@ -45,6 +50,12 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+
+# The build number is the number of commits that lead to this one, so every
+# release has a unique, increasing CFBundleVersion whatever its version name.
+# It refuses a shallow clone or a tree with changes, whose count would be wrong.
+# Before anything is built or removed.
+BUILD="$(python3 scripts/release_build_number.py)"
 
 OUT="build/release"
 DERIVED="$HOME/Library/Developer/Xcode/DerivedData/MedNotes-release"
@@ -87,6 +98,7 @@ xcodebuild \
   -archivePath "$ARCHIVE" \
   -onlyUsePackageVersionsFromResolvedFile \
   MARKETING_VERSION="$VERSION" \
+  CURRENT_PROJECT_VERSION="$BUILD" \
   DEVELOPMENT_TEAM="$MEDNOTES_TEAM_ID" \
   CODE_SIGN_IDENTITY="$MEDNOTES_SIGN_IDENTITY" \
   CODE_SIGN_STYLE=Manual \
@@ -118,6 +130,15 @@ xcodebuild -exportArchive \
   -exportPath "$EXPORT_DIR" \
   -exportOptionsPlist "$OUT/ExportOptions.plist"
 
+step "Check the version and build number in the app"
+APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
+echo "MedNotes $APP_VERSION (build $APP_BUILD)"
+if [[ "$APP_VERSION" != "$VERSION" || "$APP_BUILD" != "$BUILD" ]]; then
+  echo "the app reports $APP_VERSION ($APP_BUILD), not $VERSION ($BUILD); refusing to release" >&2
+  exit 1
+fi
+
 step "Verify the app signature and entitlement allowlist"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv --verbose=4 "$APP" 2>&1 | tee "$OUT/codesign.txt"
@@ -125,13 +146,26 @@ ENTITLEMENTS="$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 printf '%s' "$ENTITLEMENTS" > "$OUT/entitlements.plist"
 python3 scripts/verify_entitlements.py "$OUT/entitlements.plist" "$MEDNOTES_TEAM_ID"
 
+step "Check the third-party license texts in the app"
+# MedNotes/Licenses.txt must hold the notice of every component compiled in
+# (SQLCipher, swift-sodium, libsodium and the code it bundles; see
+# docs/dependencies.md) as the pinned package versions yield, and the built app
+# must carry exactly that file (the About panel shows it).
+python3 scripts/check_licenses.py --checkouts "$DERIVED/SourcePackages/checkouts" --app "$APP"
+
 step "Build the DMG"
 STAGE="$OUT/dmg-root"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
+# The license texts also sit at the top level of the DMG, readable without
+# opening the app.
+cp "$APP/Contents/Resources/Licenses.txt" "$STAGE/Licenses.txt"
 hdiutil create -volname "MedNotes $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 codesign --force --sign "$MEDNOTES_SIGN_IDENTITY" "$DMG"
+
+step "Check the DMG carries the license texts"
+python3 scripts/check_licenses.py --checkouts "$DERIVED/SourcePackages/checkouts" --dmg "$DMG"
 
 step "Notarize and staple"
 xcrun notarytool submit "$DMG" --keychain-profile "$MEDNOTES_NOTARY_PROFILE" --wait
