@@ -204,8 +204,8 @@ final class MigrationFixTests: XCTestCase {
         do {
             _ = try await migrator.migrate(backupDestination: archive, passphrase: passphrase)
             XCTFail("there is nothing to migrate")
-        } catch StoreMigrator.MigrationError.stagingFailed {
-            // expected
+        } catch StoreMigrator.MigrationError.nothingToConvert {
+            // expected: a case of its own, so its plain message is shown
         }
         XCTAssertEqual(try Data(contentsOf: leftover), Data("ORIGINAL".utf8))
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.databaseURL.path),

@@ -26,6 +26,10 @@ enum SecurityLog {
         case restorePointUpgradeFailed = "restore_point.upgrade_failed"
         case linkDerivationFailed = "links.derivation_failed"
         case restoreDroppedAttachments = "restore.dropped_attachments"
+        case backupFailed = "backup.failed"
+        case restoreFailed = "restore.failed"
+        case importFailed = "import.failed"
+        case migrationFailed = "migration.failed"
     }
 
     #if DEBUG
@@ -48,6 +52,30 @@ enum SecurityLog {
         } else {
             logger.notice("\(event.rawValue, privacy: .public)")
         }
+    }
+
+    /// Records why an operation failed: the internal detail the user is not
+    /// shown (a SQLite message, a table name, a count). Absolute paths and
+    /// quoted file names are taken out first; it never carries SQL, record
+    /// content or a patient's name.
+    static func recordFailure(_ event: Event, detail: String) {
+        let clean = redactingPaths(detail)
+        #if DEBUG
+        observer?(event, nil, clean)
+        #endif
+        logger.notice("\(event.rawValue, privacy: .public) detail=\(clean, privacy: .public)")
+    }
+
+    /// `detail` without absolute paths and without quoted names.
+    static func redactingPaths(_ detail: String) -> String {
+        var text = detail
+        for (pattern, replacement) in [("“[^”]*”", "“…”"), ("\"[^\"]*\"", "\"…\""), ("/[^\\s”\"']+", "<path>")] {
+            if let expression = try? NSRegularExpression(pattern: pattern) {
+                text = expression.stringByReplacingMatches(
+                    in: text, range: NSRange(text.startIndex..., in: text), withTemplate: replacement)
+            }
+        }
+        return text
     }
 
     /// A short opaque label for a file name or path. Never returns the path.

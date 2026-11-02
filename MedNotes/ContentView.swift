@@ -379,7 +379,7 @@ private struct RecoveryChooser: View {
                     do {
                         try await session.recoverFromBackup(at: backupURL, passphrase: passphrase)
                     } catch {
-                        failure = error.localizedDescription
+                        failure = UserFacingFailure.message(for: error, during: .restore)
                     }
                     isWorking = false
                 }
@@ -440,7 +440,7 @@ private struct MigrationWizard: View {
                         try await session.migrationBackup(to: backupURL, passphrase: passphrase)
                         try await session.runMigration(backupURL: backupURL, passphrase: passphrase)
                     } catch {
-                        failure = error.localizedDescription
+                        failure = UserFacingFailure.message(for: error, during: .migration)
                     }
                     isWorking = false
                 }

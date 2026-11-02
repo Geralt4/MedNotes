@@ -163,7 +163,9 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
     }
 
     /// What the sheets show. `description` stays English for logs, and the
-    /// file path is left out: the sheet already names the file.
+    /// file path is left out: the sheet already names the file. The detail some
+    /// cases carry (a SQLite message, a table or trigger name, a count) is never
+    /// part of it: it goes to the log (`UserFacingFailure`).
     var errorDescription: String? {
         switch self {
         case .missingManifest:
@@ -174,28 +176,28 @@ enum BackupError: Error, CustomStringConvertible, LocalizedError {
             return String(localized: "The backup archive is not in a form MedNotes can read.")
         case .invalidManifest:
             return String(localized: "This backup's manifest is invalid.")
-        case let .integrityCheckFailed(detail):
-            return String(localized: "Integrity check failed: \(detail)")
+        case .integrityCheckFailed:
+            return String(localized: "The backup failed its integrity check.")
         case let .foreignKeyViolations(n):
             return String(localized: "The backup has \(n) broken links between records.")
-        case let .countMismatch(entity, expected, actual):
-            return String(localized: "The backup's \(entity) count does not match: expected \(expected), found \(actual).")
-        case let .restoreFailed(detail):
-            return String(localized: "Restore failed: \(detail)")
+        case .countMismatch:
+            return String(localized: "The backup's contents do not match what it says it holds.")
+        case .restoreFailed:
+            return String(localized: "The restore could not be completed.")
         case .snapshotUnreadable:
             return String(localized: "The database snapshot could not be read.")
-        case let .unexpectedSchema(detail):
-            return String(localized: "The backup's schema is not one MedNotes can restore: \(detail)")
+        case .unexpectedSchema:
+            return String(localized: "This backup is not in a form MedNotes can restore.")
         case .destinationNotConfirmed:
             return String(localized: "The sync destination has not been reconfirmed since the last restore.")
         case .restorePointKeyUnavailable:
             return String(localized: "A restore point could not be made because this store has no restore key.")
-        case let .safetyCopyIncomplete(detail):
-            return String(localized: "A copy of your current data could not be made first, so nothing was changed: \(detail)")
+        case .safetyCopyIncomplete:
+            return String(localized: "A copy of your current data could not be made first, so nothing was changed.")
         case .restorePointNotUpgraded:
             return String(localized: "This restore point was made by an older version and has not been converted yet. Lock and unlock MedNotes, then try again.")
-        case let .rollbackFailed(folder, detail):
-            return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”. \(detail)")
+        case let .rollbackFailed(folder, _):
+            return String(localized: "The restore failed, and your original data could not be put back. It was kept in “\(folder)”.")
         }
     }
 }

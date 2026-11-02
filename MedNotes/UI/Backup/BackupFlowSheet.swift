@@ -82,7 +82,7 @@ struct BackupFlowSheet: View {
                         do {
                             try await session.performBackup(name: name, passphrase: passphrase)
                         } catch {
-                            failure = error.localizedDescription
+                            failure = UserFacingFailure.message(for: error, during: .backup)
                         }
                         isWorking = false
                     }
@@ -173,7 +173,7 @@ struct BackupFlowSheet: View {
                 try await session.performRestore(
                     from: fileURL, passphrase: passphrase, withoutSafetyCopy: withoutSafetyCopy)
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingFailure.message(for: error, during: .restore)
                 if case .safetyCopyIncomplete = error as? BackupError { offerRestoreWithoutCopy = true }
             }
             isWorking = false
@@ -192,7 +192,7 @@ struct BackupFlowSheet: View {
             do {
                 manifest = try await session.inspectBackup(at: fileURL, passphrase: passphrase)
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingFailure.message(for: error, during: .restore)
             }
             isWorking = false
         }

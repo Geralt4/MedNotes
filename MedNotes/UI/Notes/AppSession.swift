@@ -1514,7 +1514,7 @@ final class AppSession: ObservableObject {
             // The wizard is part of the curtain, which goes away with
             // `isMigrating`; without this the window would sit on the startup
             // spinner with no explanation.
-            initError = error.localizedDescription
+            initError = UserFacingFailure.message(for: error, during: .migration)
             throw error
         }
     }
